@@ -184,6 +184,22 @@ class TestTranspose:
         )
 
 
+class TestLog:
+    shapes = [
+        [(3,)],
+        [(2, 3)],
+        [(1, 2, 3)],
+    ]
+
+    @pytest.mark.parametrize("shapes", shapes)
+    def test_log(self, shapes):
+        _compare_fn_with_torch(
+            shapes,
+            lambda x: x.log(),
+            lambda x: x.log(),
+        )
+
+
 class TestMatMul:
     shapes = [
         [(3,), (3,)],

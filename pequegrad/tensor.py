@@ -179,6 +179,11 @@ class Tensor:
         """Returns the tensor raised to the given exponent"""
         return Pow.apply(self, exponent)
 
+    def log(self) -> "Tensor":
+        """Returns the natural logarithm of the tensor"""
+
+        return Log.apply(self)
+
     @property
     def shape(self):
         """Returns the shape of the tensor"""
@@ -300,6 +305,22 @@ class Pow(Function):
             self.exponent._grad += Tensor(
                 self.ret.grad.data * self.ret.data * np.log(self.base.data)
             )
+
+
+class Log(Function):
+    def __init__(self, a: Tensor):
+        super().__init__(a)
+        self.a = a
+
+    def forward(self):
+        self.ret = Tensor(
+            np.log(self.a.data),
+            requires_grad=self.requires_grad,
+        )
+
+    def backward(self):
+        if self.a.requires_grad:
+            self.a._grad += self.ret.grad / self.a.data
 
 
 class Exp(Function):
