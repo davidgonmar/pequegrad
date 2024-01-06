@@ -184,6 +184,22 @@ class TestTranspose:
         )
 
 
+class TestMax:
+    shapes = [
+        [(3,)],
+        [(2, 3)],
+        [(1, 2, 3)],
+    ]
+
+    @pytest.mark.parametrize("shape", shapes)
+    def test_max(self, shape):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.max(),
+            lambda x: x.max(),
+        )
+
+
 class TestLog:
     shapes = [
         [(3,)],

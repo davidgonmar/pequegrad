@@ -184,6 +184,10 @@ class Tensor:
 
         return Log.apply(self)
 
+    def max(self) -> "Tensor":
+        """Returns the maximum value of the tensor"""
+        return Max.apply(self)
+
     @property
     def shape(self):
         """Returns the shape of the tensor"""
@@ -259,6 +263,29 @@ class Function:
         f.forward()
         f.ret._ctx = f
         return f.ret
+
+
+# TODO -- implement with dim argument
+class Max(Function):
+    def __init__(self, a: Tensor):
+        super().__init__(a)
+        self.a = a
+
+    def forward(self):
+        self.ret = Tensor(
+            np.max(self.a.data),
+            requires_grad=self.requires_grad,
+        )
+        return self.ret
+
+    def backward(self):
+        if self.a.requires_grad:
+            self.a._grad += (
+                Tensor(
+                    np.where(self.a.data == self.ret.data, 1, 0),
+                )
+                * self.ret.grad
+            )
 
 
 class Sum(Function):
