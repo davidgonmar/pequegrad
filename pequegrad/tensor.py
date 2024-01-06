@@ -166,8 +166,8 @@ class Tensor:
         """Transpose the tensor"""
         return Transpose.apply(self, dim0=dim0, dim1=dim1)
 
-    def sum(self, dim: Optional[_Shape]) -> "Tensor":
-        return Sum.apply(self, dim=dim)
+    def sum(self, dim: Optional[_Shape] = None, keepdim: bool = False) -> "Tensor":
+        return Sum.apply(self, dim=dim, keepdim=keepdim)
 
     def exp(self) -> "Tensor":
         return Exp.apply(self)
@@ -184,9 +184,28 @@ class Tensor:
 
         return Log.apply(self)
 
-    def max(self) -> "Tensor":
+    def max(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor":
         """Returns the maximum value of the tensor"""
-        return Max.apply(self)
+        return Max.apply(self, dim=dim, keepdim=keepdim)
+
+    def mul(self, other: "Tensor") -> "Tensor":
+        """Hadamard product"""
+        return Mul.apply(self, other)
+
+    def _softmax(self, dim) -> Tuple["Tensor", "Tensor", "Tensor"]:
+        """Returns the softmax of the tensor"""
+        normalized = self - self.max(dim=dim, keepdim=True)
+        exponentiated = normalized.exp()
+        return (
+            normalized,
+            exponentiated,
+            exponentiated / exponentiated.sum(dim=dim, keepdim=True),
+        )
+
+    def softmax(self, dim=-1) -> "Tensor":
+        """Returns the softmax of the tensor"""
+
+        return self._softmax(dim)[2]
 
     @property
     def shape(self):
@@ -203,7 +222,7 @@ class Tensor:
 
     def __mul__(self, other: "Tensor") -> "Tensor":
         """Hadamard product"""
-        return Mul.apply(self, other)
+        return self.mul(other)
 
     def __rmul__(self, other: "Tensor" or float) -> "Tensor":
         """Hadamard product"""
@@ -267,13 +286,15 @@ class Function:
 
 # TODO -- implement with dim argument
 class Max(Function):
-    def __init__(self, a: Tensor):
+    def __init__(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
         super().__init__(a)
         self.a = a
+        self.dim = dim
+        self.keepdim = keepdim
 
     def forward(self):
         self.ret = Tensor(
-            np.max(self.a.data),
+            np.max(self.a.data, axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
         )
         return self.ret
@@ -289,14 +310,16 @@ class Max(Function):
 
 
 class Sum(Function):
-    def __init__(self, a: Tensor, dim: _Shape):
+    def __init__(self, a: Tensor, dim: Optional[_Shape] = None, keepdim: bool = False):
         super().__init__(a)
         self.a = a
         self.dim = dim
+        self.keepdim = keepdim
 
     def forward(self):
         self.ret = Tensor(
-            np.sum(self.a.data, axis=self.dim), requires_grad=self.requires_grad
+            np.sum(self.a.data, axis=self.dim, keepdims=self.keepdim),
+            requires_grad=self.requires_grad,
         )
         return self.ret
 

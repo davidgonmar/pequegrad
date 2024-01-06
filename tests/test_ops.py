@@ -200,6 +200,22 @@ class TestMax:
         )
 
 
+# TODO -- this is flaky
+class TestSoftmax:
+    shapes = [
+        [(2, 3)],
+        [(1, 2, 3)],
+    ]
+
+    @pytest.mark.parametrize("shape", shapes)
+    def test_softmax(self, shape):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.softmax(dim=-1),
+            lambda x: x.softmax(dim=-1),
+        )
+
+
 class TestLog:
     shapes = [
         [(3,)],
