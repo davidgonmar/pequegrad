@@ -219,7 +219,8 @@ class Tensor:
 
     def cross_entropy_loss(self, target: "Tensor") -> "Tensor":
         """Returns the cross entropy loss of the tensor"""
-        scaled_logits = self - self.max()
+        # At the moment, we assume minibatch affects shape like (batch_size, num_classes)
+        scaled_logits = self - self.max(dim=-1, keepdim=True)
         normalized_logits = scaled_logits - scaled_logits.logsumexp()
         return -(target * normalized_logits).sum(None)
 
