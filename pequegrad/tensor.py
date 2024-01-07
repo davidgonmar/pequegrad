@@ -160,7 +160,7 @@ class Tensor:
         """
         Returns a tensor with the given shape
         """
-        return Reshape.apply(self, shape)
+        return Reshape.apply(self, shape=shape)
 
     def transpose(self, dim0=0, dim1=1) -> "Tensor":
         """Transpose the tensor"""
@@ -479,8 +479,9 @@ class Add(Function):
             axes_to_sum = [
                 i
                 for i, (sx, sy) in enumerate(zip(self.x.shape, grad_output.shape))
-                if sx == 1 and sy > 1
+                if sx != sy
             ]
+
             grad = grad_output.sum(axis=tuple(axes_to_sum), keepdims=True)
 
             self.x._grad += Tensor(grad).reshape(self.x.shape)
@@ -490,9 +491,11 @@ class Add(Function):
             axes_to_sum = [
                 i
                 for i, (sy, sx) in enumerate(zip(self.y.shape, grad_output.shape))
-                if sy == 1 and sx > 1
+                if sy != sx
             ]
+
             grad = grad_output.sum(axis=tuple(axes_to_sum), keepdims=True)
+
             self.y._grad += Tensor(grad).reshape(self.y.shape)
 
 
@@ -520,7 +523,7 @@ class Mul(Function):
             axes_to_sum = [
                 i
                 for i, (sx, sy) in enumerate(zip(self.x.shape, grad_output.shape))
-                if sx == 1 and sy > 1
+                if sx != sy
             ]
 
             grad = grad_output * self.y.data
@@ -532,7 +535,7 @@ class Mul(Function):
             axes_to_sum = [
                 i
                 for i, (sy, sx) in enumerate(zip(self.y.shape, grad_output.shape))
-                if sy == 1 and sx > 1
+                if sy != sx
             ]
             grad = grad_output * self.x.data
             grad = grad.sum(axis=tuple(axes_to_sum), keepdims=True)
@@ -597,11 +600,14 @@ class Reshape(Function):
 
     def forward(self) -> Tensor:
         self.ret = Tensor(
-            np.reshape(self.input.data, self.output_shape),
+            np.reshape(
+                self.input.data,
+                self.output_shape,
+            ),
             requires_grad=self.requires_grad,
         )
         return self.ret
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            self.input._grad += Tensor(np.reshape(self.ret.grad.data, self.input_shape))
+            self.input._grad += Tensor(self.ret.grad.data).reshape(self.input_shape)
