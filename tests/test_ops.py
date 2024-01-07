@@ -79,17 +79,18 @@ class TestPow:
 
 class TestMean:
     shapes = [
-        [(3,)],
-        [(2, 3)],
-        [(1, 2, 3)],
+        [(3,), 0],
+        [(2, 3), -1],
+        [(1, 2, 3), None],
     ]
 
     @pytest.mark.parametrize("shape", shapes)
     def test_mean(self, shape):
+        _shape, dim = shape
         _compare_fn_with_torch(
-            shape,
-            lambda x: x.mean(),
-            lambda x: x.mean(),
+            [_shape],
+            lambda x: x.mean(dim=dim),
+            lambda x: x.mean(dim=dim),
         )
 
 
@@ -179,13 +180,17 @@ class TestReLU:
 
 class TestSum:
     # shape, dim
-    data = [[(2, 3), 0], [(2, 3), (0, 1)]]
+    data = [[(2, 3), 0], [(2, 3), (0, 1)], [(2, 3), -1]]
 
     @pytest.mark.parametrize("data", data)
     def test_sum(self, data):
         shape, dim = data
         _compare_fn_with_torch(
-            [shape], lambda x: x.sum(dim=dim), lambda x: x.sum(dim=dim)
+            [shape],
+            lambda x: x.sum(
+                dim=dim,
+            ),
+            lambda x: x.sum(dim=dim),
         )
 
 

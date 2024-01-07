@@ -340,7 +340,26 @@ class Mean(Function):
 
     def backward(self):
         if self.a.requires_grad:
-            self.a._grad += self.ret.grad / self.a.data.size
+            grad_output = self.ret.grad.data
+            # When keepdim is False, we need to insert a dimension of size 1 at the dimension we reduced over
+            # so that broadcasting works correctly during the backward pass.
+            if not self.keepdim and self.dim is not None:
+                grad_output = np.expand_dims(grad_output, axis=self.dim)
+            # Now we can broadcast the gradient to the shape of the input tensor
+            grad_broadcasted = np.broadcast_to(grad_output, self.a.shape)
+
+            # now we need to divide the gradient by the number of elements WE SUMMED OVER(not all elements)
+            # TODO -- optimize this
+            total_els = 1
+            if self.dim is None:
+                total_els = self.a.data.size
+            elif isinstance(self.dim, int):
+                total_els = self.a.shape[self.dim]
+            else:
+                total_els = 1
+                for d in self.dim:
+                    total_els *= self.a.shape[d]
+            self.a._grad += Tensor(grad_broadcasted) / total_els
 
 
 class Sum(Function):
@@ -357,9 +376,18 @@ class Sum(Function):
         )
         return self.ret
 
-    def backward(self):
+    def backward(
+        self,
+    ):
         if self.a.requires_grad:
-            self.a._grad += self.ret.grad
+            grad_output = self.ret.grad.data
+            # When keepdim is False, we need to insert a dimension of size 1 at the dimension we reduced over
+            # so that broadcasting works correctly during the backward pass.
+            if not self.keepdim and self.dim is not None:
+                grad_output = np.expand_dims(grad_output, axis=self.dim)
+            # Now we can broadcast the gradient to the shape of the input tensor
+            grad_broadcasted = np.broadcast_to(grad_output, self.a.shape)
+            self.a._grad += Tensor(grad_broadcasted)
 
 
 class Pow(Function):
