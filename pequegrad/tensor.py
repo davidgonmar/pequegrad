@@ -182,6 +182,10 @@ class Tensor:
         """Returns the maximum value of the tensor"""
         return Max.apply(self, dim=dim, keepdim=keepdim)
 
+    def mean(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor":
+        """Returns the mean value of the tensor"""
+        return Mean.apply(self, dim=dim, keepdim=keepdim)
+
     def mul(self, other: "Tensor") -> "Tensor":
         """Hadamard product"""
         return Mul.apply(self, other)
@@ -216,7 +220,7 @@ class Tensor:
         # At the moment, we assume minibatch affects shape like (batch_size, num_classes)
         scaled_logits = self - self.max(dim=-1, keepdim=True)
         normalized_logits = scaled_logits - scaled_logits.logsumexp()
-        return -(target * normalized_logits).sum(None)
+        return -(target * normalized_logits).sum(dim=-1).mean()
 
     @property
     def shape(self):
@@ -318,6 +322,25 @@ class Max(Function):
                 )
                 * self.ret.grad
             )
+
+
+class Mean(Function):
+    def __init__(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
+        super().__init__(a)
+        self.a = a
+        self.dim = dim
+        self.keepdim = keepdim
+
+    def forward(self):
+        self.ret = Tensor(
+            np.mean(self.a.data, axis=self.dim, keepdims=self.keepdim),
+            requires_grad=self.requires_grad,
+        )
+        return self.ret
+
+    def backward(self):
+        if self.a.requires_grad:
+            self.a._grad += self.ret.grad / self.a.data.size
 
 
 class Sum(Function):
