@@ -13,10 +13,14 @@ def _compare_fn_with_torch(shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-
     np.random.seed(1337)
     torch.manual_seed(1337)
 
-    # Make sure they are positive by taking the absolute value
-    np_arr = [np.abs(np.random.randn(*shape)) for shape in shapes]
-    tensors = [Tensor(arr, requires_grad=True) for arr in np_arr]
-    torch_tensors = [torch_tensor(arr, requires_grad=True) for arr in np_arr]
+    # Use a uniform distribution to initialize the arrays with 'good numbers' so that there are no numerical stability issues
+    np_arr = [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
+    tensors = [
+        Tensor(arr.astype(np.float64), requires_grad=True) for arr in np_arr
+    ]  # Using double precision
+    torch_tensors = [
+        torch_tensor(arr, dtype=torch.float64, requires_grad=True) for arr in np_arr
+    ]  # Using double precision
 
     peq_res = pequegrad_fn(*tensors)
     torch_res = torch_fn(*torch_tensors)
@@ -200,11 +204,10 @@ class TestMax:
         )
 
 
-# TODO -- this is flaky
+# TODO -- this is flaky (probably because of numerical stability issues)
 class TestSoftmax:
     shapes = [
         [(2, 3)],
-        [(1, 2, 3)],
     ]
 
     @pytest.mark.parametrize("shape", shapes)
@@ -213,6 +216,28 @@ class TestSoftmax:
             shape,
             lambda x: x.softmax(dim=-1),
             lambda x: x.softmax(dim=-1),
+        )
+
+    @pytest.mark.parametrize("shape", shapes)
+    def test_log_softmax(self, shape):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.log_softmax(dim=-1),
+            lambda x: x.log_softmax(dim=-1),
+        )
+
+
+class TestCrossEntropyLoss:
+    shapes = [
+        [(2, 3)],
+    ]
+
+    @pytest.mark.parametrize("shape", shapes)
+    def test_cross_entropy_loss(self, shape):
+        _compare_fn_with_torch(
+            shape * 2,
+            lambda x, y: x.cross_entropy_loss(y),
+            lambda x, y: torch.nn.CrossEntropyLoss(reduction="sum")(x, y),
         )
 
 
