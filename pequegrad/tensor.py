@@ -63,13 +63,7 @@ class Tensor:
         # We start with the gradient of the output node, defaulting to 1.0 if it's a scalar
         # This is called implicit gradient creation
         self._grad = (
-            gradient
-            if gradient is not None
-            else self._grad
-            if self._grad is not None
-            else Tensor(1.0)
-            if self.dim == 0
-            else None
+            gradient if gradient is not None else Tensor(1.0) if self.dim == 0 else None
         )
 
         if not isinstance(self._grad, Tensor):
