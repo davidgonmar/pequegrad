@@ -79,9 +79,14 @@ class TestPow:
 
 class TestMean:
     shapes = [
-        [(3,), 0],
+        [(2, 3), 0],
+        [(2, 3), 1],
+        [(2, 3), None],
         [(2, 3), -1],
+        [(2, 3), -2],
         [(1, 2, 3), None],
+        [(1, 2, 3), -1],
+        [(1, 2, 3), (-1, -2)],
     ]
 
     @pytest.mark.parametrize("shape", shapes)
@@ -176,7 +181,16 @@ class TestReLU:
 
 class TestSum:
     # shape, dim
-    data = [[(2, 3), 0], [(2, 3), (0, 1)], [(2, 3), -1]]
+    data = [
+        [(2, 3), 0],
+        [(2, 3), 1],
+        [(2, 3), None],
+        [(2, 3), -1],
+        [(2, 3), -2],
+        [(1, 2, 3), None],
+        [(1, 2, 3), -1],
+        [(1, 2, 3), (-1, -2)],
+    ]
 
     @pytest.mark.parametrize("data", data)
     def test_sum(self, data):
