@@ -13,11 +13,9 @@ class Tensor:
     def __init__(self, data: _ArrayLike, requires_grad=False):
         # Internally, we store the data as a numpy array
         data = (
-            np.array(data)
-            if not isinstance(data, np.ndarray) and not isinstance(data, Tensor)
-            else data.data
-            if isinstance(data, Tensor)
-            else data
+            np.array(data, copy=False)
+            if not isinstance(data, Tensor)
+            else np.array(data.data, copy=False)
         )
 
         self.data: np.ndarray = data
@@ -71,17 +69,20 @@ class Tensor:
                 f"gradient must be a tensor, not {type(self._grad).__name__}"
             )
 
+        # We assure that backward is only called once on _ctx per backward pass.
         visited = []
+        nodes = []
 
         def _dfs(node):
-            if node not in visited:
-                visited.append(node)
-                for child in node._ctx.children if node._ctx else []:
+            visited.append(node)
+            for child in node._ctx.children if node._ctx else []:
+                if child not in visited:
                     _dfs(child)
+            nodes.append(node)
 
         _dfs(self)
 
-        for node in visited:
+        for node in reversed(nodes):
             if node._ctx is not None:
                 node._ctx.backward()
                 if not retain_ctx:
@@ -192,6 +193,7 @@ class Tensor:
 
     def _softmax_helper(self, dim) -> Tuple["Tensor", "Tensor", "Tensor"]:
         """Returns the softmax of the tensor"""
+
         normalized = self - self.max(dim=dim, keepdim=True)
         exponentiated = normalized.exp()
         summed = exponentiated.sum(dim=dim, keepdim=True)
@@ -203,8 +205,13 @@ class Tensor:
 
     def softmax(self, dim=-1) -> "Tensor":
         """Returns the softmax of the tensor"""
-        normalized, exponentiated, summed = self._softmax_helper(dim)
-        return exponentiated / summed
+        self_max = self.max(dim=dim, keepdim=True)
+
+        softmax = (self - self_max).exp() / (self - self_max).exp().sum(
+            dim=dim, keepdim=True
+        )
+
+        return softmax
 
     def log_softmax(self, dim=-1) -> "Tensor":
         """Returns the log softmax of the tensor"""
@@ -241,8 +248,7 @@ class Tensor:
 
     def __rmul__(self, other: "Tensor" or float) -> "Tensor":
         """Hadamard product"""
-        # Multiplying two tensors mean multiplying their elements, so their shapes must match
-        return self.__mul__(other)
+        return self.mul(other)
 
     def __neg__(self) -> "Tensor":
         return self.__mul__(-1.0)
@@ -316,11 +322,12 @@ class Max(Function):
 
     def backward(self):
         if self.a.requires_grad:
-            self.a._grad += (
-                Tensor(
-                    np.where(self.a.data == self.ret.data, 1, 0),
+            self.a._grad += Tensor(
+                np.where(
+                    self.a.data == self.ret.data,
+                    self.ret.grad.data,
+                    0,
                 )
-                * self.ret.grad
             )
 
 
@@ -387,6 +394,7 @@ class Sum(Function):
                 grad_output = np.expand_dims(grad_output, axis=self.dim)
             # Now we can broadcast the gradient to the shape of the input tensor
             grad_broadcasted = np.broadcast_to(grad_output, self.a.shape)
+
             self.a._grad += Tensor(grad_broadcasted)
 
 
@@ -608,28 +616,28 @@ class MatMul(Function):
         if self.x.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
                 # Just multiply the gradients if both are vectors, since grad is a scalar
-                self.x._grad = Tensor(np.multiply(grad_output, self.y.data))
+                self.x._grad += Tensor(np.multiply(grad_output, self.y.data))
             elif self.x.dim == 1:
                 # Vector x Matrix
-                self.x._grad = Tensor(grad_output @ self.y.data.T)
+                self.x._grad += Tensor(grad_output @ self.y.data.T)
             elif self.y.dim == 1:
                 # Matrix x Vector
-                self.x._grad = Tensor(np.outer(grad_output, self.y.data))
+                self.x._grad += Tensor(np.outer(grad_output, self.y.data))
             else:
                 # Matrix x Matrix
-                self.x._grad = Tensor(grad_output @ self.y.data.T)
+                self.x._grad += Tensor(grad_output @ self.y.data.T)
 
         if self.y.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
-                self.y._grad = Tensor(np.multiply(self.x.data, grad_output))
+                self.y._grad += Tensor(np.multiply(self.x.data, grad_output))
             elif self.x.dim == 1:
-                self.y._grad = Tensor(np.outer(self.x.data, grad_output))
+                self.y._grad += Tensor(np.outer(self.x.data, grad_output))
             elif self.y.dim == 1:
                 # Matrix x Vector
-                self.y._grad = Tensor(self.x.data.T @ grad_output)
+                self.y._grad += Tensor(self.x.data.T @ grad_output)
             else:
                 # Matrix x Matrix
-                self.y._grad = Tensor(self.x.data.T @ grad_output)
+                self.y._grad += Tensor(self.x.data.T @ grad_output)
 
         if self.x.requires_grad:
             assert self.x._grad.shape == self.x.shape

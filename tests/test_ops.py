@@ -112,11 +112,7 @@ class TestAdd:
 
 
 class TestExp:
-    shapes = [
-        [(3,)],
-        [(2, 3)],
-        [(1, 2, 3)],
-    ]
+    shapes = [[(3,)], [(2, 3)], [(1, 2, 3)], [(2, 4, 1)]]
 
     @pytest.mark.parametrize("shapes", shapes)
     def test_exp(self, shapes):
@@ -250,7 +246,7 @@ class TestSoftmax:
 
 
 class TestCrossEntropyLoss:
-    shapes = [[(3,)]]
+    shapes = [[(3,)], [(2, 3)], [(1, 2, 3)]]
 
     @pytest.mark.parametrize("shape", shapes)
     def test_cross_entropy_loss(self, shape):
@@ -266,6 +262,7 @@ class TestLog:
         [(3,)],
         [(2, 3)],
         [(1, 2, 3)],
+        [(2, 4, 1)],
     ]
 
     @pytest.mark.parametrize("shapes", shapes)
