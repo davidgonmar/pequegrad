@@ -264,10 +264,12 @@ class TestCrossEntropyLoss:
 
     @pytest.mark.parametrize("shape", shapes)
     def test_cross_entropy_loss(self, shape):
+        def torch_fn(x, y):
+            nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
+            return nn_cross_entropy(x, y)
+
         _compare_fn_with_torch(
-            shape * 2,
-            lambda x, y: x.cross_entropy_loss(y),
-            lambda x, y: torch.nn.CrossEntropyLoss(reduction="mean")(x, y),
+            shape * 2, lambda x, y: x.cross_entropy_loss(y), torch_fn
         )
 
 

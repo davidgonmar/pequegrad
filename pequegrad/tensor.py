@@ -99,7 +99,6 @@ class Tensor:
 
         return self.data
 
-    # google style comments
     def clone(self, requires_grad: bool = None):
         """
         Returns an independent copy of the tensor.
@@ -191,18 +190,6 @@ class Tensor:
         """Hadamard product"""
         return Mul.apply(self, other)
 
-    def _softmax_helper(self, dim) -> Tuple["Tensor", "Tensor", "Tensor"]:
-        """Returns the softmax of the tensor"""
-
-        normalized = self - self.max(dim=dim, keepdim=True)
-        exponentiated = normalized.exp()
-        summed = exponentiated.sum(dim=dim, keepdim=True)
-        return (
-            normalized,
-            exponentiated,
-            summed,
-        )
-
     def softmax(self, dim=-1) -> "Tensor":
         """Returns the softmax of the tensor"""
         self_max = self.max(dim=dim, keepdim=True)
@@ -215,19 +202,26 @@ class Tensor:
 
     def log_softmax(self, dim=-1) -> "Tensor":
         """Returns the log softmax of the tensor"""
-        normalized, exponentiated, summed = self._softmax_helper(dim)
-        return normalized - summed.log()
-
-    def logsumexp(self, dim=-1) -> "Tensor":
-        """Returns the log sum exp of the tensor"""
-        return self._softmax_helper(dim)[2].log()
+        return self.softmax(dim=dim).log()
 
     def cross_entropy_loss(self, target: "Tensor") -> "Tensor":
         """Returns the cross entropy loss of the tensor"""
-        # At the moment, we assume minibatch affects shape like (batch_size, num_classes)
-        scaled_logits = self - self.max(dim=-1, keepdim=True)
-        normalized_logits = scaled_logits - scaled_logits.logsumexp()
-        return -(target * normalized_logits).sum(dim=-1).mean()
+
+        assert self.shape == target.shape, "input and target must have the same shape"
+        assert self.dim > 0, "input must be a vector"
+        assert target.dim > 0, "target must be a vector"
+        # At the moment, we expect (batch, C) tensors, both for input and target (probability distributions)
+        # If there is no minibatch, we expect (C,) tensors
+        # If there is a minibatch, we expect (batch, C, dim1, dim2, ...) tensors
+
+        # We sum over the classes (and normalize with respect to the classes dimension as well)
+        # In case there is no minibatch, we'll sum over dim 0, which is the classes dimension, and mean
+        # will not really do anything
+        # If there is a minibatch, we'll sum over dim 1, which is the classes dimension, and reduce the minibatch
+        # by taking the mean
+        c_idx = 0 if self.dim == 1 else 1
+        log_softmax = self.log_softmax(dim=c_idx)
+        return -(target * log_softmax).sum(c_idx).mean()
 
     @property
     def shape(self):
