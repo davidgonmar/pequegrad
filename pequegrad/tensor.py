@@ -228,6 +228,14 @@ class Tensor:
         c_idx = 0 if self.dim == 1 else 1
         return -(target * self.log_softmax(dim=c_idx)).sum(c_idx).mean()
 
+    def unsqueeze(self, dim: int) -> "Tensor":
+        """Returns a tensor with a dimension of size one inserted at the specified position"""
+        return Unsqueeze.apply(self, dim=dim)
+
+    def squeeze(self, dim: int) -> "Tensor":
+        """Returns a tensor with the specified dimension removed"""
+        return Squeeze.apply(self, dim=dim)
+
     @property
     def shape(self):
         """Returns the shape of the tensor"""
@@ -327,6 +335,40 @@ class Max(Function):
                     0,
                 )
             )
+
+
+class Unsqueeze(Function):
+    def __init__(self, a: Tensor, dim: int):
+        super().__init__(a)
+        self.a = a
+        self.dim = dim
+
+    def forward(self):
+        self.ret = Tensor(
+            np.expand_dims(self.a.data, axis=self.dim), requires_grad=self.requires_grad
+        )
+        return self.ret
+
+    def backward(self):
+        if self.a.requires_grad:
+            self.a._grad += Tensor(np.squeeze(self.ret.grad.data, axis=self.dim))
+
+
+class Squeeze(Function):
+    def __init__(self, a: Tensor, dim: int):
+        super().__init__(a)
+        self.a = a
+        self.dim = dim
+
+    def forward(self):
+        self.ret = Tensor(
+            np.squeeze(self.a.data, axis=self.dim), requires_grad=self.requires_grad
+        )
+        return self.ret
+
+    def backward(self):
+        if self.a.requires_grad:
+            self.a._grad += Tensor(np.expand_dims(self.ret.grad.data, axis=self.dim))
 
 
 class Mean(Function):

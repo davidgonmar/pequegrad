@@ -273,6 +273,41 @@ class TestCrossEntropyLoss:
         )
 
 
+class TestUnsqueeze:
+    data = [
+        [(3,), 0],
+        [(2, 3), 1],
+        [(1, 2, 3), 0],
+        [(1, 2, 3), 1],
+        [(1, 2, 3), 2],
+    ]
+
+    @pytest.mark.parametrize("data", data)
+    def test_unsqueeze(self, data):
+        shape, dim = data
+        _compare_fn_with_torch(
+            [shape],
+            lambda x: x.unsqueeze(dim),
+            lambda x: x.unsqueeze(dim),
+        )
+
+
+class TestSqueeze:
+    data = [
+        [(1, 2, 3), 0],
+        [(1, 3, 1), 2],
+    ]
+
+    @pytest.mark.parametrize("data", data)
+    def test_squeeze(self, data):
+        shape, dim = data
+        _compare_fn_with_torch(
+            [shape],
+            lambda x: x.squeeze(dim),
+            lambda x: x.squeeze(dim),
+        )
+
+
 class TestLog:
     shapes = [
         [(3,)],
