@@ -190,6 +190,11 @@ class Tensor:
         """Hadamard product"""
         return Mul.apply(self, other)
 
+    def logsumexp(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor":
+        """Returns the logsumexp of the tensor"""
+        max = self.max(dim=dim, keepdim=True)
+        return (self - max).exp().sum(dim=dim, keepdim=keepdim).log() + max
+
     def softmax(self, dim=-1) -> "Tensor":
         """Returns the softmax of the tensor"""
         self_max = self.max(dim=dim, keepdim=True)
@@ -202,7 +207,8 @@ class Tensor:
 
     def log_softmax(self, dim=-1) -> "Tensor":
         """Returns the log softmax of the tensor"""
-        return self.softmax(dim=dim).log()
+        # Use the logsumexp trick to avoid numerical instability
+        return self - self.logsumexp(dim=dim, keepdim=True)
 
     def cross_entropy_loss(self, target: "Tensor") -> "Tensor":
         """Returns the cross entropy loss of the tensor"""
@@ -220,8 +226,7 @@ class Tensor:
         # If there is a minibatch, we'll sum over dim 1, which is the classes dimension, and reduce the minibatch
         # by taking the mean
         c_idx = 0 if self.dim == 1 else 1
-        log_softmax = self.log_softmax(dim=c_idx)
-        return -(target * log_softmax).sum(c_idx).mean()
+        return -(target * self.log_softmax(dim=c_idx)).sum(c_idx).mean()
 
     @property
     def shape(self):
