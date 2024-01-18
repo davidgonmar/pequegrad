@@ -220,7 +220,7 @@ class Tensor:
         # If there is no minibatch, we expect (C,) tensors
         # If there is a minibatch, we expect (batch, C, dim1, dim2, ...) tensors
 
-        # We sum over the classes (and normalize with respect to the classes dimension as well)
+        # We sum over the classes.
         # In case there is no minibatch, we'll sum over dim 0, which is the classes dimension, and mean
         # will not really do anything
         # If there is a minibatch, we'll sum over dim 1, which is the classes dimension, and reduce the minibatch
@@ -304,7 +304,6 @@ class Function:
         return f.ret
 
 
-# TODO -- implement with dim argument
 class Max(Function):
     def __init__(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
         super().__init__(a)
