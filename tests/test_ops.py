@@ -49,10 +49,10 @@ def _compare_fn_with_torch(shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-
         _compare(t.grad, torch_t.grad, tol)
 
 
-class TestReshape:
-    shapes = [(2, 3), (3, 2), (6, 1), (1, 6), (6,), (1, 1, 6), (1, 2, 3), (2, 3, 1)]
-
-    @pytest.mark.parametrize("shape", shapes)
+class TestOps:
+    @pytest.mark.parametrize(
+        "shape", [(2, 3), (3, 2), (6, 1), (1, 6), (6,), (1, 1, 6), (1, 2, 3), (2, 3, 1)]
+    )
     def test_reshape(self, shape):
         _compare_fn_with_torch(
             [shape],
@@ -60,15 +60,14 @@ class TestReshape:
             lambda x: x.reshape(shape),
         )
 
-
-class TestPow:
-    shapes = [
-        [(3,), (3,)],
-        [(2, 3), (2, 3)],
-        [(1, 2, 3), (1, 2, 3)],
-    ]
-
-    @pytest.mark.parametrize("shapes", shapes)
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            [(3,), (3,)],
+            [(2, 3), (2, 3)],
+            [(1, 2, 3), (1, 2, 3)],
+        ],
+    )
     def test_pow(self, shapes):
         _compare_fn_with_torch(
             shapes,
@@ -76,38 +75,36 @@ class TestPow:
             lambda x, y: x**y,
         )
 
-
-class TestMean:
-    shapes = [
-        [(2, 3), 0],
-        [(2, 3), 1],
-        [(2, 3), None],
-        [(2, 3), -1],
-        [(2, 3), -2],
-        [(1, 2, 3), None],
-        [(1, 2, 3), -1],
-        [(1, 2, 3), (-1, -2)],
-    ]
-
-    @pytest.mark.parametrize("shape", shapes)
-    def test_mean(self, shape):
-        _shape, dim = shape
+    @pytest.mark.parametrize(
+        "data",
+        [
+            [(2, 3), 0],
+            [(2, 3), 1],
+            [(2, 3), None],
+            [(2, 3), -1],
+            [(2, 3), -2],
+            [(1, 2, 3), None],
+            [(1, 2, 3), -1],
+            [(1, 2, 3), (-1, -2)],
+        ],
+    )
+    def test_mean(self, data):
+        shape, dim = data
         _compare_fn_with_torch(
-            [_shape],
+            [shape],
             lambda x: x.mean(dim=dim),
             lambda x: x.mean(dim=dim),
         )
 
-
-class TestAdd:
-    shapes = [
-        [(1, 2, 3), (1, 2, 3)],
-        [(1, 2, 3), (1, 2, 1)],
-        [(1, 2, 3), (1, 1, 3)],
-        [(2, 3), (3,)],
-    ]
-
-    @pytest.mark.parametrize("shapes", shapes)
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            [(1, 2, 3), (1, 2, 3)],
+            [(1, 2, 3), (1, 2, 1)],
+            [(1, 2, 3), (1, 1, 3)],
+            [(2, 3), (3,)],
+        ],
+    )
     def test_add(self, shapes):
         _compare_fn_with_torch(
             shapes,
@@ -115,11 +112,7 @@ class TestAdd:
             lambda x, y: x + y,
         )
 
-
-class TestExp:
-    shapes = [[(3,)], [(2, 3)], [(1, 2, 3)], [(2, 4, 1)]]
-
-    @pytest.mark.parametrize("shapes", shapes)
+    @pytest.mark.parametrize("shapes", [[(3,)], [(2, 3)], [(1, 2, 3)], [(2, 4, 1)]])
     def test_exp(self, shapes):
         _compare_fn_with_torch(
             shapes,
@@ -127,19 +120,18 @@ class TestExp:
             lambda x: x.exp(),
         )
 
-
-class TestMSE:
-    shapes = [
-        [(3,)],
+    @pytest.mark.parametrize(
+        "shape",
         [
-            (
-                3,
-                2,
-            )
+            [(3,)],
+            [
+                (
+                    3,
+                    2,
+                )
+            ],
         ],
-    ]
-
-    @pytest.mark.parametrize("shape", shapes)
+    )
     def test_mse(self, shape):
         def torch_fn(x, y):
             mse = torch.nn.MSELoss(reduction="mean")
@@ -147,52 +139,48 @@ class TestMSE:
 
         _compare_fn_with_torch(shape * 2, lambda x, y: x.mse_loss(y), torch_fn)
 
-
-class TestMul:
-    shapes = [
-        [(1, 2, 3), (1, 2, 3)],
-        [(1, 2, 3), (1, 2, 1)],
-        [(1, 2, 3), (1, 1, 3)],
-    ]
-
-    @pytest.mark.parametrize("shapes", shapes)
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            [(1, 2, 3), (1, 2, 3)],
+            [(1, 2, 3), (1, 2, 1)],
+            [(1, 2, 3), (1, 1, 3)],
+        ],
+    )
     def test_mul(self, shapes):
         _compare_fn_with_torch(shapes, lambda x, y: x * y, lambda x, y: x * y)
 
-
-class TestReLU:
-    shapes = [
+    @pytest.mark.parametrize(
+        "shape",
         [
-            (1,),
+            [
+                (1,),
+            ],
+            [
+                (
+                    1,
+                    2,
+                )
+            ],
+            [(1, 2, 3)],
         ],
-        [
-            (
-                1,
-                2,
-            )
-        ],
-        [(1, 2, 3)],
-    ]
-
-    @pytest.mark.parametrize("shape", shapes)
+    )
     def test_relu(self, shape):
         _compare_fn_with_torch(shape, lambda x: x.relu())
 
-
-class TestSum:
-    # shape, dim
-    data = [
-        [(2, 3), 0],
-        [(2, 3), 1],
-        [(2, 3), None],
-        [(2, 3), -1],
-        [(2, 3), -2],
-        [(1, 2, 3), None],
-        [(1, 2, 3), -1],
-        [(1, 2, 3), (-1, -2)],
-    ]
-
-    @pytest.mark.parametrize("data", data)
+    @pytest.mark.parametrize(
+        "data",
+        [
+            [(2, 3), 0],
+            [(2, 3), 1],
+            [(2, 3), None],
+            [(2, 3), -1],
+            [(2, 3), -2],
+            [(1, 2, 3), None],
+            [(1, 2, 3), -1],
+            [(1, 2, 3), (-1, -2)],
+        ],
+    )
     def test_sum(self, data):
         shape, dim = data
         _compare_fn_with_torch(
@@ -203,14 +191,12 @@ class TestSum:
             lambda x: x.sum(dim=dim),
         )
 
-
-class TestTranspose:
-    # shape, dim0, dim1
-    data = [
-        [(1, 2, 3), 0, 1],
-    ]
-
-    @pytest.mark.parametrize("data", data)
+    @pytest.mark.parametrize(
+        "data",
+        [
+            [(1, 2, 3), 0, 1],
+        ],
+    )
     def test_transpose(self, data):
         shape, dim0, dim1 = data
         _compare_fn_with_torch(
@@ -219,15 +205,14 @@ class TestTranspose:
             lambda x: x.transpose(dim0, dim1),
         )
 
-
-class TestMax:
-    shapes = [
-        [(3,)],
-        [(2, 3)],
-        [(1, 2, 3)],
-    ]
-
-    @pytest.mark.parametrize("shape", shapes)
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(3,)],
+            [(2, 3)],
+            [(1, 2, 3)],
+        ],
+    )
     def test_max(self, shape):
         _compare_fn_with_torch(
             shape,
@@ -235,14 +220,12 @@ class TestMax:
             lambda x: x.max(),
         )
 
-
-# TODO -- this is flaky (probably because of numerical stability issues)
-class TestSoftmax:
-    shapes = [
-        [(2, 3)],
-    ]
-
-    @pytest.mark.parametrize("shape", shapes)
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
     def test_softmax(self, shape):
         _compare_fn_with_torch(
             shape,
@@ -250,7 +233,12 @@ class TestSoftmax:
             lambda x: x.softmax(dim=-1),
         )
 
-    @pytest.mark.parametrize("shape", shapes)
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
     def test_log_softmax(self, shape):
         _compare_fn_with_torch(
             shape,
@@ -258,11 +246,7 @@ class TestSoftmax:
             lambda x: x.log_softmax(dim=-1),
         )
 
-
-class TestCrossEntropyLoss:
-    shapes = [[(3,)], [(2, 3)], [(1, 2, 3)]]
-
-    @pytest.mark.parametrize("shape", shapes)
+    @pytest.mark.parametrize("shape", [[(3,)], [(2, 3)], [(1, 2, 3)]])
     def test_cross_entropy_loss(self, shape):
         def torch_fn(x, y):
             nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
@@ -272,17 +256,16 @@ class TestCrossEntropyLoss:
             shape * 2, lambda x, y: x.cross_entropy_loss(y), torch_fn
         )
 
-
-class TestUnsqueeze:
-    data = [
-        [(3,), 0],
-        [(2, 3), 1],
-        [(1, 2, 3), 0],
-        [(1, 2, 3), 1],
-        [(1, 2, 3), 2],
-    ]
-
-    @pytest.mark.parametrize("data", data)
+    @pytest.mark.parametrize(
+        "data",
+        [
+            [(3,), 0],
+            [(2, 3), 1],
+            [(1, 2, 3), 0],
+            [(1, 2, 3), 1],
+            [(1, 2, 3), 2],
+        ],
+    )
     def test_unsqueeze(self, data):
         shape, dim = data
         _compare_fn_with_torch(
@@ -291,14 +274,13 @@ class TestUnsqueeze:
             lambda x: x.unsqueeze(dim),
         )
 
-
-class TestSqueeze:
-    data = [
-        [(1, 2, 3), 0],
-        [(1, 3, 1), 2],
-    ]
-
-    @pytest.mark.parametrize("data", data)
+    @pytest.mark.parametrize(
+        "data",
+        [
+            [(1, 2, 3), 0],
+            [(1, 3, 1), 2],
+        ],
+    )
     def test_squeeze(self, data):
         shape, dim = data
         _compare_fn_with_torch(
@@ -307,16 +289,15 @@ class TestSqueeze:
             lambda x: x.squeeze(dim),
         )
 
-
-class TestLog:
-    shapes = [
-        [(3,)],
-        [(2, 3)],
-        [(1, 2, 3)],
-        [(2, 4, 1)],
-    ]
-
-    @pytest.mark.parametrize("shapes", shapes)
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            [(3,)],
+            [(2, 3)],
+            [(1, 2, 3)],
+            [(2, 4, 1)],
+        ],
+    )
     def test_log(self, shapes):
         _compare_fn_with_torch(
             shapes,
@@ -324,16 +305,15 @@ class TestLog:
             lambda x: x.log(),
         )
 
-
-class TestMatMul:
-    shapes = [
-        [(3,), (3,)],
-        [(2,), (2, 2)],
-        [(2, 2), (2, 2)],
-        [(4, 1), (1,)],
-        [(4,), (4, 1)],
-    ]
-
-    @pytest.mark.parametrize("shapes", shapes)
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            [(3,), (3,)],
+            [(2,), (2, 2)],
+            [(2, 2), (2, 2)],
+            [(4, 1), (1,)],
+            [(4,), (4, 1)],
+        ],
+    )
     def test_matmul(self, shapes):
         _compare_fn_with_torch(shapes, lambda x, y: x @ y, lambda x, y: x @ y)
