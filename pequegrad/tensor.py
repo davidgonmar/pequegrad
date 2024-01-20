@@ -277,6 +277,9 @@ class Tensor:
         """Matrix multiplication"""
         return MatMul.apply(self, other)
 
+    def __len__(self):
+        return len(self.data)
+
 
 class Function:
     ret: Tensor
