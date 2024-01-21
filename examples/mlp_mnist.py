@@ -4,55 +4,28 @@ import gzip
 import numpy as np
 from pequegrad.tensor import Tensor
 from pequegrad.optim import SGD
+from pequegrad.modules import Linear
 
 mnist_url = "http://yann.lecun.com/exdb/mnist/"
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 
-class LinearLayer:
-    def __init__(self, input_size, output_size):
-        self.input_size = input_size
-        self.output_size = output_size
-        # kaiming initialization
-        self.weights = Tensor(
-            np.random.normal(
-                0, np.sqrt(1 / input_size), (output_size, input_size)
-            ).tolist(),
-            requires_grad=True,
-        )
-        self.bias = Tensor(np.zeros(output_size).tolist(), requires_grad=True)
-
-    def forward(self, input):
-        return (input @ self.weights.transpose()) + self.bias
-
-    def parameters(self):
-        return [self.weights, self.bias]
-
-    def zero_grad(self):
-        self.weights.zero_grad()
-        self.bias.zero_grad()
-
-    def backward(self, gradient):
-        self.weights.backward(gradient)
-        self.bias.backward(gradient)
-
-
 class MLP:
     def __init__(self):
-        self.LL1 = LinearLayer(784, 200)
-        self.LL2 = LinearLayer(200, 10)
+        self.fc1 = Linear(784, 200)
+        self.fc2 = Linear(200, 10)
 
     def forward(self, input):
-        input = self.LL1.forward(input).relu()
-        return self.LL2.forward(input)
+        input = self.fc1.forward(input).relu()
+        return self.fc2.forward(input)
 
     def parameters(self):
-        return self.LL1.parameters() + self.LL2.parameters()
+        return self.fc1.parameters() + self.fc2.parameters()
 
     def zero_grad(self):
-        self.LL1.zero_grad()
-        self.LL2.zero_grad()
+        self.fc1.zero_grad()
+        self.fc2.zero_grad()
 
 
 def download_mnist(path):
