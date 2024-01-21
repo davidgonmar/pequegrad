@@ -130,6 +130,16 @@ class Tensor:
         self._grad = Tensor.zeros(self.shape)
 
     ##### INITIALIZATION METHODS #####
+
+    @staticmethod
+    def normal(shape: _Shape, mean=0.0, std=1.0, requires_grad=False) -> "Tensor":
+        """Returns a tensor of random numbers with the given shape"""
+        return Tensor(np.random.normal(mean, std, shape), requires_grad=requires_grad)
+
+    def uniform(shape: _Shape, low=0.0, high=1.0, requires_grad=False) -> "Tensor":
+        """Returns a tensor of random numbers with the given shape"""
+        return Tensor(np.random.uniform(low, high, shape), requires_grad=requires_grad)
+
     @staticmethod
     def randn(shape: _Shape, requires_grad=False) -> "Tensor":
         """Returns a tensor of random numbers with the given shape"""
