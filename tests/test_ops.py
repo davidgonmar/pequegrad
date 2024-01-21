@@ -5,7 +5,9 @@ import numpy as np
 import torch
 
 
-def _compare_fn_with_torch(shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-5):
+def _compare_fn_with_torch(
+    shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-5, backward=True
+):
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
 
@@ -41,12 +43,13 @@ def _compare_fn_with_torch(shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-
 
     _compare(peq_res, torch_res, tol)
 
-    # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
-    peq_res.backward(Tensor(np.full(peq_res.shape, 2.0)))
-    torch_res.backward(torch_tensor(np.full(torch_res.shape, 2.0)))
+    if backward:
+        # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
+        peq_res.backward(Tensor(np.full(peq_res.shape, 2.0)))
+        torch_res.backward(torch_tensor(np.full(torch_res.shape, 2.0)))
 
-    for t, torch_t in zip(tensors, torch_tensors):
-        _compare(t.grad, torch_t.grad, tol)
+        for t, torch_t in zip(tensors, torch_tensors):
+            _compare(t.grad, torch_t.grad, tol)
 
 
 class TestOps:
@@ -317,3 +320,27 @@ class TestOps:
     )
     def test_matmul(self, shapes):
         _compare_fn_with_torch(shapes, lambda x, y: x @ y, lambda x, y: x @ y)
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, shape_kernel
+        [
+            # for input: batch_size, input_channels, input_height, input_width
+            # for kernel: output_channels, input_channels, kernel_height, kernel_width
+            [(1, 1, 10, 5), (1, 1, 3, 3)],
+            [(1, 1, 10, 5), (1, 1, 1, 1)],
+            [(5, 1, 10, 5), (3, 1, 3, 3)],
+            [(5, 1, 10, 5), (3, 1, 1, 1)],
+            [(5, 1, 10, 5), (3, 1, 5, 5)],
+        ],
+    )
+    def test_conv2d(self, data):
+        # TODO - Implement backward for conv2d
+        shape_input, shape_kernel = data
+        torch_fn = lambda x, y: torch.nn.functional.conv2d(x, y)  # noqa: E731
+        _compare_fn_with_torch(
+            [shape_input, shape_kernel],
+            lambda x, y: x.conv2d(y),
+            torch_fn,
+            backward=False,
+        )

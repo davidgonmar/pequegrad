@@ -1,6 +1,7 @@
 from typing import List, Union, Type, Set, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
+from .util import unfold_numpy_array
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -250,6 +251,9 @@ class Tensor:
     def squeeze(self, dim: int) -> "Tensor":
         """Returns a tensor with the specified dimension removed"""
         return Squeeze.apply(self, dim=dim)
+
+    def conv2d(self, filter: "Tensor"):
+        return Conv2d.apply(self, filter)
 
     @property
     def shape(self):
@@ -726,3 +730,24 @@ class Reshape(Function):
     def backward(self) -> Tensor:
         if self.input.requires_grad:
             self.input._grad += Tensor(self.ret.grad.data).reshape(self.input_shape)
+
+
+class Conv2d(Function):
+    def __init__(self, _input: Tensor, kernel: Tensor):
+        super().__init__(_input)
+        self.input = _input
+        self.kernel = kernel
+
+    def forward(self) -> Tensor:
+        k_out_c, k_in_c, k_h, k_w = self.kernel.shape
+        unfolded_in = unfold_numpy_array(self.input.data, (k_h, k_w))
+        in_minibatch, in_channels, in_h, in_w = self.input.shape
+        res = (
+            (unfolded_in @ self.kernel.data.reshape(k_out_c, -1).T)
+            .transpose((0, 2, 1))
+            .reshape((in_minibatch, k_out_c, in_h - k_h + 1, in_w - k_w + 1))
+        )
+        self.ret = Tensor(res, requires_grad=self.requires_grad)
+
+    def backward(self) -> Tensor:
+        raise NotImplementedError

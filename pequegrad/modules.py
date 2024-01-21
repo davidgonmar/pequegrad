@@ -21,9 +21,7 @@ class Module:
 class Linear(Module):
     def __init__(self, in_features, out_features):
         self.weights = kaiming_init(in_features, (in_features, out_features))
-
         self.bias = Tensor.zeros(out_features, requires_grad=True)
-
         self._parameters = [self.weights, self.bias]
 
     def forward(self, input):
