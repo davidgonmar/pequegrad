@@ -5,6 +5,7 @@ import numpy as np
 from pequegrad.tensor import Tensor
 from pequegrad.optim import SGD
 from pequegrad.modules import Linear
+from pequegrad.context import no_grad
 
 mnist_url = "http://yann.lecun.com/exdb/mnist/"
 
@@ -113,15 +114,16 @@ def train(model, X_train, Y_train, X_test, Y_test, epochs=15, batch_size=32):
 
         print(f"Epoch {epoch} | Loss {loss.data}")
 
-    # Evaluate the model
-    correct = 0
-    for i in range(0, len(X_test), batch_size):
-        end_idx = min(i + batch_size, len(X_test))
-        batch_X = Tensor(X_test[i:end_idx])
-        batch_Y = Y_test[i:end_idx]
+    with no_grad():
+        # Evaluate the model
+        correct = 0
+        for i in range(0, len(X_test), batch_size):
+            end_idx = min(i + batch_size, len(X_test))
+            batch_X = Tensor(X_test[i:end_idx])
+            batch_Y = Y_test[i:end_idx]
 
-        prediction = model.forward(batch_X)
-        correct += (np.argmax(prediction.data, axis=1) == batch_Y).sum()
+            prediction = model.forward(batch_X)
+            correct += (np.argmax(prediction.data, axis=1) == batch_Y).sum()
 
     print(f"Test accuracy: {correct / len(X_test)}")
     print("Got {} / {} correct!".format(correct, len(X_test)))

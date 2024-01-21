@@ -1,5 +1,6 @@
 from typing import List, Union, Type, Set, Tuple, Optional
 import numpy as np
+from .context import pequegrad_context
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -20,15 +21,19 @@ class Tensor:
 
         self.data: np.ndarray = data
 
+        # If the tensor was created under a no_grad context, it doesn't require gradients
+        self.requires_grad: bool = requires_grad and pequegrad_context.grad_enabled
+
         # Gradient is initialized as 0.0 if requires_grad is True, None otherwise
         self._grad: Type[Tensor] = (
-            Tensor.zeros(self.shape, requires_grad=False) if requires_grad else None
+            Tensor.zeros(self.shape, requires_grad=False)
+            if self.requires_grad
+            else None
         )
 
-        # The context is the function that created this tensor, along with its inputs
+        # The context is the function that created this tensor, along with its inputs. The function
+        # is responsible for assigning itself to the _ctx attribute of the tensor
         self._ctx: Optional[Function] = None
-
-        self.requires_grad: bool = requires_grad
 
     def __iter__(self):
         return iter(self.data)
@@ -321,7 +326,10 @@ class Function:
 
         f = cls(*tensors, **kwargs)
         f.forward()
-        f.ret._ctx = f
+        should_store_grad = f.requires_grad and pequegrad_context.grad_enabled
+        if should_store_grad:
+            f.ret._ctx = f
+
         return f.ret
 
 
