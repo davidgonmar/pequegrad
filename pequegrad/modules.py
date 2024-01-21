@@ -20,13 +20,14 @@ class Module:
 
 class Linear(Module):
     def __init__(self, in_features, out_features):
-        self.weights = kaiming_init(in_features, (out_features, in_features))
+        self.weights = kaiming_init(in_features, (in_features, out_features))
+
         self.bias = Tensor.zeros(out_features, requires_grad=True)
 
         self._parameters = [self.weights, self.bias]
 
     def forward(self, input):
-        return (input @ self.weights.transpose()) + self.bias
+        return (input @ self.weights) + self.bias
 
     def backward(self, output_grad: Tensor):
         self.weights.backward(output_grad)
