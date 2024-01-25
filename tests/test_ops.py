@@ -329,24 +329,44 @@ class TestOps:
 
     @pytest.mark.parametrize(
         "data",
-        # shape_input, shape_kernel
+        # shape_input, shape_kernel, bias
         [
             # for input: batch_size, input_channels, input_height, input_width
             # for kernel: output_channels, input_channels, kernel_height, kernel_width
-            [(1, 1, 10, 5), (1, 1, 3, 3)],
-            [(1, 1, 10, 5), (1, 1, 1, 1)],
-            [(5, 1, 10, 5), (3, 1, 3, 3)],
-            [(5, 1, 10, 5), (3, 1, 1, 1)],
-            [(5, 1, 10, 5), (3, 1, 5, 5)],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True],
+            [(1, 1, 10, 5), (1, 1, 3, 3), False],
+            [(1, 1, 10, 5), (1, 1, 1, 1), True],
+            [(1, 1, 10, 5), (1, 1, 1, 1), False],
+            [(5, 1, 10, 5), (3, 1, 3, 3), True],
+            [(5, 1, 10, 5), (3, 1, 3, 3), False],
+            [(5, 1, 10, 5), (3, 1, 1, 1), True],
+            [(5, 1, 10, 5), (3, 1, 1, 1), False],
+            [(5, 1, 10, 5), (3, 1, 5, 5), True],
+            [(5, 1, 10, 5), (3, 1, 5, 5), False],
         ],
     )
     def test_conv2d(self, data):
         # TODO - Implement backward for conv2d
-        shape_input, shape_kernel = data
-        torch_fn = lambda x, y: torch.nn.functional.conv2d(x, y)  # noqa: E731
+        shape_input, shape_kernel, use_bias = data
+
+        def torch_fn(x, y, b=None):
+            if b is None:
+                return torch.nn.functional.conv2d(x, y)
+            return torch.nn.functional.conv2d(x, y, bias=b)
+
+        def peq_fn(x, y, b=None):
+            if b is None:
+                return x.conv2d(y)
+            return x.conv2d(y, b)
+
+        if use_bias:
+            bias_shape = (shape_kernel[0],)
+        arr = [shape_input, shape_kernel]
+        if use_bias:
+            arr.append(bias_shape)
         _compare_fn_with_torch(
-            [shape_input, shape_kernel],
-            lambda x, y: x.conv2d(y),
+            arr,
+            peq_fn,
             torch_fn,
         )
 

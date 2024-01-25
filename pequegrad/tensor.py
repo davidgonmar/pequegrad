@@ -260,7 +260,7 @@ class Tensor:
         """Returns the transpose of the tensor"""
         return self.transpose(0, 1)
 
-    def conv2d(self, filter: "Tensor"):
+    def conv2d(self, filter: "Tensor", bias: "Tensor" = None) -> "Tensor":
         """Returns the 2d convolution of the tensor with the given filter"""
         inp_unf = self.unfold(filter.shape[-2:])
         out_unf = (
@@ -270,7 +270,17 @@ class Tensor:
             self.shape[-2] - filter.shape[-2] + 1,
             self.shape[-1] - filter.shape[-1] + 1,
         )
-        return out_unf.fold((1, 1), after_conv_size)
+        out = out_unf.fold((1, 1), after_conv_size)
+
+        if bias is not None:
+            assert bias.shape == (
+                out.shape[1],
+            ), "bias shape must match output shape. Got {} but expected {}".format(
+                bias.shape, (out.shape[1],)
+            )
+            out += bias.reshape((1, -1, 1, 1))  # so we add the bias to each channel
+
+        return out
 
     def unfold(self, kernel_shape: Tuple[int, ...]):
         return Unfold.apply(self, kernel_shape=kernel_shape)
@@ -834,24 +844,3 @@ class Fold(Function):
         if self.input.requires_grad:
             unfolded = unfold_numpy_array(self.ret.grad.data, self.kernel_shape)[0]
             self.input._grad += Tensor(unfolded.transpose((0, 2, 1)))
-
-
-class Conv2d(Function):
-    def __init__(self, _input: Tensor, kernel: Tensor):
-        super().__init__(_input)
-        self.input = _input
-        self.kernel = kernel
-
-    def forward(self) -> Tensor:
-        k_out_c, k_in_c, k_h, k_w = self.kernel.shape
-        unfolded_in = unfold_numpy_array(self.input.data, (k_h, k_w))[0]
-        in_minibatch, in_channels, in_h, in_w = self.input.shape
-        res = (
-            (unfolded_in @ self.kernel.data.reshape(k_out_c, -1).T)
-            .transpose((0, 2, 1))
-            .reshape((in_minibatch, k_out_c, in_h - k_h + 1, in_w - k_w + 1))
-        )
-        self.ret = Tensor(res, requires_grad=self.requires_grad)
-
-    def backward(self) -> Tensor:
-        raise NotImplementedError

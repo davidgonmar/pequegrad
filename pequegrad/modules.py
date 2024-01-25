@@ -37,14 +37,13 @@ class Conv2d(Module):
         self.kernel = kaiming_init(
             in_channels, (out_channels, in_channels, kernel_size, kernel_size)
         )
-        self.bias = Tensor.zeros((out_channels,), requires_grad=True)
+        self.bias = Tensor.zeros(out_channels, requires_grad=True)
         self._parameters = [self.kernel, self.bias]
         assert stride == 1, "only stride=1 is supported"
         assert padding == 0, "only padding=0 is supported"
 
-    def forward(self, input):
-        return input.conv2d(self.kernel) + self.bias
+    def forward(self, input: Tensor):
+        return input.conv2d(self.kernel, self.bias)
 
     def backward(self, output_grad: Tensor):
         self.kernel.backward(output_grad)
-        self.bias.backward(output_grad)

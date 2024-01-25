@@ -19,9 +19,6 @@ def unfold_numpy_array(x: np.ndarray, kernel_shape: Tuple[int, int]):
             # so each xx's row represents a flattened 'step' that includes all channel dimensions
             # batch dimension will be kept in the first dimension
             xx[:, row, :] = x[:, :, i : i + k_h, j : j + k_w].reshape(batch, -1)
-            backward_x[:, :, i : i + k_h, j : j + k_w] += np.ones(
-                (batch, chann, k_h, k_w)
-            )
             # this is the same as iterating over the batches and doing the following:
             # xx[b, row, :] = x[b, :, i : i + k_h, j : j + k_w].flatten()
             # but is vectorized and faster
@@ -63,8 +60,5 @@ def fold_numpy_array(
 
             # batch, chann, m, n
             out[:, :, i : i + k_h, j : j + k_w] += row.reshape(batch, chann, k_h, k_w)
-            backward_xx[:, (n - k_w + 1) * i + j, :] += np.ones(
-                (batch, chann * k_h * k_w)
-            )
 
     return out, backward_xx
