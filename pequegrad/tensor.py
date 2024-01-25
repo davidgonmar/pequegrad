@@ -261,11 +261,7 @@ class Tensor:
         return self.transpose(0, 1)
 
     def conv2d(self, filter: "Tensor"):
-        """res = (
-            (unfolded_in @ self.kernel.data.reshape(k_out_c, -1).T)
-            .transpose((0, 2, 1))
-            .reshape((in_minibatch, k_out_c, in_h - k_h + 1, in_w - k_w + 1))
-        )"""
+        """Returns the 2d convolution of the tensor with the given filter"""
         inp_unf = self.unfold(filter.shape[-2:])
         out_unf = (
             inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T

@@ -30,3 +30,21 @@ class Linear(Module):
     def backward(self, output_grad: Tensor):
         self.weights.backward(output_grad)
         self.bias.backward(output_grad)
+
+
+class Conv2d(Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        self.kernel = kaiming_init(
+            in_channels, (out_channels, in_channels, kernel_size, kernel_size)
+        )
+        self.bias = Tensor.zeros((out_channels,), requires_grad=True)
+        self._parameters = [self.kernel, self.bias]
+        assert stride == 1, "only stride=1 is supported"
+        assert padding == 0, "only padding=0 is supported"
+
+    def forward(self, input):
+        return input.conv2d(self.kernel) + self.bias
+
+    def backward(self, output_grad: Tensor):
+        self.kernel.backward(output_grad)
+        self.bias.backward(output_grad)
