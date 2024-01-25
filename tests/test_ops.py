@@ -317,6 +317,11 @@ class TestOps:
             [(2, 2), (2, 2)],
             [(4, 1), (1,)],
             [(4,), (4, 1)],
+            [(2, 4, 1), (2, 1, 4)],  # both batched
+            [(2, 4, 1), (1, 4)],  # batched x unbatched
+            [(4, 1), (2, 1, 4)],  # unbatched x batched
+            [(2, 2, 3, 5), (5, 2)],  # batched_2 x unbatched
+            [(5, 2), (2, 2, 2, 5)],  # unbatched x batched_2
         ],
     )
     def test_matmul(self, shapes):

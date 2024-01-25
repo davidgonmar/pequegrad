@@ -705,6 +705,11 @@ class MatMul(Function):
 
     def backward(self):
         grad_output = self.ret.grad.data
+        # If we are multiplying 2 matrices, we need to check out cases where one of them is batched
+        # ,of shape (...extra_dims, m, n) and the other is not (of shape (n, k)).
+        # In that case, we need to sum over the batch dimensions to get the gradient of the non-batched matrix
+        # so the gradient has the same shape as the non-batched matrix
+        # TODO -- check cases with vectors, and higher dimensional tensors (rn it works when shape of the batched matrix is (batch, m, n) and the other is (n, k))
         if self.x.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
                 # Just multiply the gradients if both are vectors, since grad is a scalar
@@ -714,10 +719,20 @@ class MatMul(Function):
                 self.x._grad += Tensor(grad_output @ self.y.data.T)
             elif self.y.dim == 1:
                 # Matrix x Vector
-                self.x._grad += Tensor(np.outer(grad_output, self.y.data))
+                diff = self.y.dim - self.x.dim
+                axis_to_sum_over = tuple(range(diff))
+                self.x._grad += Tensor(
+                    np.outer(grad_output, self.y.data).sum(axis=axis_to_sum_over)
+                )
             else:
                 # Matrix x Matrix
-                self.x._grad += Tensor(grad_output @ self.y.data.T)
+                diff = self.y.dim - self.x.dim
+                axis_to_sum_over = tuple(range(diff))
+                self.x._grad += Tensor(
+                    (grad_output @ self.y.data.swapaxes(-1, -2)).sum(
+                        axis=axis_to_sum_over
+                    )
+                )
 
         if self.y.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
@@ -729,12 +744,24 @@ class MatMul(Function):
                 self.y._grad += Tensor(self.x.data.T @ grad_output)
             else:
                 # Matrix x Matrix
-                self.y._grad += Tensor(self.x.data.T @ grad_output)
+                diff = self.x.dim - self.y.dim
+                axis_to_sum_over = tuple(range(diff))
+                self.y._grad += Tensor(
+                    (self.x.data.swapaxes(-1, -2) @ grad_output).sum(
+                        axis=axis_to_sum_over
+                    )
+                )
 
         if self.x.requires_grad:
-            assert self.x._grad.shape == self.x.shape
+            assert self.x._grad.shape == self.x.shape, (
+                f"grad shape {self.x._grad.shape} does not match tensor shape {self.x.shape}"
+                + f"\ngrad_output shape: {grad_output.shape}"
+            )
         if self.y.requires_grad:
-            assert self.y._grad.shape == self.y.shape
+            assert self.y._grad.shape == self.y.shape, (
+                f"grad shape {self.y._grad.shape} does not match tensor shape {self.y.shape}"
+                + f"\ngrad_output shape: {grad_output.shape}"
+            )
 
 
 class Reshape(Function):
