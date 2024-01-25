@@ -3,8 +3,10 @@ import numpy as np
 from typing import List
 
 
-def kaiming_init(n, shape):
-    return Tensor(np.random.normal(0, np.sqrt(1 / n), shape), requires_grad=True)
+def kaiming_init(shape):
+    fan_in = shape[0]
+    bound = 1 / np.sqrt(fan_in)
+    return Tensor.uniform(shape, -bound, bound, requires_grad=True)
 
 
 class Module:
@@ -20,7 +22,7 @@ class Module:
 
 class Linear(Module):
     def __init__(self, in_features, out_features):
-        self.weights = kaiming_init(in_features, (in_features, out_features))
+        self.weights = kaiming_init((in_features, out_features))
         self.bias = Tensor.zeros(out_features, requires_grad=True)
         self._parameters = [self.weights, self.bias]
 
@@ -35,15 +37,12 @@ class Linear(Module):
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         self.kernel = kaiming_init(
-            in_channels, (out_channels, in_channels, kernel_size, kernel_size)
+            (out_channels, in_channels, kernel_size, kernel_size)
         )
         self.bias = Tensor.zeros(out_channels, requires_grad=True)
         self._parameters = [self.kernel, self.bias]
         assert stride == 1, "only stride=1 is supported"
         assert padding == 0, "only padding=0 is supported"
 
-    def forward(self, input: Tensor):
+    def forward(self, input):
         return input.conv2d(self.kernel, self.bias)
-
-    def backward(self, output_grad: Tensor):
-        self.kernel.backward(output_grad)
