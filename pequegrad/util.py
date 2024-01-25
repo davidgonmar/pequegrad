@@ -9,8 +9,6 @@ def unfold_numpy_array(x: np.ndarray, kernel_shape: Tuple[int, int]):
 
     # output size = (batch, height of unfolded matrix, flattened kernel (including channels))
     xx = np.zeros((batch, (m - k_h + 1) * (n - k_w + 1), chann * k_h * k_w))
-    backward_x = np.zeros_like(x)
-
     row = 0
     for i in range(m - k_h + 1):
         for j in range(n - k_w + 1):
@@ -24,7 +22,7 @@ def unfold_numpy_array(x: np.ndarray, kernel_shape: Tuple[int, int]):
             # but is vectorized and faster
             row += 1
 
-    return xx, backward_x
+    return xx
 
 
 def fold_numpy_array(
@@ -51,7 +49,6 @@ def fold_numpy_array(
     #    [(5, 1, 10, 5), (3, 1, 5, 5)],
     # xx shape = (batch, height of unfolded mat, k_h * k_w * chann)
     out = np.zeros((batch, chann, m, n))
-    backward_xx = np.zeros_like(xx)
 
     # iterate over the number of windows
     for i in range(m - k_h + 1):
@@ -61,4 +58,4 @@ def fold_numpy_array(
             # batch, chann, m, n
             out[:, :, i : i + k_h, j : j + k_w] += row.reshape(batch, chann, k_h, k_w)
 
-    return out, backward_xx
+    return out

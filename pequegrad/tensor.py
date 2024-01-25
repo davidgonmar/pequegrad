@@ -799,7 +799,7 @@ class Unfold(Function):
         self.kernel_shape = kernel_shape
 
     def forward(self) -> Tensor:
-        unfolded, bw_unfolded = unfold_numpy_array(self.input.data, self.kernel_shape)
+        unfolded = unfold_numpy_array(self.input.data, self.kernel_shape)
         self.ret = Tensor(
             unfolded.transpose((0, 2, 1)),
             requires_grad=self.requires_grad,
@@ -812,7 +812,7 @@ class Unfold(Function):
                 self.ret.grad.data.transpose((0, 2, 1)),
                 self.kernel_shape,
                 self.input.shape[-2:],
-            )[0]
+            )
             self.input._grad += Tensor(folded_grad)
 
 
@@ -829,7 +829,7 @@ class Fold(Function):
         self.output_shape = output_shape
 
     def forward(self) -> Tensor:
-        folded, bw = fold_numpy_array(
+        folded = fold_numpy_array(
             self.input.data.transpose((0, 2, 1)),
             self.kernel_shape,
             self.output_shape,
@@ -842,5 +842,5 @@ class Fold(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            unfolded = unfold_numpy_array(self.ret.grad.data, self.kernel_shape)[0]
+            unfolded = unfold_numpy_array(self.ret.grad.data, self.kernel_shape)
             self.input._grad += Tensor(unfolded.transpose((0, 2, 1)))
