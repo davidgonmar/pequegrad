@@ -1,7 +1,7 @@
 from typing import List, Union, Type, Set, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
-from .util import unfold_numpy_array
+from .util import unfold_numpy_array, fold_numpy_array
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -91,6 +91,9 @@ class Tensor:
         for node in reversed(nodes):
             if node._ctx is not None:
                 node._ctx.backward()
+                assert (
+                    node._grad.shape == node.shape
+                ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}"
                 if not retain_ctx:
                     node._ctx = None
 
@@ -252,8 +255,32 @@ class Tensor:
         """Returns a tensor with the specified dimension removed"""
         return Squeeze.apply(self, dim=dim)
 
+    @property
+    def T(self) -> "Tensor":
+        """Returns the transpose of the tensor"""
+        return self.transpose(0, 1)
+
     def conv2d(self, filter: "Tensor"):
-        return Conv2d.apply(self, filter)
+        """res = (
+            (unfolded_in @ self.kernel.data.reshape(k_out_c, -1).T)
+            .transpose((0, 2, 1))
+            .reshape((in_minibatch, k_out_c, in_h - k_h + 1, in_w - k_w + 1))
+        )"""
+        inp_unf = self.unfold(filter.shape[-2:])
+        out_unf = (
+            inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T
+        ).transpose(1, 2)
+        after_conv_size = (
+            self.shape[-2] - filter.shape[-2] + 1,
+            self.shape[-1] - filter.shape[-1] + 1,
+        )
+        return out_unf.fold((1, 1), after_conv_size)
+
+    def unfold(self, kernel_shape: Tuple[int, ...]):
+        return Unfold.apply(self, kernel_shape=kernel_shape)
+
+    def fold(self, kernel_shape: Tuple[int, ...], output_shape: Tuple[int, ...]):
+        return Fold.apply(self, kernel_shape=kernel_shape, output_shape=output_shape)
 
     @property
     def shape(self):
@@ -732,6 +759,60 @@ class Reshape(Function):
             self.input._grad += Tensor(self.ret.grad.data).reshape(self.input_shape)
 
 
+class Unfold(Function):
+    def __init__(self, input: Tensor, kernel_shape: Tuple[int, ...]):
+        super().__init__(input)
+        self.input = input
+        self.kernel_shape = kernel_shape
+
+    def forward(self) -> Tensor:
+        unfolded, bw_unfolded = unfold_numpy_array(self.input.data, self.kernel_shape)
+        self.ret = Tensor(
+            unfolded.transpose((0, 2, 1)),
+            requires_grad=self.requires_grad,
+        )
+        return self.ret
+
+    def backward(self) -> Tensor:
+        if self.input.requires_grad:
+            folded_grad = fold_numpy_array(
+                self.ret.grad.data.transpose((0, 2, 1)),
+                self.kernel_shape,
+                self.input.shape[-2:],
+            )[0]
+            self.input._grad += Tensor(folded_grad)
+
+
+class Fold(Function):
+    def __init__(
+        self,
+        input: Tensor,
+        kernel_shape: Tuple[int, ...],
+        output_shape: Tuple[int, ...],
+    ):
+        super().__init__(input)
+        self.input = input
+        self.kernel_shape = kernel_shape
+        self.output_shape = output_shape
+
+    def forward(self) -> Tensor:
+        folded, bw = fold_numpy_array(
+            self.input.data.transpose((0, 2, 1)),
+            self.kernel_shape,
+            self.output_shape,
+        )
+        self.ret = Tensor(
+            folded,
+            requires_grad=self.requires_grad,
+        )
+        return self.ret
+
+    def backward(self) -> Tensor:
+        if self.input.requires_grad:
+            unfolded = unfold_numpy_array(self.ret.grad.data, self.kernel_shape)[0]
+            self.input._grad += Tensor(unfolded.transpose((0, 2, 1)))
+
+
 class Conv2d(Function):
     def __init__(self, _input: Tensor, kernel: Tensor):
         super().__init__(_input)
@@ -740,7 +821,7 @@ class Conv2d(Function):
 
     def forward(self) -> Tensor:
         k_out_c, k_in_c, k_h, k_w = self.kernel.shape
-        unfolded_in = unfold_numpy_array(self.input.data, (k_h, k_w))
+        unfolded_in = unfold_numpy_array(self.input.data, (k_h, k_w))[0]
         in_minibatch, in_channels, in_h, in_w = self.input.shape
         res = (
             (unfolded_in @ self.kernel.data.reshape(k_out_c, -1).T)

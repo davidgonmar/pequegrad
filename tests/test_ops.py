@@ -45,8 +45,9 @@ def _compare_fn_with_torch(
 
     if backward:
         # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
-        peq_res.backward(Tensor(np.full(peq_res.shape, 2.0)))
-        torch_res.backward(torch_tensor(np.full(torch_res.shape, 2.0)))
+        nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
+        peq_res.backward(Tensor(nparr.astype(np.float64)))
+        torch_res.backward(torch_tensor(nparr, dtype=torch.float64))
 
         for t, torch_t in zip(tensors, torch_tensors):
             _compare(t.grad, torch_t.grad, tol)
@@ -342,5 +343,46 @@ class TestOps:
             [shape_input, shape_kernel],
             lambda x, y: x.conv2d(y),
             torch_fn,
-            backward=False,
         )
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, kernel_size
+        [
+            [(2, 2, 3, 3), (2, 2)],
+            [(1, 1, 10, 5), (3, 3)],
+            [(1, 1, 10, 5), (1, 1)],
+            [(5, 1, 10, 5), (3, 3)],
+            [(5, 1, 10, 5), (1, 1)],
+            [(5, 1, 10, 5), (5, 5)],
+        ],
+    )
+    def test_unfold(self, data):
+        shape_input, kernel_size = data
+        torch_fn = lambda x: torch.nn.functional.unfold(x, kernel_size)  # noqa: E731
+        _compare_fn_with_torch([shape_input], lambda x: x.unfold(kernel_size), torch_fn)
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, kernel_size
+        [
+            [(2, 2, 3, 3), (2, 2)],
+            [(1, 1, 10, 5), (3, 3)],
+            [(1, 1, 10, 5), (1, 1)],
+            [(5, 1, 10, 5), (3, 3)],
+            [(5, 1, 10, 5), (1, 1)],
+            [(5, 1, 10, 5), (5, 5)],
+        ],
+    )
+    def test_fold(self, data):
+        shape_input, kernel_size = data
+
+        def torch_fn(x):
+            unfolded = torch.nn.functional.unfold(x, kernel_size)
+            return torch.nn.functional.fold(unfolded, x.shape[2:], kernel_size)
+
+        def peq_fn(x):
+            unfolded = x.unfold(kernel_size)
+            return unfolded.fold(kernel_size, x.shape[2:])
+
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
