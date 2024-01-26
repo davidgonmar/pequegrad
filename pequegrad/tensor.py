@@ -1,7 +1,7 @@
 from typing import List, Union, Type, Set, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
-from .util import unfold_numpy_array, fold_numpy_array
+from .util import im2col, col2im
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -799,17 +799,17 @@ class Unfold(Function):
         self.kernel_shape = kernel_shape
 
     def forward(self) -> Tensor:
-        unfolded = unfold_numpy_array(self.input.data, self.kernel_shape)
+        unfolded = im2col(self.input.data, self.kernel_shape)
         self.ret = Tensor(
-            unfolded.transpose((0, 2, 1)),
+            unfolded,
             requires_grad=self.requires_grad,
         )
         return self.ret
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            folded_grad = fold_numpy_array(
-                self.ret.grad.data.transpose((0, 2, 1)),
+            folded_grad = col2im(
+                self.ret.grad.data,
                 self.kernel_shape,
                 self.input.shape[-2:],
             )
@@ -829,8 +829,8 @@ class Fold(Function):
         self.output_shape = output_shape
 
     def forward(self) -> Tensor:
-        folded = fold_numpy_array(
-            self.input.data.transpose((0, 2, 1)),
+        folded = col2im(
+            self.input.data,
             self.kernel_shape,
             self.output_shape,
         )
@@ -842,5 +842,5 @@ class Fold(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            unfolded = unfold_numpy_array(self.ret.grad.data, self.kernel_shape)
-            self.input._grad += Tensor(unfolded.transpose((0, 2, 1)))
+            unfolded = im2col(self.ret.grad.data, self.kernel_shape)
+            self.input._grad += Tensor(unfolded)

@@ -2,60 +2,71 @@ import numpy as np
 from typing import Tuple
 
 
-def unfold_numpy_array(x: np.ndarray, kernel_shape: Tuple[int, int]):
+def im2col(x: np.ndarray, kernel_shape: Tuple[int, int]) -> np.ndarray:
+    """
+    Unfold a numpy array to a 3D array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
+    It is equivalent to im2col transposed.
+
+    Args:
+        x: Input array of shape (batch_size, n_channels, x_h, x_w)
+        kernel_shape: Kernel shape (k_h, k_w)
+
+    Returns:
+        Unfolded array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
+
+    """
+
+    batch_size, in_channels, x_h, x_w = x.shape
     k_h, k_w = kernel_shape
-    assert x.ndim == 4, "only accepting batched arrays of ndim 4"
-    batch, chann, m, n = x.shape
+    out_h = x_h - k_h + 1
+    out_w = x_w - k_w + 1
 
-    # output size = (batch, height of unfolded matrix, flattened kernel (including channels))
-    xx = np.zeros((batch, (m - k_h + 1) * (n - k_w + 1), chann * k_h * k_w))
-    row = 0
-    for i in range(m - k_h + 1):
-        for j in range(n - k_w + 1):
-            # we will be putting in xx the flattened convolution 'steps' for each position of the filter.
-            # all the channels for one position will be included in the flattened array
-            # so each xx's row represents a flattened 'step' that includes all channel dimensions
-            # batch dimension will be kept in the first dimension
-            xx[:, row, :] = x[:, :, i : i + k_h, j : j + k_w].reshape(batch, -1)
-            # this is the same as iterating over the batches and doing the following:
-            # xx[b, row, :] = x[b, :, i : i + k_h, j : j + k_w].flatten()
-            # but is vectorized and faster
-            row += 1
+    cols = np.zeros((batch_size, in_channels * k_h * k_w, out_h * out_w))
 
-    return xx
+    for i in range(out_h):
+        h_max = i + k_h
+        for j in range(out_w):
+            w_max = j + k_w
+            cols[:, :, i * out_w + j] = x[:, :, i:h_max, j:w_max].reshape(
+                batch_size, -1
+            )
+
+    return cols
 
 
-def fold_numpy_array(
-    xx: np.ndarray, kernel_shape: Tuple[int, int], input_shape: Tuple[int, int]
+def col2im(
+    unfolded: np.ndarray, kernel_shape: Tuple[int, int], output_shape: Tuple[int, int]
 ):
-    # xx shape = (batch, height of unfolded mat, flattened kernel)
-    assert xx.ndim == 3, "only accepting batched arrays of ndim 3"
-    # first dimension is batch
-    # second dimension is the flattened convolution 'steps' for each position of the filter,
-    # so its shape should be (m - k_h + 1) * (n - k_w + 1)
-    assert xx.shape[1] == (input_shape[0] - kernel_shape[0] + 1) * (
-        input_shape[1] - kernel_shape[1] + 1
-    ), "shape mismatch, got {} but expected {}".format(
-        xx.shape[1],
-        (input_shape[0] - kernel_shape[0] + 1) * (input_shape[1] - kernel_shape[1] + 1),
-    )
+    """
+    Fold a 3D array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
+    It is equivalent to col2im transposed.
 
-    # third dimension is the flattened kernel (including channels)
+    Args:
+        unfolded: Unfolded array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
+        kernel_shape: Kernel shape (k_h, k_w)
+        output_shape: Output shape (x_h, x_w)
+
+    Returns:
+        Folded array of shape (batch_size, n_channels, x_h, x_w)
+
+    """
+    assert (
+        len(unfolded.shape) == 3
+    ), "unfolded must have 3 dimensions: (batch, k_h * k_w * n_channels, (out_h - k_h + 1) * (out_w - k_w + 1))"
+
     k_h, k_w = kernel_shape
-    chann = xx.shape[2] // (k_h * k_w)
-    m, n = input_shape
-    batch = xx.shape[0]
+    out_h, out_w = output_shape
+    out_channels = unfolded.shape[1] // (k_h * k_w)
+    out_batch = unfolded.shape[0]
 
-    #    [(5, 1, 10, 5), (3, 1, 5, 5)],
-    # xx shape = (batch, height of unfolded mat, k_h * k_w * chann)
-    out = np.zeros((batch, chann, m, n))
+    out = np.zeros((out_batch, out_channels, out_h, out_w))
 
-    # iterate over the number of windows
-    for i in range(m - k_h + 1):
-        for j in range(n - k_w + 1):
-            row = xx[:, (n - k_w + 1) * i + j, :]
-
-            # batch, chann, m, n
-            out[:, :, i : i + k_h, j : j + k_w] += row.reshape(batch, chann, k_h, k_w)
+    for i in range(out_h - k_h + 1):
+        for j in range(out_w - k_w + 1):
+            col = unfolded[:, :, i * (out_w - k_w + 1) + j]
+            print(col.shape)
+            out[:, :, i : i + k_h, j : j + k_w] += col.reshape(
+                out_batch, out_channels, k_h, k_w
+            )
 
     return out
