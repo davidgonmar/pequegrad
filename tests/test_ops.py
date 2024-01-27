@@ -411,3 +411,25 @@ class TestOps:
             return unfolded.fold(kernel_size, x.shape[2:])
 
         _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, kernel_size
+        [
+            [(1, 1, 10, 5), (3, 3)],
+            [(1, 1, 10, 5), (1, 1)],
+            [(5, 1, 10, 5), (3, 3)],
+            [(5, 1, 10, 5), (1, 1)],
+            [(5, 1, 10, 5), (5, 5)],
+        ],
+    )
+    def test_max_pool2d(self, data):
+        shape_input, kernel_size = data
+
+        def torch_fn(x):
+            return torch.nn.functional.max_pool2d(x, kernel_size, stride=1)
+
+        def peq_fn(x):
+            return x.max_pool2d(kernel_size)
+
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)

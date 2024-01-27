@@ -52,7 +52,9 @@ def col2im(
     """
     assert (
         len(unfolded.shape) == 3
-    ), "unfolded must have 3 dimensions: (batch, k_h * k_w * n_channels, (out_h - k_h + 1) * (out_w - k_w + 1))"
+    ), "unfolded must have 3 dimensions: (batch, k_h * k_w * n_channels, (out_h - k_h + 1) * (out_w - k_w + 1)), got shape {}".format(
+        unfolded.shape
+    )
 
     k_h, k_w = kernel_shape
     out_h, out_w = output_shape
@@ -64,7 +66,6 @@ def col2im(
     for i in range(out_h - k_h + 1):
         for j in range(out_w - k_w + 1):
             col = unfolded[:, :, i * (out_w - k_w + 1) + j]
-            print(col.shape)
             out[:, :, i : i + k_h, j : j + k_w] += col.reshape(
                 out_batch, out_channels, k_h, k_w
             )

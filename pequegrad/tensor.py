@@ -282,6 +282,21 @@ class Tensor:
 
         return out
 
+    def max_pool2d(self, kernel_size: Tuple[int, int]) -> "Tensor":
+        """Returns the 2d maxpooling of the tensor with the given kernel size"""
+        assert (
+            self.dim == 4
+        ), "max_pool2d is only supported for tensors with 4 dimensions"
+        new_shape = (
+            self.shape[0],
+            self.shape[1],
+            (self.shape[2] - kernel_size[0] + 1),
+            (self.shape[3] - kernel_size[1] + 1),
+        )
+        unfolded = self.unfold(kernel_size)
+        maxed = unfolded.max(1)
+        return maxed.reshape(new_shape)
+
     def unfold(self, kernel_shape: Tuple[int, ...]):
         return Unfold.apply(self, kernel_shape=kernel_shape)
 
@@ -386,12 +401,20 @@ class Max(Function):
 
     def backward(self):
         if self.a.requires_grad:
+            grad_output = self.ret.grad.data
+            ret_data = self.ret.data
+            # When keepdim is False, we need to insert a dimension of size 1 at the dimension we reduced over
+            # so that broadcasting works correctly during the backward pass.
+            if not self.keepdim and self.dim is not None:
+                grad_output = np.expand_dims(grad_output, axis=self.dim)
+                ret_data = np.expand_dims(ret_data, axis=self.dim)
+
+            # Now we can broadcast the gradient to the shape of the input tensor
+            grad_broadcasted = np.broadcast_to(grad_output, self.a.shape)
+            ret_broadcasted = np.broadcast_to(ret_data, self.a.shape)
+
             self.a._grad += Tensor(
-                np.where(
-                    self.a.data == self.ret.data,
-                    self.ret.grad.data,
-                    0,
-                )
+                np.where(self.a.data == ret_broadcasted, grad_broadcasted, 0)
             )
 
 
@@ -616,7 +639,7 @@ class Add(Function):
 
     def forward(self):
         self.ret = Tensor(
-            np.add(self.x.data, self.y.data),
+            self.x.data + self.y.data,
             requires_grad=self.requires_grad,
         )
         return self.ret
