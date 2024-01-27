@@ -307,11 +307,18 @@ class Tensor:
         maxed = unfolded.max(2)
         return maxed.reshape(new_shape)
 
-    def unfold(self, kernel_shape: Tuple[int, ...]):
-        return Unfold.apply(self, kernel_shape=kernel_shape)
+    def unfold(self, kernel_shape: Tuple[int, ...], stride: int = 1):
+        return Unfold.apply(self, kernel_shape=kernel_shape, stride=stride)
 
-    def fold(self, kernel_shape: Tuple[int, ...], output_shape: Tuple[int, ...]):
-        return Fold.apply(self, kernel_shape=kernel_shape, output_shape=output_shape)
+    def fold(
+        self,
+        kernel_shape: Tuple[int, ...],
+        output_shape: Tuple[int, ...],
+        stride: int = 1,
+    ):
+        return Fold.apply(
+            self, kernel_shape=kernel_shape, output_shape=output_shape, stride=stride
+        )
 
     @property
     def shape(self):
@@ -826,13 +833,14 @@ class Reshape(Function):
 
 
 class Unfold(Function):
-    def __init__(self, input: Tensor, kernel_shape: Tuple[int, ...]):
+    def __init__(self, input: Tensor, kernel_shape: Tuple[int, ...], stride: int = 1):
         super().__init__(input)
         self.input = input
         self.kernel_shape = kernel_shape
+        self.stride = stride
 
     def forward(self) -> Tensor:
-        unfolded = im2col(self.input.data, self.kernel_shape)
+        unfolded = im2col(self.input.data, self.kernel_shape, stride=self.stride)
         self.ret = Tensor(
             unfolded,
             requires_grad=self.requires_grad,
@@ -845,6 +853,7 @@ class Unfold(Function):
                 self.ret.grad.data,
                 self.kernel_shape,
                 self.input.shape[-2:],
+                stride=self.stride,
             )
             self.input._grad += Tensor(folded_grad)
 
@@ -855,17 +864,20 @@ class Fold(Function):
         input: Tensor,
         kernel_shape: Tuple[int, ...],
         output_shape: Tuple[int, ...],
+        stride: int = 1,
     ):
         super().__init__(input)
         self.input = input
         self.kernel_shape = kernel_shape
         self.output_shape = output_shape
+        self.stride = stride
 
     def forward(self) -> Tensor:
         folded = col2im(
             self.input.data,
             self.kernel_shape,
             self.output_shape,
+            stride=self.stride,
         )
         self.ret = Tensor(
             folded,
@@ -875,5 +887,5 @@ class Fold(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            unfolded = im2col(self.ret.grad.data, self.kernel_shape)
+            unfolded = im2col(self.ret.grad.data, self.kernel_shape, stride=self.stride)
             self.input._grad += Tensor(unfolded)

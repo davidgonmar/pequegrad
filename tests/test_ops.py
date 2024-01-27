@@ -372,43 +372,53 @@ class TestOps:
 
     @pytest.mark.parametrize(
         "data",
-        # shape_input, kernel_size
+        # shape_input, kernel_size, stride
         [
-            [(2, 2, 3, 3), (2, 2)],
-            [(1, 1, 10, 5), (3, 3)],
-            [(1, 1, 10, 5), (1, 1)],
-            [(5, 1, 10, 5), (3, 3)],
-            [(5, 1, 10, 5), (1, 1)],
-            [(5, 1, 10, 5), (5, 5)],
+            [(2, 2, 3, 3), (2, 2), 1],
+            [(2, 2, 3, 3), (2, 2), 2],
+            [(1, 1, 10, 5), (3, 3), 1],
+            [(1, 1, 10, 5), (2, 2), 2],
+            [(1, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (3, 3), 1],
+            [(5, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (5, 5), 1],
         ],
     )
     def test_unfold(self, data):
-        shape_input, kernel_size = data
-        torch_fn = lambda x: torch.nn.functional.unfold(x, kernel_size)  # noqa: E731
-        _compare_fn_with_torch([shape_input], lambda x: x.unfold(kernel_size), torch_fn)
+        shape_input, kernel_size, stride = data
+        torch_fn = lambda x: torch.nn.functional.unfold(
+            x, kernel_size, stride=stride
+        )  # noqa: E731
+        _compare_fn_with_torch(
+            [shape_input], lambda x: x.unfold(kernel_size, stride=stride), torch_fn
+        )
 
     @pytest.mark.parametrize(
         "data",
         # shape_input, kernel_size
         [
-            [(2, 2, 3, 3), (2, 2)],
-            [(1, 1, 10, 5), (3, 3)],
-            [(1, 1, 10, 5), (1, 1)],
-            [(5, 1, 10, 5), (3, 3)],
-            [(5, 1, 10, 5), (1, 1)],
-            [(5, 1, 10, 5), (5, 5)],
+            [(2, 2, 3, 3), (2, 2), 1],
+            [(2, 2, 3, 3), (2, 2), 2],
+            [(1, 1, 10, 5), (3, 3), 1],
+            [(1, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (3, 3), 1],
+            [(5, 1, 10, 5), (3, 3), 2],
+            [(5, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (5, 5), 1],
         ],
     )
     def test_fold(self, data):
-        shape_input, kernel_size = data
+        shape_input, kernel_size, stride = data
 
         def torch_fn(x):
-            unfolded = torch.nn.functional.unfold(x, kernel_size)
-            return torch.nn.functional.fold(unfolded, x.shape[2:], kernel_size)
+            unfolded = torch.nn.functional.unfold(x, kernel_size, stride=stride)
+            return torch.nn.functional.fold(
+                unfolded, x.shape[2:], kernel_size, stride=stride
+            )
 
         def peq_fn(x):
-            unfolded = x.unfold(kernel_size)
-            return unfolded.fold(kernel_size, x.shape[2:])
+            unfolded = x.unfold(kernel_size, stride=stride)
+            return unfolded.fold(kernel_size, x.shape[2:], stride=stride)
 
         _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
 
