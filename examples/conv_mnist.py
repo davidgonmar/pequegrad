@@ -15,17 +15,21 @@ DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 class ConvNet:
     def __init__(self):
         # input size = 28x28
-        self.conv1 = Conv2d(in_channels=1, out_channels=4, kernel_size=5)  # 24x24
-        self.conv2 = Conv2d(
-            in_channels=4, out_channels=2, kernel_size=5
-        )  # 20x20 -> flattened it is 20*20*2 = 800
-        self.fc1 = Linear(800, 10)
+        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3)
+        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3)
+        self.fc1 = Linear(16 * 22 * 22, 10)
 
     def forward(self, input):
-        input = input.reshape((-1, 1, 28, 28))
-        input = self.conv1.forward(input).relu()
-        input = self.conv2.forward(input).relu()
-        input = input.reshape((-1, 800))
+        input = input.reshape((-1, 1, 28, 28))  # shape: (28, 28)
+        input = (
+            self.conv1.forward(input)
+            .relu()
+            .max_pool2d(kernel_size=(2, 2))  # stride = 1
+        )  # shape: (28, 28) -> (26, 26) -> (25, 25)
+        input = (
+            self.conv2.forward(input).relu().max_pool2d(kernel_size=(2, 2))
+        )  # shape: (25, 25) -> (23, 23) -> (22, 22)
+        input = input.reshape((-1, 16 * 22 * 22))
         input = self.fc1.forward(input)
         return input
 
@@ -89,36 +93,35 @@ def get_dataset():
     return Tensor(X_train), Tensor(y_train), Tensor(X_test), Tensor(y_test)
 
 
-def train(model, X_train, Y_train, X_test, Y_test, epochs=15, batch_size=32):
+def train(model, X_train, Y_train, X_test, Y_test, epochs=140, batch_size=128):
     # weights of the network printed
-    optim = SGD(model.parameters(), lr=0.001, weight_decay=0)
+    optim = SGD(model.parameters(), lr=0.001, weight_decay=0.005)
     for epoch in range(epochs):
-        for i in range(0, len(X_train), batch_size):
-            # Determine the end index of the current batch
-            end_idx = min(i + batch_size, len(X_train))
-            batch_X = Tensor(X_train[i:end_idx])
-            batch_Y = Y_train[i:end_idx]
+        # Randomly sample batch indices
+        indices = np.random.choice(len(X_train), batch_size, replace=False)
+        batch_X = Tensor(X_train[indices])
+        batch_Y = Y_train[indices]
 
-            # Forward pass
-            prediction = model.forward(batch_X)
+        # Forward pass
+        prediction = model.forward(batch_X)
 
-            # Convert batch_Y to one-hot encoding (just passing the value is not supported yet)
-            batch_Y_one_hot = np.zeros((end_idx - i, 10))
-            batch_Y_one_hot[np.arange(end_idx - i), batch_Y] = 1
+        # Convert batch_Y to one-hot encoding (just passing the value is not supported yet)
+        batch_Y_one_hot = np.zeros((batch_size, 10))
+        batch_Y_one_hot[np.arange(batch_size), batch_Y] = 1
 
-            # Compute loss and backpropagate
-            loss = prediction.cross_entropy_loss(
-                Tensor(batch_Y_one_hot, requires_grad=True)
-            )
+        # Compute loss and backpropagate
+        loss = prediction.cross_entropy_loss(
+            Tensor(batch_Y_one_hot, requires_grad=True)
+        )
 
-            loss.backward()
+        loss.backward()
 
-            # Update the weights
-            optim.step()
-            print(
-                "step {} / {}".format(i // batch_size, len(X_train) // batch_size),
-                end="\r",
-            )
+        # Update the weights
+        optim.step()
+        print(
+            "step {} / {}".format(epoch, epochs),
+            end="\r",
+        )
 
         print(f"Epoch {epoch} | Loss {loss.data}")
 
