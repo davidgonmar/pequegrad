@@ -438,7 +438,7 @@ class TestOps:
         shape_input, kernel_size = data
 
         def torch_fn(x):
-            return torch.nn.functional.max_pool2d(x, kernel_size, stride=1)
+            return torch.nn.functional.max_pool2d(x, kernel_size)
 
         def peq_fn(x):
             return x.max_pool2d(kernel_size)

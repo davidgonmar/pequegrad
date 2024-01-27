@@ -17,19 +17,17 @@ class ConvNet:
         # input size = 28x28
         self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3)
         self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3)
-        self.fc1 = Linear(16 * 22 * 22, 10)
+        self.fc1 = Linear(16 * 5 * 5, 10)
 
     def forward(self, input):
         input = input.reshape((-1, 1, 28, 28))  # shape: (28, 28)
         input = (
-            self.conv1.forward(input)
-            .relu()
-            .max_pool2d(kernel_size=(2, 2))  # stride = 1
-        )  # shape: (28, 28) -> (26, 26) -> (25, 25)
+            self.conv1.forward(input).relu().max_pool2d(kernel_size=(2, 2))
+        )  # shape: (28, 28) -> (26, 26) -> (13, 13)
         input = (
             self.conv2.forward(input).relu().max_pool2d(kernel_size=(2, 2))
-        )  # shape: (25, 25) -> (23, 23) -> (22, 22)
-        input = input.reshape((-1, 16 * 22 * 22))
+        )  # shape: (13, 13) -> (11, 11) -> (5, 5)
+        input = input.reshape((-1, 16 * 5 * 5))
         input = self.fc1.forward(input)
         return input
 

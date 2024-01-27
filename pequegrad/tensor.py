@@ -287,13 +287,16 @@ class Tensor:
         assert (
             self.dim == 4
         ), "max_pool2d is only supported for tensors with 4 dimensions"
+        stride = kernel_size
+        assert stride[0] == stride[1], "kernel size must be square"
+
         new_shape = (
             self.shape[0],
             self.shape[1],
-            (self.shape[2] - kernel_size[0] + 1),
-            (self.shape[3] - kernel_size[1] + 1),
+            (self.shape[2] - kernel_size[0]) // stride[0] + 1,
+            (self.shape[3] - kernel_size[1]) // stride[1] + 1,
         )
-        unfolded = self.unfold(kernel_size)
+        unfolded = self.unfold(kernel_size, stride=stride[0])
         # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
         # concatenation of the channels, so we need to reshape to 'divide' the channels
         unfolded = unfolded.reshape(
