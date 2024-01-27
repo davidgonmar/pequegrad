@@ -294,7 +294,17 @@ class Tensor:
             (self.shape[3] - kernel_size[1] + 1),
         )
         unfolded = self.unfold(kernel_size)
-        maxed = unfolded.max(1)
+        # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
+        # concatenation of the channels, so we need to reshape to 'divide' the channels
+        unfolded = unfolded.reshape(
+            (
+                unfolded.shape[0],
+                self.shape[1],
+                kernel_size[0] * kernel_size[1],
+                unfolded.shape[-1],
+            )
+        )
+        maxed = unfolded.max(2)
         return maxed.reshape(new_shape)
 
     def unfold(self, kernel_shape: Tuple[int, ...]):
