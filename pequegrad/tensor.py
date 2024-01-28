@@ -322,6 +322,32 @@ class Tensor:
             self, kernel_shape=kernel_shape, output_shape=output_shape, stride=stride
         )
 
+    def var(self, dim=None, keepdim=True, correction=1):
+        # keep dim on mean so that we can broadcast
+        mean = self.mean(dim=dim, keepdim=True)
+
+        # only dim of type positive int, tuple or None are supported
+        assert (
+            dim >= 0
+            if isinstance(dim, int)
+            else all(d >= 0 for d in dim)
+            if dim is not None
+            else True
+        ), "only positive dims supported by now. Got {}".format(dim)
+
+        N = (
+            self.data.size
+            if dim is None
+            else self.shape[dim]
+            if isinstance(dim, int)
+            else np.prod([self.shape[i] for i in dim])
+        )
+        variance = ((self - mean) ** 2).sum(dim=dim, keepdim=keepdim) / (N - correction)
+        return variance
+
+    def std(self, dim=None, keepdim=True, correction=1):
+        return self.var(dim=dim, keepdim=keepdim, correction=correction) ** 0.5
+
     @property
     def shape(self):
         """Returns the shape of the tensor"""
@@ -353,7 +379,7 @@ class Tensor:
         return self.pow(exponent)
 
     def __truediv__(self, other: "Tensor") -> "Tensor":
-        return self.__mul__(other**-1)
+        return self.__mul__(other**-1.0)
 
     def relu(self) -> "Tensor":
         """ReLU activation function"""

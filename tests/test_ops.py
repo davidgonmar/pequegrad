@@ -444,3 +444,58 @@ class TestOps:
             return x.max_pool2d(kernel_size)
 
         _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, dim, keepdim
+        [
+            [(5, 3, 10, 5), 0, True],
+            [(5, 3, 10, 5), 1, True],
+            [(5, 3, 10, 5), 2, True],
+            [(5, 3, 10, 5), 3, True],
+            [(5, 3, 10, 5), 0, False],
+            [(5, 3, 10, 5), 1, False],
+            [(5, 3, 10, 5), 2, False],
+            [(5, 3, 10, 5), 3, False],
+            [(5, 3, 10, 5), None, True],
+            [(5, 3, 10, 5), None, False],
+            [(5, 3, 10, 5), (0, 1), True],
+            [(5, 3, 10, 5), (0, 1), False],
+            [(5, 3, 10, 5), (1, 2), True],
+            [(5, 3, 10, 5), (1, 2), False],
+            [(5, 3, 10, 5), (2, 3), True],
+            [(5, 3, 10, 5), (2, 3), False],
+            [(5, 3, 10, 5), (0, 2), True],
+            [(5, 3, 10, 5), (0, 2), False],
+            [(5, 3, 10, 5), (1, 3), True],
+            [(5, 3, 10, 5), (1, 3), False],
+            [(5, 3, 10, 5), (0, 3), True],
+            [(5, 3, 10, 5), (0, 3), False],
+            [(5, 3, 10, 5), (0, 1, 2), True],
+            [(5, 3, 10, 5), (0, 1, 2), False],
+            [(5, 3, 10, 5), (1, 2, 3), True],
+            [(5, 3, 10, 5), (1, 2, 3), False],
+            [(5, 3, 10, 5), (0, 1, 3), True],
+            [(5, 3, 10, 5), (0, 1, 3), False],
+            [(5, 3, 10, 5), (0, 2, 3), True],
+            [(5, 3, 10, 5), (0, 2, 3), False],
+            [(5, 3, 10, 5), (0, 1, 2, 3), True],
+            [(5, 3, 10, 5), (0, 1, 2, 3), False],
+        ],
+    )
+    def test_std_var(self, data):
+        shape_input, dim, keepdim = data
+
+        def torch_fn(x):
+            return torch.std(x, dim=dim, keepdim=keepdim)
+
+        def peq_fn(x):
+            return x.std(dim=dim, keepdim=keepdim)
+
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
+
+        def torch_fn(x):
+            return torch.var(x, dim=dim, keepdim=keepdim)
+
+        def peq_fn(x):
+            return x.var(dim=dim, keepdim=keepdim)
