@@ -348,6 +348,32 @@ class Tensor:
     def std(self, dim=None, keepdim=True, correction=1):
         return self.var(dim=dim, keepdim=keepdim, correction=correction) ** 0.5
 
+    def sqrt(self):
+        return self**0.5
+
+    def layer_norm(self, normalized_shape: _Shape, eps=1e-05):
+        """Applies Layer Normalization over a mini-batch of inputs"""
+
+        # calculate mean/std over last dims
+        ns_l = len(normalized_shape)
+        assert (
+            self.dim >= ns_l
+        ), "normalized_shape should be smaller than the number of dimensions of input tensor"
+        assert (
+            self.shape[-ns_l:] == normalized_shape
+        ), "normalized_shape should be the last dimensions of input tensor"
+
+        last_d_dims = tuple(range(self.dim - ns_l, self.dim))
+
+        mean = self.mean(dim=last_d_dims, keepdim=True)
+        variance = self.var(
+            dim=last_d_dims, keepdim=True, correction=0
+        )  # unbiased variance is used
+        # for numerical stability, we add eps before sqrt
+        std = (variance + eps).sqrt()
+
+        return (self - mean) / std
+
     @property
     def shape(self):
         """Returns the shape of the tensor"""

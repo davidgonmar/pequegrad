@@ -499,3 +499,25 @@ class TestOps:
 
         def peq_fn(x):
             return x.var(dim=dim, keepdim=keepdim)
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, normalized_shape, eps
+        [
+            [(5, 3, 10, 5), (3, 10, 5), 1e-5],
+            [(2, 3, 4, 5), (3, 4, 5), 1e-5],
+            [(2, 3, 4, 5), (4, 5), 1e-5],
+            [(1, 2, 3, 4, 5), (2, 3, 4, 5), 1e-5],
+            [(1, 2), (2,), 1e-5],
+        ],
+    )
+    def test_layer_norm(self, data):
+        shape_input, normalized_shape, eps = data
+
+        def torch_fn(x):
+            return torch.nn.functional.layer_norm(x, normalized_shape, eps=eps)
+
+        def peq_fn(x):
+            return x.layer_norm(normalized_shape, eps=eps)
+
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
