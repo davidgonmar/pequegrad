@@ -240,28 +240,27 @@ class Exp(Function):
             self.a._grad += self.ret.grad * Tensor(np.exp(self.a.data))
 
 
-class Transpose(Function):
-    def __init__(self, a: Tensor, dim0: int, dim1: int):
+class Permute(Function):
+    def __init__(self, a: Tensor, dims: Tuple[int, ...]):
         super().__init__(a)
         self.a = a
-        self.dim0 = dim0
-        self.dim1 = dim1
-
-        # We swap the dimensions in the axes list
-        axes = list(range(self.a.dim))
-        axes[dim0], axes[dim1] = axes[dim1], axes[dim0]
-        self.axes = axes
+        self.dims = dims
 
     def forward(self):
         self.ret = Tensor(
-            np.transpose(self.a.data, self.axes),
+            np.transpose(self.a.data, self.dims),
             requires_grad=self.requires_grad,
         )
         return self.ret
 
     def backward(self):
+        bw_dims = np.argsort(
+            self.dims
+        )  # computes the indices that would sort the dims back
         if self.a.requires_grad:
-            self.a._grad += self.ret.grad.transpose(self.dim0, self.dim1)
+            self.a._grad += Tensor(
+                np.transpose(self.ret.grad.data, bw_dims),
+            )
 
 
 class ReLU(Function):

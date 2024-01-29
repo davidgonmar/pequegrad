@@ -176,7 +176,14 @@ class Tensor:
 
     def transpose(self, dim0=0, dim1=1) -> "Tensor":
         """Transpose the tensor"""
-        return Transpose.apply(self, dim0=dim0, dim1=dim1)
+        axis = list(range(self.dim))
+        axis[dim0], axis[dim1] = axis[dim1], axis[dim0]
+
+        return self.permute(*axis)
+
+    def permute(self, *dims) -> "Tensor":
+        """Permute the tensor"""
+        return Permute.apply(self, dims=dims)
 
     def sum(self, dim: Optional[_Shape] = None, keepdim: bool = False) -> "Tensor":
         return Sum.apply(self, dim=dim, keepdim=keepdim)
@@ -430,11 +437,11 @@ from .function import (  # noqa: E402 avoid circular imports
     Mean,
     Mul,
     Sum,
-    Transpose,
     Reshape,
     Unsqueeze,
     Squeeze,
     Unfold,
     Fold,
     Function,
+    Permute,
 )
