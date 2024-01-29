@@ -272,13 +272,29 @@ class TestOps:
         )
 
     @pytest.mark.parametrize("shape", [[(3,)], [(2, 3)], [(1, 2, 3)]])
-    def test_cross_entropy_loss(self, shape):
+    def test_cross_entropy_loss_probs(self, shape):
         def torch_fn(x, y):
             nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
             return nn_cross_entropy(x, y)
 
         _compare_fn_with_torch(
-            shape * 2, lambda x, y: x.cross_entropy_loss(y), torch_fn
+            shape * 2, lambda x, y: x.cross_entropy_loss_probs(y), torch_fn
+        )
+
+    # batch, classes
+    @pytest.mark.parametrize("shape", [(2, 3), (3, 2), (6, 1), (1, 6)])
+    def test_cross_entropy_loss_index(self, shape):
+        np_idx = np.random.randint(0, shape[1], size=shape[0]).astype(np.int64)
+        correct_index = Tensor(np_idx)
+        correct_index_torch = torch_tensor(np_idx)
+
+
+        def torch_fn(x):
+            nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
+            return nn_cross_entropy(x, correct_index_torch)
+
+        _compare_fn_with_torch(
+            [shape], lambda x: x.cross_entropy_loss_indices(correct_index), torch_fn
         )
 
     @pytest.mark.parametrize(

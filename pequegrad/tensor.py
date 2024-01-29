@@ -168,6 +168,19 @@ class Tensor:
         """Returns a tensor of ones with the given shape"""
         return Tensor(np.full(shape, value), requires_grad=requires_grad)
 
+    @staticmethod
+    def one_hot(num_classes: int, indices: "Tensor", requires_grad=False) -> "Tensor":
+        assert indices.dim == 1, "indices must be a vector"
+        assert np.all(indices.data >= 0), "indices must be positive integers (>= 0)"
+        assert np.all(
+            indices.data < num_classes
+        ), "indices must be smaller than num_classes"
+
+        np_one_hot = np.zeros((indices.data.size, num_classes))
+        np_one_hot[np.arange(indices.data.size), indices.data.astype(int)] = 1.0
+
+        return Tensor(np_one_hot, requires_grad=requires_grad)
+
     def reshape(self, shape: _Shape) -> "Tensor":
         """
         Returns a tensor with the given shape
@@ -235,7 +248,7 @@ class Tensor:
         # Use the logsumexp trick to avoid numerical instability
         return self - self.logsumexp(dim=dim, keepdim=True)
 
-    def cross_entropy_loss(self, target: "Tensor") -> "Tensor":
+    def cross_entropy_loss_probs(self, target: "Tensor") -> "Tensor":
         """Returns the cross entropy loss of the tensor"""
 
         assert self.shape == target.shape, "input and target must have the same shape"
@@ -252,6 +265,22 @@ class Tensor:
         # by taking the mean
         c_idx = 0 if self.dim == 1 else 1
         return -(target * self.log_softmax(dim=c_idx)).sum(c_idx).mean()
+
+    def cross_entropy_loss_indices(self, target: "Tensor") -> "Tensor":
+        """
+        Returns the cross entropy loss of the tensor.
+        Only works for inputs of shape (batch, C), and targets of shape (batch,)
+        """
+
+        assert self.dim == 2, "input must be a matrix, of shape (batch, C)"
+        assert target.dim == 1, "target must be a vector, of shape (batch,)"
+        assert (
+            self.shape[0] == target.shape[0]
+        ), "input and target must have the same batch size"
+
+        one_hot_target = Tensor.one_hot(self.shape[1], target)
+
+        return self.cross_entropy_loss_probs(one_hot_target)
 
     def unsqueeze(self, dim: int) -> "Tensor":
         """Returns a tensor with a dimension of size one inserted at the specified position"""
