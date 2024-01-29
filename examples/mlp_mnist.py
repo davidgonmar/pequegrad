@@ -85,7 +85,7 @@ def get_dataset():
     return Tensor(X_train), Tensor(y_train), Tensor(X_test), Tensor(y_test)
 
 
-def train(model, X_train, Y_train, X_test, Y_test, epochs=15, batch_size=32):
+def train(model, X_train, Y_train, X_test, Y_test, epochs=8, batch_size=512):
     # weights of the network printed
     optim = SGD(model.parameters(), lr=0.001, weight_decay=0)
     for epoch in range(epochs):
@@ -93,19 +93,13 @@ def train(model, X_train, Y_train, X_test, Y_test, epochs=15, batch_size=32):
             # Determine the end index of the current batch
             end_idx = min(i + batch_size, len(X_train))
             batch_X = Tensor(X_train[i:end_idx])
-            batch_Y = Y_train[i:end_idx]
+            batch_Y = Tensor(Y_train[i:end_idx])
 
             # Forward pass
             prediction = model.forward(batch_X)
 
-            # Convert batch_Y to one-hot encoding (just passing the value is not supported yet)
-            batch_Y_one_hot = np.zeros((end_idx - i, 10))
-            batch_Y_one_hot[np.arange(end_idx - i), batch_Y] = 1
-
             # Compute loss and backpropagate
-            loss = prediction.cross_entropy_loss(
-                Tensor(batch_Y_one_hot, requires_grad=True)
-            )
+            loss = prediction.cross_entropy_loss_indices(batch_Y)
 
             loss.backward()
 
