@@ -8,6 +8,7 @@ import torch
 def _compare_fn_with_torch(
     shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-5, backward=True
 ):
+
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
 
@@ -287,7 +288,6 @@ class TestOps:
         np_idx = np.random.randint(0, shape[1], size=shape[0]).astype(np.int64)
         correct_index = Tensor(np_idx)
         correct_index_torch = torch_tensor(np_idx)
-
 
         def torch_fn(x):
             nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")

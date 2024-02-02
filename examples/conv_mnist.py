@@ -126,7 +126,7 @@ def train(model, X_train, Y_train, X_test, Y_test, epochs=250, batch_size=32):
             end="\r",
         )
 
-        print(f"Epoch {epoch} | Loss {loss.data}")
+        print(f"Epoch {epoch} | Loss {loss.numpy()}")
 
     with no_grad():
         # Evaluate the model
@@ -137,7 +137,7 @@ def train(model, X_train, Y_train, X_test, Y_test, epochs=250, batch_size=32):
             batch_Y = Y_test[i:end_idx]
 
             prediction = model.forward(batch_X)
-            correct += (np.argmax(prediction.data, axis=1) == batch_Y).sum()
+            correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
 
     print(f"Test accuracy: {correct / len(X_test)}")
     print("Got {} / {} correct!".format(correct, len(X_test)))

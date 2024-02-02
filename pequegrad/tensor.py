@@ -1,6 +1,7 @@
 from typing import List, Union, Type, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
+from .storage import Storage
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -12,14 +13,22 @@ class Tensor:
     """
 
     def __init__(self, data: _ArrayLike, requires_grad=False):
-        # Internally, we store the data as a numpy array
-        data = (
-            np.array(data, copy=False)
-            if not isinstance(data, Tensor)
-            else np.array(data.data, copy=False)
+        # Internally, we store the data as a numpy array\
+        if isinstance(data, Tensor):
+            data = data.numpy()
+        elif isinstance(data, Storage):
+            data = data.numpy()
+        elif isinstance(data, (int, float)):
+            data = np.array(data)
+
+        assert isinstance(
+            data, np.ndarray
+        ), "data must be a numpy array, not {}".format(type(data))
+        assert data.dtype != np.object, "Data type not supported, got {}".format(
+            data.dtype
         )
 
-        self.data: np.ndarray = data
+        self.data: Storage = Storage(data)
 
         # If the tensor was created under a no_grad context, it doesn't require gradients
         self.requires_grad: bool = requires_grad and pequegrad_context.grad_enabled
@@ -93,6 +102,7 @@ class Tensor:
                 assert (
                     node._grad.shape == node.shape
                 ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}"
+
                 if not retain_ctx:
                     node._ctx = None
 
@@ -105,7 +115,7 @@ class Tensor:
         Returns the tensor as a nested list. If the tensor is a scalar, returns the scalar
         """
 
-        return self.data
+        return self.data.numpy().tolist()
 
     def clone(self, requires_grad: bool = None):
         """
@@ -121,9 +131,9 @@ class Tensor:
 
         return Tensor(
             self.data.copy(),
-            requires_grad=requires_grad
-            if requires_grad is not None
-            else self.requires_grad,
+            requires_grad=(
+                requires_grad if requires_grad is not None else self.requires_grad
+            ),
         )
 
     def zero_grad(self):
@@ -171,15 +181,19 @@ class Tensor:
     @staticmethod
     def one_hot(num_classes: int, indices: "Tensor", requires_grad=False) -> "Tensor":
         assert indices.dim == 1, "indices must be a vector"
-        assert np.all(indices.data >= 0), "indices must be positive integers (>= 0)"
+        assert np.all(indices.numpy() >= 0), "indices must be positive integers (>= 0)"
         assert np.all(
-            indices.data < num_classes
+            indices.numpy() < num_classes
         ), "indices must be smaller than num_classes"
 
         np_one_hot = np.zeros((indices.data.size, num_classes))
-        np_one_hot[np.arange(indices.data.size), indices.data.astype(int)] = 1.0
+
+        np_one_hot[np.arange(indices.data.size), indices.data.astype(int).numpy()] = 1.0
 
         return Tensor(np_one_hot, requires_grad=requires_grad)
+
+    def numpy(self) -> np.ndarray:
+        return self.data.numpy()
 
     def reshape(self, shape: _Shape) -> "Tensor":
         """
@@ -366,17 +380,17 @@ class Tensor:
         assert (
             dim >= 0
             if isinstance(dim, int)
-            else all(d >= 0 for d in dim)
-            if dim is not None
-            else True
+            else all(d >= 0 for d in dim) if dim is not None else True
         ), "only positive dims supported by now. Got {}".format(dim)
 
         N = (
             self.data.size
             if dim is None
-            else self.shape[dim]
-            if isinstance(dim, int)
-            else np.prod([self.shape[i] for i in dim])
+            else (
+                self.shape[dim]
+                if isinstance(dim, int)
+                else np.prod([self.shape[i] for i in dim])
+            )
         )
         variance = ((self - mean) ** 2).sum(dim=dim, keepdim=keepdim) / (N - correction)
         return variance
@@ -413,6 +427,7 @@ class Tensor:
     @property
     def shape(self):
         """Returns the shape of the tensor"""
+
         return self.data.shape
 
     @property

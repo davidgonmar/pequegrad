@@ -9,7 +9,7 @@ class TestContext:
         z = x + y
 
         assert isinstance(z._ctx, Add)
-        assert z.grad.data == 0.0
+        assert z.grad.data.numpy() == 0.0
 
     def test_graph_build_no_grad(self):
         with no_grad():
