@@ -117,3 +117,7 @@ ignored
 .ruff_cache
 
 .pytest_cache
+
+.vs
+
+out
