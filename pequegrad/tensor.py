@@ -24,7 +24,7 @@ class Tensor:
         assert isinstance(
             data, np.ndarray
         ), "data must be a numpy array, not {}".format(type(data))
-        assert data.dtype != np.object, "Data type not supported, got {}".format(
+        assert data.dtype != object, "Data type not supported, got {}".format(
             data.dtype
         )
 

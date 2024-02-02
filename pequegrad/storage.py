@@ -46,7 +46,7 @@ class Storage:
             data, np.ndarray
         ), f"Data must be a numpy array, got {type(data)}"
 
-        assert data.dtype != np.object, "Data type not supported"
+        assert data.dtype != object, "Data type not supported"
         self.data = data
 
     def add(self, other: "Storage") -> "Storage":
