@@ -20,6 +20,8 @@ class Tensor:
             data = data.numpy()
         elif isinstance(data, (int, float)):
             data = np.array(data)
+        elif isinstance(data, list):
+            data = np.array(data)
 
         assert isinstance(
             data, np.ndarray
