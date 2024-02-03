@@ -14,9 +14,4 @@ if os.path.exists(windows_vs_build_path):
     sys.path.append(windows_vs_build_path)
 
 
-# print what python can find
-
-print(sys.path)
-
-
-import pequegrad_cu  # noqa: F401
+from pequegrad_cu import Array as CudaArray  # noqa: F401
