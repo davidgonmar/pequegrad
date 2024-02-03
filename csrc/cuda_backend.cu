@@ -147,8 +147,35 @@ public:
         cudaFree(ptr);
     }
 
-    CudaArray(const CudaArray&) = delete;
-    CudaArray& operator=(const CudaArray&) = delete;
+    CudaArray(const CudaArray& other) {
+    size = other.size;
+    shape = other.shape;
+    strides = other.strides;
+    cudaError_t err = cudaMalloc(&ptr, size * ELEM_SIZE);
+    if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+    err = cudaMemcpy(ptr, other.ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice);
+    if (err != cudaSuccess) {
+        cudaFree(ptr);
+        throw std::runtime_error(cudaGetErrorString(err));
+    }
+}
+
+CudaArray& operator=(const CudaArray& other) {
+    if (this != &other) {
+        cudaFree(ptr); // Free existing device memory
+        size = other.size;
+        shape = other.shape;
+        strides = other.strides;
+        cudaError_t err = cudaMalloc(&ptr, size * ELEM_SIZE);
+        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        err = cudaMemcpy(ptr, other.ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice);
+        if (err != cudaSuccess) {
+            cudaFree(ptr);
+            throw std::runtime_error(cudaGetErrorString(err));
+        }
+    }
+    return *this;
+}
 
     CudaArray(CudaArray&& other) {
         //printf("CudaArray move constructor\n");
