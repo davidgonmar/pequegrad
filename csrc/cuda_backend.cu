@@ -2,6 +2,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <binary_ops_kernels.cuh>
 
 #include <iostream>
 #include <sstream>
@@ -13,10 +14,8 @@
 namespace pequegrad{
 namespace cuda {
 namespace py = pybind11;
-__global__ void AddKernel(const float* a, const float* b, float* out, size_t size) {
-    size_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (gid < size) out[gid] = a[gid] + b[gid];
-}
+
+typedef void(*BinaryOpKernel)(size_t, const float*, const float*, float*);
 
 class CudaArray {
 public:
@@ -32,17 +31,14 @@ public:
         //printf("ptr: %d\n", ptr);
         //printf("ptr_as_int: %d\n", ptr_as_int());
     }
-
-    CudaArray add(const CudaArray& other) const {
+    CudaArray binop(const CudaArray& other, BinaryOpKernel Ker) const {
         if (size != other.size) {
             throw std::runtime_error("Size mismatch");
         }
         CudaArray out(size, shape, strides);
         dim3 block(DEFAULT_BLOCK_SIZE);
         dim3 grid((out.size + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE);
-
-        AddKernel<<<grid, block>>>(this->ptr, other.ptr, out.ptr, out.size);
-
+        Ker<<<grid, block>>>(out.size, this->ptr, other.ptr, out.ptr);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
         return out;
@@ -182,13 +178,17 @@ PYBIND11_MODULE(pequegrad_cu, m) {
         return CudaArray::fromNumpy(np_array);
       }).def("__repr__", [](const CudaArray& arr) {
         return arr.toString();
-          }).def("add", [](const CudaArray& arr, const CudaArray& other) {
-        CudaArray out = arr.add(other);
-        return out;
-
-      }).def("__add__", [](const CudaArray& arr, const CudaArray& other) {
-        CudaArray out = arr.add(other);
-        return out;
+      }).def("add", [](const CudaArray& arr, const CudaArray& other) {
+        return arr.binop(other, AddKernel);
+      })
+      .def("sub", [](const CudaArray& arr, const CudaArray& other) {
+        return arr.binop(other, SubKernel);
+      }).
+      def("mul", [](const CudaArray& arr, const CudaArray& other) {
+        return arr.binop(other, MultKernel);
+      }).
+      def("div", [](const CudaArray& arr, const CudaArray& other) {
+        return arr.binop(other, DivKernel);
       }).
       def("__getitem__", [](const CudaArray& arr, std::vector<py::ssize_t> index) {
         return arr.getitem(index);

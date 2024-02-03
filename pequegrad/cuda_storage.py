@@ -31,7 +31,7 @@ class Storage:
         raise NotImplementedError
 
     def astype(self, dtype: Union[str, np.dtype]) -> "Storage":
-        raise NotImplementedError
+        raise NotImplementedError("Only float32 is supported")
 
     @property
     def strides(self) -> tuple:
@@ -48,7 +48,7 @@ class Storage:
             )
 
     def add(self, other: "Storage") -> "Storage":
-        return Storage(self.data + other.data)
+        return Storage(self.data.add(other.data))
 
     def __add__(self, other: "Storage") -> "Storage":
         return self.add(other)
@@ -57,22 +57,22 @@ class Storage:
         raise self.add(other)
 
     def sub(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.sub(other.data))
 
     def __sub__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.sub(other)
 
     def __rsub__(self, other: "Storage") -> "Storage":
         raise NotImplementedError
 
     def mul(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.mul(other.data))
 
     def __mul__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.mul(other)
 
     def __rmul__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.mul(other)
 
     def matmul(self, other: "Storage") -> "Storage":
         raise NotImplementedError
@@ -81,10 +81,10 @@ class Storage:
         raise NotImplementedError
 
     def div(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.div(other.data))
 
     def __truediv__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.div(other)
 
     def expand_dims(self, axis: int) -> "Storage":
         raise NotImplementedError
