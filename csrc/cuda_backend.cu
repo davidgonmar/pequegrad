@@ -13,6 +13,11 @@
 namespace pequegrad{
 namespace cuda {
 namespace py = pybind11;
+__global__ void AddKernel(const float* a, const float* b, float* out, size_t size) {
+    size_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (gid < size) out[gid] = a[gid] + b[gid];
+}
+
 class CudaArray {
 public:
     float* ptr;
@@ -26,6 +31,21 @@ public:
         //printf("CudaArray(%d) constructor\n", size);
         //printf("ptr: %d\n", ptr);
         //printf("ptr_as_int: %d\n", ptr_as_int());
+    }
+
+    CudaArray add(const CudaArray& other) const {
+        if (size != other.size) {
+            throw std::runtime_error("Size mismatch");
+        }
+        CudaArray out(size, shape, strides);
+        dim3 block(DEFAULT_BLOCK_SIZE);
+        dim3 grid((out.size + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE);
+
+        AddKernel<<<grid, block>>>(this->ptr, other.ptr, out.ptr, out.size);
+
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        return out;
     }
 
     float getitem(std::vector<py::ssize_t> index) const {
@@ -117,27 +137,21 @@ public:
         return *this;
     }
 
+    CudaArray clone() const {
+        CudaArray out(size, shape, strides);
+        cudaError_t err = cudaMemcpy(out.ptr, ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice);
+        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        return out;
+    }
+
+
     int64_t ptr_as_int() const { return (int64_t)ptr; }
 
 };
 
 
 
-__global__ void AddKernel(const float* a, const float* b, float* out, size_t size) {
-  size_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (gid < size) out[gid] = a[gid] + b[gid];
-}
 
-void Add(const CudaArray& a, const CudaArray& b, CudaArray* out) {
-  dim3 block(DEFAULT_BLOCK_SIZE);
-  dim3 grid((out->size + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE);
-
-  AddKernel<<<grid, block>>>(a.ptr, b.ptr, out->ptr, out->size);
-
-  cudaError_t err = cudaGetLastError();
-  if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
-  cudaDeviceSynchronize();
-}
 
 
 }  // namespace cuda
@@ -154,19 +168,20 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("ptr", &CudaArray::ptr_as_int)
       .def_readonly("shape", &CudaArray::shape)
       .def_readonly("strides", &CudaArray::strides)
+      .def("clone", &CudaArray::clone)
       .def("from_numpy", [](py::array_t<float> np_array) {
         return CudaArray::fromNumpy(np_array);
       }).def("__repr__", [](const CudaArray& arr) {
-        //printf("calling __repr__ on CudaArray\n");
-        //printf("arr.size: %d\n", arr.size);
-        //printf("arr.ptr: %d\n", arr.ptr);
-       // printf("arr.ptr_as_int: %d\n", arr.ptr_as_int());
         return arr.toString();
-          }).def("__add__", [](const CudaArray& a, const CudaArray& b) {
-              CudaArray out(a.size, a.shape, a.strides);
-        Add(a, b, &out);
+          }).def("add", [](const CudaArray& arr, const CudaArray& other) {
+        CudaArray out = arr.add(other);
         return out;
-      }).def("__getitem__", [](const CudaArray& arr, std::vector<py::ssize_t> index) {
+
+      }).def("__add__", [](const CudaArray& arr, const CudaArray& other) {
+        CudaArray out = arr.add(other);
+        return out;
+      }).
+      def("__getitem__", [](const CudaArray& arr, std::vector<py::ssize_t> index) {
         return arr.getitem(index);
     });
 

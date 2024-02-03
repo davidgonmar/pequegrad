@@ -32,13 +32,20 @@ class Storage:
         return tuple(self.data.strides)
 
     def __init__(self, data: np.ndarray):
-        self.data = CudaArray.from_numpy(data)
+        if isinstance(data, np.ndarray):
+            self.data = CudaArray.from_numpy(data)
+        elif isinstance(data, CudaArray):
+            self.data = data.clone()
+        else:
+            raise ValueError(
+                f"Data must be a numpy array or CudaArray, got {type(data)}"
+            )
 
     def add(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data + other.data)
 
     def __add__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.add(other)
 
     def __radd__(self, other: "Storage") -> "Storage":
         raise NotImplementedError
