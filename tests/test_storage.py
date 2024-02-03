@@ -52,3 +52,28 @@ class TestStorage:
         self._compare_with_numpy(
             x.broadcast_to(to_shape), np.broadcast_to(nparr, to_shape)
         )
+
+    # test for binary operations with broadcasting
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(3, 4), (1, 3, 4)],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize(
+        "lambdaop",
+        [
+            lambda x, y: x + y,
+            lambda x, y: x - y,
+            lambda x, y: x * y,
+            lambda x, y: x / y,
+        ],
+    )
+    def test_binop_broadcast(self, shape, class_storage, lambdaop):
+        from_shape, to_shape = shape
+        nparr = np.random.rand(*from_shape).astype(np.float32)
+        nparrbroadcasted = np.random.rand(*to_shape).astype(np.float32)
+        x = class_storage(nparr)
+        y = class_storage(nparrbroadcasted)
+        self._compare_with_numpy(lambdaop(x, y), lambdaop(nparr, nparrbroadcasted))

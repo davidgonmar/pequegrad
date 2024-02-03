@@ -23,7 +23,21 @@ public:
     size_t size;
     std::vector<py::ssize_t> shape;
     std::vector<py::ssize_t> strides;
-  
+    
+    bool isContiguous() const {
+        if (strides.size() != shape.size()) {
+            return false;
+        }
+        std::vector<py::ssize_t> expected_strides(shape.size());
+        expected_strides[shape.size() - 1] = ELEM_SIZE;
+        for (int i = shape.size() - 2; i >= 0; --i) {
+            expected_strides[i] = expected_strides[i + 1] * shape[i + 1];
+        }
+        if (expected_strides != strides) {
+            return false;
+        }
+        return true;
+    }
     CudaArray(size_t size, std::vector<py::ssize_t> shape, std::vector<py::ssize_t> strides) :size(size), shape(shape), strides(strides) {
         cudaError_t err = cudaMalloc(&ptr, size * ELEM_SIZE);
         if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
@@ -65,8 +79,20 @@ public:
         
     }
     CudaArray binop(const CudaArray& other, BinaryOpKernel Ker) const {
-        if (size != other.size) {
-            throw std::runtime_error("got incompatible shapes");
+        if (shape != other.shape) {
+            // try to broadcast, from smaller to larger
+            if (shape.size() < other.shape.size()) {
+                return broadcastTo(other.shape).binop(other, Ker);
+            }
+            else if (shape.size() > other.shape.size()) {
+                return binop(other.broadcastTo(shape), Ker);
+            }
+            else {
+                throw std::runtime_error("got incompatible shapes");
+            }
+        }
+        if (!isContiguous() || !other.isContiguous()) {
+            throw std::runtime_error("non contiguous binary ops not implemented");
         }
         dim3 block_size(DEFAULT_BLOCK_SIZE);
         dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
