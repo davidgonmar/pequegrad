@@ -4,12 +4,15 @@ from .cuda import CudaArray
 
 
 class Storage:
-    backend = "numpy"
+    backend = "cuda"
 
     data: CudaArray
 
     def to_numpy(self) -> np.ndarray:
         return self.data.to_numpy()
+
+    def numpy(self) -> np.ndarray:
+        return self.to_numpy()
 
     @property
     def shape(self) -> tuple:
@@ -51,7 +54,7 @@ class Storage:
         return self.add(other)
 
     def __radd__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        raise self.add(other)
 
     def sub(self, other: "Storage") -> "Storage":
         raise NotImplementedError
@@ -137,9 +140,6 @@ class Storage:
     def __ne__(self, other: "Storage") -> bool:
         raise NotImplementedError
 
-    def numpy(self) -> np.ndarray:
-        raise NotImplementedError
-
     def reshape(self, *shape: Union[int, Tuple[int, ...]]) -> "Storage":
         raise NotImplementedError
 
@@ -153,7 +153,7 @@ class Storage:
         raise NotImplementedError
 
     def __repr__(self):
-        raise NotImplementedError
+        return f"Storage({self.data})"
 
     def max(self, axis: int, keepdims: bool = None) -> "Storage":
         raise NotImplementedError
