@@ -15,13 +15,16 @@ def test_cuda_getitem():
     assert np.allclose(x[0, 0], y[0, 0])
 
 
+def test_to_numpy():
+    x = np.random.rand(10, 5)
+    y = Storage(x)
+    assert np.allclose(x, y.to_numpy())
+
+
 def test_cuda_elwise_add():
     x = np.random.rand(10, 5)
     y = np.random.rand(10, 5)
     z = Storage(x) + Storage(y)
     znp = x + y
 
-    # todo -- vectorize
-    for i in range(x.shape[0]):
-        for j in range(x.shape[1]):
-            assert np.allclose(z[i, j], znp[i, j])
+    assert np.allclose(z.to_numpy(), znp)

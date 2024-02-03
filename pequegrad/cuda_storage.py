@@ -8,6 +8,9 @@ class Storage:
 
     data: CudaArray
 
+    def to_numpy(self) -> np.ndarray:
+        return self.data.to_numpy()
+
     @property
     def shape(self) -> tuple:
         return tuple(self.data.shape)

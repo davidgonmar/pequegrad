@@ -83,6 +83,14 @@ public:
         if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
         return arr;
     }
+
+    py::array_t<float> toNumpy() const {
+        py::array_t<float> result(shape, strides);
+        auto err = cudaMemcpy(result.mutable_data(), ptr, size * ELEM_SIZE, cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        return result;
+    }
+   
     std::string toString() const {
         std::stringstream ss;
         ss << "CudaArray(" << size << ") [";
@@ -169,6 +177,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def_readonly("shape", &CudaArray::shape)
       .def_readonly("strides", &CudaArray::strides)
       .def("clone", &CudaArray::clone)
+      .def("to_numpy", &CudaArray::toNumpy)
       .def("from_numpy", [](py::array_t<float> np_array) {
         return CudaArray::fromNumpy(np_array);
       }).def("__repr__", [](const CudaArray& arr) {
