@@ -31,18 +31,49 @@ public:
         //printf("ptr: %d\n", ptr);
         //printf("ptr_as_int: %d\n", ptr_as_int());
     }
+    CudaArray broadcastTo(const std::vector<py::ssize_t> shape) const {
+        const std::vector<py::ssize_t> shape_from = this->shape;
+        const std::vector<py::ssize_t> shape_to = shape;
+        // determine if we can broadcast
+        const int from_ndim = shape_from.size();
+        const int to_ndim = shape_to.size();
+        // cannot broadcast if the number of dimensions of the from array is greater than the number of dimensions of the to array
+        if (from_ndim > to_ndim) {
+            throw std::runtime_error("got incompatible shapes, to_ndim < from_ndim: " + std::to_string(to_ndim) + " < " + std::to_string(from_ndim));
+        }
+        
+        int new_size = 1;
+        std::vector<py::ssize_t> new_strides(to_ndim, 0);
+        // reverse test if the dim is 1 or they are equal
+        for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
+            py::ssize_t dim_to = shape_to[i];
+            py::ssize_t dim_from = (j >= 0) ? shape_from[j] : 1; // assume non existing shape is 1
+            if (dim_to != dim_from && dim_from != 1) {
+                throw std::runtime_error("got incompatible shapes");
+            }
+            new_size *= dim_to;
+            new_strides[i] = (dim_from == 1) ? 0 : strides[j];
+        }
+        CudaArray out(new_size, shape_to, new_strides);
+        // copy the data to the new array
+        
+        cudaError_t err = cudaMemcpy(out.ptr, ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice);
+
+        if (err != cudaSuccess) throw std::runtime_error("cuda error: " + std::string(cudaGetErrorString(err)));
+
+        return out;
+        
+    }
     CudaArray binop(const CudaArray& other, BinaryOpKernel Ker) const {
         if (size != other.size) {
-            throw std::runtime_error("Size mismatch");
+            throw std::runtime_error("got incompatible shapes");
         }
+        dim3 block_size(DEFAULT_BLOCK_SIZE);
+        dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
         CudaArray out(size, shape, strides);
-        dim3 block(DEFAULT_BLOCK_SIZE);
-        dim3 grid((out.size + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE);
-        Ker<<<grid, block>>>(out.size, this->ptr, other.ptr, out.ptr);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        Ker<<<grid_size, block_size>>>(size, ptr, other.ptr, out.ptr);
         return out;
-    }
+}
 
     float getitem(std::vector<py::ssize_t> index) const {
         if (index.size() != shape.size()) {
@@ -55,7 +86,8 @@ public:
           if (index[i] < 0 || index[i] >= shape[i]) {
                 throw std::runtime_error("Index out of bounds");
           }
-          offset += index[i] * strides[i] / ELEM_SIZE;
+          offset += index[i] * strides[i] / ELEM_SIZE; // since strides are in bytes,
+          //we need to divide by ELEM_SIZE to get the correct offset
         }
         // Copy the requested element from device to host
         float value;
@@ -173,6 +205,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def_readonly("shape", &CudaArray::shape)
       .def_readonly("strides", &CudaArray::strides)
       .def("clone", &CudaArray::clone)
+      .def("broadcast_to", &CudaArray::broadcastTo)
       .def("to_numpy", &CudaArray::toNumpy)
       .def("from_numpy", [](py::array_t<float> np_array) {
         return CudaArray::fromNumpy(np_array);
@@ -194,12 +227,5 @@ PYBIND11_MODULE(pequegrad_cu, m) {
         return arr.getitem(index);
     });
 
-
-  // copy numpy array to GPU
-  m.def("from_numpy", [](py::array_t<float> a, CudaArray* out) {
-    cudaError_t err =
-        cudaMemcpy(out->ptr, a.request().ptr, out->size * ELEM_SIZE, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
-  });
 
 }

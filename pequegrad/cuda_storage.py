@@ -93,7 +93,7 @@ class Storage:
         raise NotImplementedError
 
     def broadcast_to(self, shape: tuple) -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.broadcast_to(shape))
 
     def where(self, condition: "Storage", other: "Storage") -> "Storage":
         raise NotImplementedError
