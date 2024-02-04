@@ -108,37 +108,41 @@ class Storage:
         raise NotImplementedError
 
     def equal(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.eq(other.data))
 
     def greater(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.gt(other.data))
 
     def greater_equal(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.ge(other.data))
 
     def less(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.lt(other.data))
 
     def less_equal(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.le(other.data))
 
-    def __eq__(self, other: "Storage") -> bool:
-        raise NotImplementedError
+    def not_equal(self, other: "Storage") -> "Storage":
+        return Storage(self.data.ne(other.data))
 
-    def __gt__(self, other: "Storage") -> bool:
-        raise NotImplementedError
+    def __eq__(self, other: "Storage") -> "Storage":
+        print("eq", self.equal(other))
+        return self.equal(other)
 
-    def __ge__(self, other: "Storage") -> bool:
-        raise NotImplementedError
+    def __gt__(self, other: "Storage") -> "Storage":
+        return self.greater(other)
 
-    def __lt__(self, other: "Storage") -> bool:
-        raise NotImplementedError
+    def __ge__(self, other: "Storage") -> "Storage":
+        return self.greater_equal(other)
 
-    def __le__(self, other: "Storage") -> bool:
-        raise NotImplementedError
+    def __lt__(self, other: "Storage") -> "Storage":
+        return self.less(other)
 
-    def __ne__(self, other: "Storage") -> bool:
-        raise NotImplementedError
+    def __le__(self, other: "Storage") -> "Storage":
+        return self.less_equal(other)
+
+    def __ne__(self, other: "Storage") -> "Storage":
+        return self.not_equal(other)
 
     def reshape(self, *shape: Union[int, Tuple[int, ...]]) -> "Storage":
         raise NotImplementedError

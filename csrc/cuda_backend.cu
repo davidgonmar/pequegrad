@@ -322,6 +322,24 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       def("div", [](const CudaArray& arr, const CudaArray& other) {
         return arr.binop(other, DivKernel);
       }).
+      def("eq", [](const CudaArray& arr, const CudaArray& other) {
+        return arr.binop(other, EqualKernel);
+      }).
+        def("ne", [](const CudaArray& arr, const CudaArray& other) {
+            return arr.binop(other, NotEqualKernel);
+        }).
+        def("lt", [](const CudaArray& arr, const CudaArray& other) {
+            return arr.binop(other, LessKernel);
+            }).
+            def("le", [](const CudaArray& arr, const CudaArray& other) {
+                return arr.binop(other, LessEqualKernel);
+        }).
+        def("gt", [](const CudaArray& arr, const CudaArray& other) {
+            return arr.binop(other, GreaterKernel);
+        }).
+        def("ge", [](const CudaArray& arr, const CudaArray& other) {
+            return arr.binop(other, GreaterEqualKernel);
+        }).
       def("__getitem__", [](const CudaArray& arr, std::vector<py::ssize_t> index) {
         return arr.getitem(index);
     });

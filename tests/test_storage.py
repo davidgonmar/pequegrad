@@ -12,6 +12,7 @@ class TestStorage:
     def _compare_with_numpy(self, x: Storage, y: np.ndarray):
         assert x.shape == y.shape
         assert x.strides == y.strides
+        assert np.allclose(x.data, y)
 
     @pytest.mark.parametrize("shape", [(1, 2), (3, 4)])
     @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
