@@ -258,7 +258,6 @@ class Permute(Function):
             self.dims
         )  # computes the indices that would sort the dims back
         if self.a.requires_grad:
-
             self.a._grad += Tensor(self.ret.grad.data.permute(*bw_dims))
 
 

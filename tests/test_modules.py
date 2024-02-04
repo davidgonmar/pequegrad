@@ -4,9 +4,9 @@ from pequegrad.modules import Linear, Conv2d
 
 class TestModules:
     def test_linear(self):
-        l = Linear(2, 1)
+        li = Linear(2, 1)
         x = Tensor([1.0, 2.0])
-        y = l.forward(x)
+        y = li.forward(x)
         assert y.shape == (1,)
 
     def test_conv2d(self):

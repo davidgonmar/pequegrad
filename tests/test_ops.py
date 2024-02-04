@@ -8,7 +8,6 @@ import torch
 def _compare_fn_with_torch(
     shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-5, backward=True
 ):
-
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
 
@@ -423,9 +422,10 @@ class TestOps:
     )
     def test_unfold(self, data):
         shape_input, kernel_size, stride = data
-        torch_fn = lambda x: torch.nn.functional.unfold(
-            x, kernel_size, stride=stride
-        )  # noqa: E731
+
+        def torch_fn(x):
+            return torch.nn.functional.unfold(x, kernel_size, stride=stride)
+
         _compare_fn_with_torch(
             [shape_input], lambda x: x.unfold(kernel_size, stride=stride), torch_fn
         )

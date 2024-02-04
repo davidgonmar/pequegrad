@@ -8,7 +8,6 @@ NPStorage = Storage
 
 
 class TestStorage:
-
     def _compare_with_numpy(self, x: Storage, y: np.ndarray):
         assert x.shape == y.shape
         assert x.strides == y.strides
