@@ -39,7 +39,7 @@ class Storage:
 
     def __init__(self, data: np.ndarray):
         if isinstance(data, np.ndarray):
-            self.data = CudaArray.from_numpy(data)
+            self.data = CudaArray.from_numpy(data.astype(np.float32))
         elif isinstance(data, CudaArray):
             self.data = data.clone()
         else:

@@ -168,6 +168,13 @@ class Storage:
             else Storage(np.less_equal(self.data, other))
         )
 
+    def not_equal(self, other: "Storage") -> "Storage":
+        return (
+            Storage(np.not_equal(self.data, other.data))
+            if isinstance(other, Storage)
+            else Storage(np.not_equal(self.data, other))
+        )
+
     def __eq__(self, other: "Storage") -> bool:
         return self.equal(other)
 
@@ -184,7 +191,7 @@ class Storage:
         return self.less_equal(other)
 
     def __ne__(self, other: "Storage") -> bool:
-        return not self.equal(other)
+        return self.not_equal(other)
 
     def numpy(self) -> np.ndarray:
         return self.data.copy()

@@ -14,7 +14,9 @@ class TestStorage:
         assert x.strides == y.strides
         assert np.allclose(x.numpy(), y)
 
-    @pytest.mark.parametrize("shape", [(2, 2)])
+    @pytest.mark.parametrize(
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+    )
     @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
     @pytest.mark.parametrize(
         "lambdaop",
@@ -23,6 +25,12 @@ class TestStorage:
             lambda x, y: x - y,
             lambda x, y: x * y,
             lambda x, y: x / y,
+            lambda x, y: x == y,
+            lambda x, y: x != y,
+            lambda x, y: x < y,
+            lambda x, y: x <= y,
+            lambda x, y: x > y,
+            lambda x, y: x >= y,
         ],
     )
     def test_binop(self, shape, class_storage, lambdaop):
@@ -30,7 +38,13 @@ class TestStorage:
         np2 = np.random.rand(*shape).astype(np.float32)
         x = class_storage(np1)
         y = class_storage(np2)
-        self._compare_with_numpy(lambdaop(x, y), lambdaop(np1, np2))
+        res = lambdaop(x, y)  # cast to float as of now (only in case of NPStorage)
+        if class_storage == NPStorage:
+            assert (
+                type(res) == NPStorage
+            ), "Result should be of type NPStorage, op: " + str(lambdaop)
+            res.data = res.data.astype(np.float32)
+        self._compare_with_numpy(res, lambdaop(np1, np2).astype(np.float32))
 
     # test for broadcasting shapes -> from, to
     @pytest.mark.parametrize(
