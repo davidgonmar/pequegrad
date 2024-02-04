@@ -15,7 +15,7 @@ namespace pequegrad{
 namespace cuda {
 namespace py = pybind11;
 
-typedef void(*BinaryOpKernel)(size_t, const float*, const float*, float*);
+typedef void(*BinaryOpKernel)(const int* strides, const int* ostrides, const int *shape, const int ndim, const float* a, const float* b, float* out);
 
 class CudaArray {
 public:
@@ -45,9 +45,22 @@ public:
         //printf("ptr: %d\n", ptr);
         //printf("ptr_as_int: %d\n", ptr_as_int());
     }
-    CudaArray broadcastTo(const std::vector<py::ssize_t> shape) const {
+    CudaArray(size_t size, std::vector<py::ssize_t> shape) :size(size), shape(shape) { // todo: compute strides
+        cudaError_t err = cudaMalloc(&ptr, size * ELEM_SIZE);
+        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        //printf("CudaArray(%d) constructor\n", size);
+        //printf("ptr: %d\n", ptr);
+        //printf("ptr_as_int: %d\n", ptr_as_int());
+        strides.resize(shape.size());
+        strides[shape.size() - 1] = ELEM_SIZE;
+        for (int i = shape.size() - 2; i >= 0; --i) {
+            strides[i] = strides[i + 1] * shape[i + 1];
+        }
+
+    }
+    CudaArray broadcastTo(const std::vector<py::ssize_t> _shape) const {
         const std::vector<py::ssize_t> shape_from = this->shape;
-        const std::vector<py::ssize_t> shape_to = shape;
+        const std::vector<py::ssize_t> shape_to = _shape;
         // determine if we can broadcast
         const int from_ndim = shape_from.size();
         const int to_ndim = shape_to.size();
@@ -61,12 +74,15 @@ public:
         // reverse test if the dim is 1 or they are equal
         for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
             py::ssize_t dim_to = shape_to[i];
-            py::ssize_t dim_from = (j >= 0) ? shape_from[j] : 1; // assume non existing shape is 1
-            if (dim_to != dim_from && dim_from != 1) {
-                throw std::runtime_error("got incompatible shapes");
+            py::ssize_t dim_from = (j >= 0) ? shape_from[j] : -1; // -1 means we 'ran' out of dimensions for j
+            if (dim_to != dim_from && dim_from != 1 && dim_from != -1) {
+                // we can only 'broadcast' a dimension if dim_from == 1 or we ran out of dimensions.
+                throw std::runtime_error("got incompatible shapes, dim_to != dim_from: " + std::to_string(dim_to) + " != " + std::to_string(dim_from));
+            }
+            if (dim_from != 1 && dim_from != -1) {
+                new_strides[i] = strides[j];
             }
             new_size *= dim_to;
-            new_strides[i] = (dim_from == 1) ? 0 : strides[j];
         }
         CudaArray out(new_size, shape_to, new_strides);
         // copy the data to the new array
@@ -88,16 +104,45 @@ public:
                 return binop(other.broadcastTo(shape), Ker);
             }
             else {
-                throw std::runtime_error("got incompatible shapes");
+                // we need to check the one with less product of shape, and try to broadcast
+                int64_t prod_shape = 1;
+                int64_t prod_other_shape = 1;
+                for (int i = 0; i < shape.size(); i++) {
+                    prod_shape *= shape[i];
+                    prod_other_shape *= other.shape[i];
+                }
+                if (prod_shape < prod_other_shape) {
+                    return broadcastTo(other.shape).binop(other, Ker);
+                }
+                else {
+                    return binop(other.broadcastTo(shape), Ker);
+                }
             }
         }
-        if (!isContiguous() || !other.isContiguous()) {
-            throw std::runtime_error("non contiguous binary ops not implemented");
-        }
+        assert(shape == other.shape);
         dim3 block_size(DEFAULT_BLOCK_SIZE);
         dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
-        CudaArray out(size, shape, strides);
-        Ker<<<grid_size, block_size>>>(size, ptr, other.ptr, out.ptr);
+        // Default stride calculation
+        CudaArray out(size, shape);
+
+        int* device_strides;
+        int* device_ostrides;
+        int* device_shape;
+        cudaMalloc(&device_strides, strides.size() * sizeof(int));
+        cudaMalloc(&device_shape, shape.size() * sizeof(int));
+        cudaMalloc(&device_ostrides, other.strides.size() * sizeof(int));
+
+        cudaMemcpy(device_strides, (const int*)strides.data(), strides.size() * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(device_ostrides, (const int*)other.strides.data(), strides.size() * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(device_shape, (const int*)shape.data(), shape.size() * sizeof(int), cudaMemcpyHostToDevice);
+
+       
+
+
+
+        Ker<<<grid_size, block_size>>>(device_strides, device_ostrides, device_shape, (const int)strides.size(), ptr, other.ptr, out.ptr);
+        cudaFree(device_strides);
+        cudaFree(device_shape);
         return out;
 }
 
@@ -132,6 +177,7 @@ public:
         auto size = buffer_info.size;
         auto* ptr = static_cast<float*>(buffer_info.ptr);
         std::vector<py::ssize_t> py_shape = buffer_info.shape;
+
         CudaArray arr(size, py_shape, py_strides);
         auto err = cudaMemcpy(arr.ptr, ptr, size * ELEM_SIZE, cudaMemcpyHostToDevice);
         if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
@@ -174,17 +220,17 @@ public:
     }
 
     CudaArray(const CudaArray& other) {
-    size = other.size;
-    shape = other.shape;
-    strides = other.strides;
-    cudaError_t err = cudaMalloc(&ptr, size * ELEM_SIZE);
-    if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
-    err = cudaMemcpy(ptr, other.ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice);
-    if (err != cudaSuccess) {
-        cudaFree(ptr);
-        throw std::runtime_error(cudaGetErrorString(err));
+        size = other.size;
+        shape = other.shape;
+        strides = other.strides;
+        cudaError_t err = cudaMalloc(&ptr, size * ELEM_SIZE);
+        if (err != cudaSuccess) throw std::runtime_error(cudaGetErrorString(err));
+        err = cudaMemcpy(ptr, other.ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice);
+        if (err != cudaSuccess) {
+            cudaFree(ptr);
+            throw std::runtime_error(cudaGetErrorString(err));
+        }
     }
-}
 
 CudaArray& operator=(const CudaArray& other) {
     if (this != &other) {
