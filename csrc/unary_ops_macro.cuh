@@ -1,0 +1,17 @@
+#define DEF_UNARY_OP_KERNEL(KERNEL_NAME, FN)                                   \
+  extern "C" __global__ void KERNEL_NAME (const int *in_strides,                \
+                                         const int *shape, const int num_dims, \
+                                         const float *in, float *out) {  \
+    const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
+                                                                               \
+    int tmpIdx = idx;                                                          \
+    int inIdx = 0;                                                             \
+    for (int d = num_dims - 1; d >= 0; d--) {                                  \
+      int dim = tmpIdx % shape[d];                                             \
+      inIdx += dim * in_strides[d];                                            \
+      tmpIdx /= shape[d];                                                      \
+    }                                                                          \
+                                                                               \
+    int x = in[inIdx];                                                         \
+    out[idx] = FN;                                                             \
+  }

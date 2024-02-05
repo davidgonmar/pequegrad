@@ -1,5 +1,5 @@
 #define DEF_BIN_OP_KERNEL(KERNEL_NAME, FN)                                     \
-  __global__ void KERNEL_NAME(                                                 \
+  extern "C" __global__ void KERNEL_NAME(                                      \
       const int *lhs_strides, /* in bytes */                                   \
       const int *rhs_strides, /* in bytes */                                   \
       const int *shape,   /* both lhs and rhs should have equal shape, we dont \

@@ -95,6 +95,9 @@ class Storage:
     def broadcast_to(self, shape: tuple) -> "Storage":
         return Storage(self.data.broadcast_to(shape))
 
+    def contiguous(self):
+        return Storage(self.data.contiguous())
+
     def where(self, condition: "Storage", other: "Storage") -> "Storage":
         raise NotImplementedError
 

@@ -1,4 +1,5 @@
 #include "binary_ops_kernels.cuh"
+#include "unary_ops_kernels.cuh"
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -61,7 +62,7 @@ public:
       : size(size), shape(shape) {
     strides.resize(shape.size());
     strides[shape.size() - 1] = ELEM_SIZE;
-    for (size_t i = shape.size() - 2; i >= 0; --i) {
+    for (int i = shape.size() - 2; i >= 0; --i) {
       strides[i] = strides[i + 1] * shape[i + 1];
     }
     CHECK_CUDA(cudaMalloc(&ptr, size * ELEM_SIZE));
@@ -277,6 +278,29 @@ public:
     return out;
   }
 
+  CudaArray as_contiguous() const {
+    dim3 block_size(DEFAULT_BLOCK_SIZE);
+    dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
+    int n_dims = shape.size();
+    int *d_strides, *d_shape;
+
+    CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(int)));
+
+    int *host_strides = (int *)malloc(n_dims * sizeof(int));
+    int *host_shape = (int *)malloc(n_dims * sizeof(int));
+
+    for (int i = 0; i < n_dims; i++) {
+      host_strides[i] = strides[i];
+      host_shape[i] = shape[i];
+    }
+
+    CudaArray out(size, shape);
+    CopyKernel<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr,out.ptr);
+
+    return out;
+  }
+
   int64_t ptr_as_int() const { return (int64_t)ptr; }
 };
 
@@ -342,6 +366,8 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, GreaterEqualKernel);
            })
+      .def("contiguous",
+           [](const CudaArray &arr) { return arr.as_contiguous(); })
       .def("__getitem__",
            [](const CudaArray &arr, std::vector<py::ssize_t> index) {
              return arr.getitem(index);

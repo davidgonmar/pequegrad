@@ -130,6 +130,9 @@ class Storage:
     def swapaxes(self, axis1: int, axis2: int) -> "Storage":
         return Storage(np.swapaxes(self.data, axis1, axis2))
 
+    def contiguous(self) -> "Storage":
+        return Storage(self.data.copy())
+
     def squeeze(self, axis: int) -> "Storage":
         return Storage(np.squeeze(self.data, axis))
 
