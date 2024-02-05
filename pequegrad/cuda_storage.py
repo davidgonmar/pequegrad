@@ -184,7 +184,7 @@ class Storage:
         raise NotImplementedError
 
     def permute(self, *dims: int) -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.permute(dims))
 
     def el_wise_max(self, other: "Storage") -> "Storage":
         raise NotImplementedError

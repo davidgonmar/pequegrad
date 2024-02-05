@@ -51,7 +51,25 @@ public:
     }
     return true;
   }
+  CudaArray permute(std::vector<py::ssize_t> axes) const {
+      // TODO - check that axes is from 0 to shape.size - 1, in any order
+      if (axes.size() != shape.size()) {
+          throw std::runtime_error("axes must have same size as shape");
+      }
+      std::vector<py::ssize_t> newShape(shape.size());
+      std::vector<py::ssize_t> newStrides(strides.size());
 
+      for (size_t i = 0; i < axes.size(); ++i) {
+          newShape[i] = shape[axes[i]];
+          newStrides[i] = strides[axes[i]];
+      }
+
+      CudaArray out(size, newShape, newStrides);
+      cudaFree(out.ptr); // we want to return a view of the array, so we share ptr. This probably will introduce bugs
+      out.ptr = ptr;
+      return out;
+  }
+  
   CudaArray(size_t size, std::vector<py::ssize_t> shape,
             std::vector<py::ssize_t> strides)
       : size(size), shape(shape), strides(strides) {
@@ -368,6 +386,9 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            })
       .def("contiguous",
            [](const CudaArray &arr) { return arr.as_contiguous(); })
+        .def("permute", 
+            [](const CudaArray& arr, std::vector<py::ssize_t> axes) { return arr.permute(axes); }
+            )
       .def("__getitem__",
            [](const CudaArray &arr, std::vector<py::ssize_t> index) {
              return arr.getitem(index);

@@ -95,3 +95,18 @@ class TestStorage:
         x = class_storage(nparr)
         y = class_storage(nparrbroadcasted)
         self._compare_with_numpy(lambdaop(x, y), lambdaop(nparr, nparrbroadcasted))
+
+    # test permute (transpose for numpy)
+    @pytest.mark.parametrize(
+        # shape, new_order
+        "data",
+        [[(3, 4), (1, 0)], [(5,), (0,)], [(1, 2, 3), (2, 0, 1)]],
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    def test_transpose_contiguous(self, data, class_storage):
+        shape, new_order = data
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        x_permuted = x.permute(*new_order)
+        np_transposed = np.transpose(nparr, new_order)
+        self._compare_with_numpy(x_permuted, np_transposed)
