@@ -103,10 +103,25 @@ class TestStorage:
         [[(3, 4), (1, 0)], [(5,), (0,)], [(1, 2, 3), (2, 0, 1)]],
     )
     @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
-    def test_transpose_contiguous(self, data, class_storage):
+    def test_transpose_and_contiguous(self, data, class_storage):
         shape, new_order = data
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
         x_permuted = x.permute(*new_order)
         np_transposed = np.transpose(nparr, new_order)
         self._compare_with_numpy(x_permuted, np_transposed)
+
+        # test for contiguous
+        npcont = np.array(
+            np_transposed.data, order="C"
+        )  # this will copy the array in a way that it is contiguous
+        xcont = x_permuted.contiguous()
+        self._compare_with_numpy(xcont, npcont)
+
+        assert xcont.is_contiguous()
+        if len(shape) > 1:
+            assert not x_permuted.is_contiguous()
+            assert xcont.is_contiguous()
+        else:
+            assert x_permuted.is_contiguous()
+            assert xcont.is_contiguous()

@@ -47,6 +47,9 @@ class Storage:
                 f"Data must be a numpy array or CudaArray, got {type(data)}"
             )
 
+    def is_contiguous(self) -> bool:
+        return self.data.is_contiguous()
+
     def add(self, other: "Storage") -> "Storage":
         return Storage(self.data.add(other.data))
 

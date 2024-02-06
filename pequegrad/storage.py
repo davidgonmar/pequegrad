@@ -133,6 +133,9 @@ class Storage:
     def contiguous(self) -> "Storage":
         return Storage(self.data.copy())
 
+    def is_contiguous(self) -> bool:
+        return self.data.flags["C_CONTIGUOUS"]
+
     def squeeze(self, axis: int) -> "Storage":
         return Storage(np.squeeze(self.data, axis))
 

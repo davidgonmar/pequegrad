@@ -32,7 +32,7 @@ typedef void (*BinaryOpKernel)(const int *strides, const int *ostrides,
 
 class CudaArray {
 public:
-  float *ptr;
+  std::shared_ptr<float> ptr;
   size_t size;
   std::vector<py::ssize_t> shape;
   std::vector<py::ssize_t> strides;
@@ -43,7 +43,7 @@ public:
     }
     std::vector<py::ssize_t> expected_strides(shape.size());
     expected_strides[shape.size() - 1] = ELEM_SIZE;
-    for (size_t i = shape.size() - 2; i >= 0; --i) {
+    for (int i = shape.size() - 2; i >= 0; --i) {
       expected_strides[i] = expected_strides[i + 1] * shape[i + 1];
     }
     if (expected_strides != strides) {
@@ -51,29 +51,33 @@ public:
     }
     return true;
   }
+  CudaArray(size_t size, const std::vector<py::ssize_t> &shape,
+            const std::vector<py::ssize_t> &strides,
+            const std::shared_ptr<float> &sharedPtr)
+      : size(size), shape(shape), strides(strides), ptr(sharedPtr) {}
   CudaArray permute(std::vector<py::ssize_t> axes) const {
-      // TODO - check that axes is from 0 to shape.size - 1, in any order
-      if (axes.size() != shape.size()) {
-          throw std::runtime_error("axes must have same size as shape");
-      }
-      std::vector<py::ssize_t> newShape(shape.size());
-      std::vector<py::ssize_t> newStrides(strides.size());
+    // TODO - check that axes is from 0 to shape.size - 1, in any order
+    if (axes.size() != shape.size()) {
+      throw std::runtime_error("axes must have same size as shape");
+    }
+    std::vector<py::ssize_t> newShape(shape.size());
+    std::vector<py::ssize_t> newStrides(strides.size());
 
-      for (size_t i = 0; i < axes.size(); ++i) {
-          newShape[i] = shape[axes[i]];
-          newStrides[i] = strides[axes[i]];
-      }
+    for (size_t i = 0; i < axes.size(); ++i) {
+      newShape[i] = shape[axes[i]];
+      newStrides[i] = strides[axes[i]];
+    }
 
-      CudaArray out(size, newShape, newStrides);
-      cudaFree(out.ptr); // we want to return a view of the array, so we share ptr. This probably will introduce bugs
-      out.ptr = ptr;
-      return out;
+    CudaArray out(size, newShape, newStrides, ptr);
+    return out;
   }
-  
+
   CudaArray(size_t size, std::vector<py::ssize_t> shape,
             std::vector<py::ssize_t> strides)
       : size(size), shape(shape), strides(strides) {
-    CHECK_CUDA(cudaMalloc(&ptr, size * ELEM_SIZE));
+    float *raw_ptr;
+    CHECK_CUDA(cudaMalloc(&raw_ptr, size * ELEM_SIZE));
+    ptr = std::shared_ptr<float>(raw_ptr, [](float *p) { cudaFree(p); });
   }
 
   CudaArray(size_t size, std::vector<py::ssize_t> shape)
@@ -83,7 +87,9 @@ public:
     for (int i = shape.size() - 2; i >= 0; --i) {
       strides[i] = strides[i + 1] * shape[i + 1];
     }
-    CHECK_CUDA(cudaMalloc(&ptr, size * ELEM_SIZE));
+    float *raw_ptr;
+    CHECK_CUDA(cudaMalloc(&raw_ptr, size * ELEM_SIZE));
+    ptr = std::shared_ptr<float>(raw_ptr, [](float *p) { cudaFree(p); });
   }
 
   CudaArray broadcastTo(const std::vector<py::ssize_t> _shape) const {
@@ -121,8 +127,8 @@ public:
       new_size *= dim_to;
     }
     CudaArray out(new_size, shape_to, new_strides);
-    CHECK_CUDA(
-        cudaMemcpy(out.ptr, ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice));
+    CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), size * ELEM_SIZE,
+                          cudaMemcpyDeviceToDevice));
     return out;
   }
 
@@ -177,7 +183,7 @@ public:
     CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
                           cudaMemcpyHostToDevice));
     Ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
-                                   ptr, other.ptr, out.ptr);
+                                   ptr.get(), other.ptr.get(), out.ptr.get());
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
     return out;
@@ -199,8 +205,8 @@ public:
     }
     // Copy the requested element from device to host
     float value;
-    CHECK_CUDA(
-        cudaMemcpy(&value, ptr + offset, ELEM_SIZE, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(cudaMemcpy(&value, ptr.get() + offset, ELEM_SIZE,
+                          cudaMemcpyDeviceToHost));
     return value;
   }
 
@@ -212,21 +218,22 @@ public:
     auto *ptr = static_cast<float *>(buffer_info.ptr);
     std::vector<py::ssize_t> py_shape = buffer_info.shape;
     CudaArray arr(size, py_shape, py_strides);
-    CHECK_CUDA(
-        cudaMemcpy(arr.ptr, ptr, size * ELEM_SIZE, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(arr.ptr.get(), ptr, size * ELEM_SIZE,
+                          cudaMemcpyHostToDevice));
     return arr;
   }
 
   py::array_t<float> toNumpy() const {
     py::array_t<float> result(shape, strides);
-    CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr, size * ELEM_SIZE,
+    CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr.get(), size * ELEM_SIZE,
                           cudaMemcpyDeviceToHost));
     float *host = (float *)malloc(size * ELEM_SIZE);
     if (host == nullptr) {
       throw std::runtime_error("failed to allocate host memory");
     }
     cudaDeviceSynchronize();
-    CHECK_CUDA(cudaMemcpy(host, ptr, size * ELEM_SIZE, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(
+        cudaMemcpy(host, ptr.get(), size * ELEM_SIZE, cudaMemcpyDeviceToHost));
     return result;
   }
 
@@ -237,7 +244,8 @@ public:
     if (host == nullptr) {
       throw std::runtime_error("failed to allocate host memory");
     }
-    CHECK_CUDA(cudaMemcpy(host, ptr, size * ELEM_SIZE, cudaMemcpyDeviceToHost));
+    CHECK_CUDA(
+        cudaMemcpy(host, ptr.get(), size * ELEM_SIZE, cudaMemcpyDeviceToHost));
     for (size_t i = 0; i < size; i++) {
       ss << host[i] << " ";
     }
@@ -246,53 +254,40 @@ public:
     return ss.str();
   }
 
-  ~CudaArray() { cudaFree(ptr); }
+  ~CudaArray() {}
 
-  CudaArray(const CudaArray &other) {
-    size = other.size;
-    shape = other.shape;
-    strides = other.strides;
-    CHECK_CUDA(cudaMalloc(&ptr, size * ELEM_SIZE));
-    CHECK_CUDA(
-        cudaMemcpy(ptr, other.ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice));
-  }
+  CudaArray(const CudaArray &other)
+      : size(other.size), shape(other.shape), strides(other.strides),
+        ptr(other.ptr) {}
 
   CudaArray &operator=(const CudaArray &other) {
     if (this != &other) {
-      cudaFree(ptr); // Free existing device memory
       size = other.size;
       shape = other.shape;
       strides = other.strides;
-      CHECK_CUDA(cudaMalloc(&ptr, size * ELEM_SIZE));
-      CHECK_CUDA(cudaMemcpy(ptr, other.ptr, size * ELEM_SIZE,
-                            cudaMemcpyDeviceToDevice));
+      ptr = other.ptr;
     }
     return *this;
   }
 
-  CudaArray(CudaArray &&other) {
-    ptr = other.ptr;
-    size = other.size;
-    shape = other.shape;
-    strides = other.strides;
-    other.ptr = nullptr;
-  }
+  CudaArray(CudaArray &&other) noexcept
+      : size(other.size), shape(std::move(other.shape)),
+        strides(std::move(other.strides)), ptr(std::move(other.ptr)) {}
 
-  CudaArray &operator=(CudaArray &&other) {
+  CudaArray &operator=(CudaArray &&other) noexcept {
     if (this != &other) {
-      ptr = other.ptr;
       size = other.size;
-      other.ptr = nullptr;
-      shape = other.shape;
-      strides = other.strides;
+      shape = std::move(other.shape);
+      strides = std::move(other.strides);
+      ptr = std::move(other.ptr);
     }
     return *this;
   }
 
   CudaArray clone() const {
     CudaArray out(size, shape, strides);
-    CHECK_CUDA(
-        cudaMemcpy(out.ptr, ptr, size * ELEM_SIZE, cudaMemcpyDeviceToDevice));
+    CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), size * ELEM_SIZE,
+                          cudaMemcpyDeviceToDevice));
     return out;
   }
 
@@ -313,13 +308,22 @@ public:
       host_shape[i] = shape[i];
     }
 
+    CHECK_CUDA(cudaMemcpy(d_strides, host_strides, n_dims * sizeof(int),
+                          cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
+                          cudaMemcpyHostToDevice));
+
     CudaArray out(size, shape);
-    CopyKernel<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr,out.ptr);
+    CopyKernel<<<grid_size, block_size>>>(d_strides, d_shape, n_dims,
+                                          this->ptr.get(), out.ptr.get());
+
+    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaGetLastError());
 
     return out;
   }
 
-  int64_t ptr_as_int() const { return (int64_t)ptr; }
+  int64_t ptr_as_int() const { return (int64_t)ptr.get(); }
 };
 
 } // namespace cuda
@@ -386,9 +390,11 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            })
       .def("contiguous",
            [](const CudaArray &arr) { return arr.as_contiguous(); })
-        .def("permute", 
-            [](const CudaArray& arr, std::vector<py::ssize_t> axes) { return arr.permute(axes); }
-            )
+      .def("permute",
+           [](const CudaArray &arr, std::vector<py::ssize_t> axes) {
+             return arr.permute(axes);
+           })
+      .def("is_contiguous", &CudaArray::isContiguous)
       .def("__getitem__",
            [](const CudaArray &arr, std::vector<py::ssize_t> index) {
              return arr.getitem(index);
