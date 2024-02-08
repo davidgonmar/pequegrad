@@ -181,10 +181,10 @@ class Storage:
         raise NotImplementedError
 
     def log(self) -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.log())
 
     def exp(self) -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.exp())
 
     def permute(self, *dims: int) -> "Storage":
         return Storage(self.data.permute(dims))

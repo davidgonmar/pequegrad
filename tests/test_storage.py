@@ -96,7 +96,6 @@ class TestStorage:
         y = class_storage(nparrbroadcasted)
         self._compare_with_numpy(lambdaop(x, y), lambdaop(nparr, nparrbroadcasted))
 
-    # test permute (transpose for numpy)
     @pytest.mark.parametrize(
         # shape, new_order
         "data",
@@ -125,3 +124,22 @@ class TestStorage:
         else:
             assert x_permuted.is_contiguous()
             assert xcont.is_contiguous()
+
+    @pytest.mark.parametrize(
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize(
+        "lambdaop",  # tensor, np
+        [
+            [lambda x: x.log(), np.log],
+            [lambda x: x.exp(), np.exp],
+        ],
+    )
+    def test_unary_op(self, shape, class_storage, lambdaop):
+        tensor_op, np_op = lambdaop
+
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        res = tensor_op(x)
+        self._compare_with_numpy(res, np_op(nparr))

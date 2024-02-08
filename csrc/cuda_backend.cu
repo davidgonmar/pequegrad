@@ -30,6 +30,10 @@ typedef void (*BinaryOpKernel)(const int *strides, const int *ostrides,
                                const int *shape, const int ndim, const float *a,
                                const float *b, float *out);
 
+typedef void (*ElementWiseOpKernel)(
+  const int *in_strides,const int *shape, const int num_dims,const float *in, float *out
+);
+
 class CudaArray {
 public:
   std::shared_ptr<float> ptr;
@@ -291,7 +295,7 @@ public:
     return out;
   }
 
-  CudaArray as_contiguous() const {
+  CudaArray elwiseop(ElementWiseOpKernel Ker) const {
     dim3 block_size(DEFAULT_BLOCK_SIZE);
     dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
     int n_dims = shape.size();
@@ -314,13 +318,17 @@ public:
                           cudaMemcpyHostToDevice));
 
     CudaArray out(size, shape);
-    CopyKernel<<<grid_size, block_size>>>(d_strides, d_shape, n_dims,
+    Ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims,
                                           this->ptr.get(), out.ptr.get());
 
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
 
     return out;
+  }
+
+  CudaArray asContiguous() const {
+    return elwiseop(CopyKernel);
   }
 
   int64_t ptr_as_int() const { return (int64_t)ptr.get(); }
@@ -389,7 +397,15 @@ PYBIND11_MODULE(pequegrad_cu, m) {
              return arr.binop(other, GreaterEqualKernel);
            })
       .def("contiguous",
-           [](const CudaArray &arr) { return arr.as_contiguous(); })
+           [](const CudaArray &arr) { return arr.asContiguous();})
+      .def("exp",
+      [](const CudaArray &arr) {
+          return arr.elwiseop(ExpKernel);
+      }).
+      def("log",
+      [](const CudaArray &arr) {
+          return arr.elwiseop(LogKernel);
+      })
       .def("permute",
            [](const CudaArray &arr, std::vector<py::ssize_t> axes) {
              return arr.permute(axes);
