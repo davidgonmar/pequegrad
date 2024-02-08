@@ -20,11 +20,12 @@ class Storage:
 
     @property
     def T(self) -> "Storage":
-        raise NotImplementedError
+        axis = range(self.ndim)
+        return self.permute(*reversed(axis))
 
     @property
     def ndim(self) -> int:
-        raise NotImplementedError
+        return len(self.shape)
 
     @property
     def size(self) -> int:

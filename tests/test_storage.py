@@ -171,3 +171,21 @@ class TestStorage:
         x = class_storage(nparr)
         res = tensor_op(x)
         self._compare_with_numpy(res, np_op(nparr))
+
+    @pytest.mark.parametrize(
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    def test_T(self, shape, class_storage):
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        self._compare_with_numpy(x.T, np.transpose(nparr, axes=range(len(shape))[::-1]))
+
+    @pytest.mark.parametrize(
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    def test_ndim(self, shape, class_storage):
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        assert x.ndim == len(shape)
