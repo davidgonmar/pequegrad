@@ -82,7 +82,7 @@ class Storage:
         return Storage(self.data.matmul(other.data))
 
     def __matmul__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.matmul(other)
 
     def div(self, other: "Storage") -> "Storage":
         return Storage(self.data.div(other.data))
