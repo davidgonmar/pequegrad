@@ -29,7 +29,7 @@ class Storage:
 
     @property
     def size(self) -> int:
-        raise NotImplementedError
+        return np.prod(self.shape)
 
     def astype(self, dtype: Union[str, np.dtype]) -> "Storage":
         raise NotImplementedError("Only float32 is supported")
@@ -67,7 +67,7 @@ class Storage:
         return self.sub(other)
 
     def __rsub__(self, other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(other.data.sub(self.data))
 
     def mul(self, other: "Storage") -> "Storage":
         return Storage(self.data.mul(other.data))

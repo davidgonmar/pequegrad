@@ -189,3 +189,12 @@ class TestStorage:
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
         assert x.ndim == len(shape)
+
+    @pytest.mark.parametrize(
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    def test_size(self, shape, class_storage):
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        assert x.size == np.prod(shape)
