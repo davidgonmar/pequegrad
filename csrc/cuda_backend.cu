@@ -46,6 +46,9 @@ public:
     if (strides.size() != shape.size()) {
       return false;
     }
+    if (strides.size() == 0) { // scalar
+      return true;
+    }
     std::vector<py::ssize_t> expected_strides(shape.size());
     expected_strides[shape.size() - 1] = ELEM_SIZE;
     for (int i = shape.size() - 2; i >= 0; --i) {
@@ -88,9 +91,12 @@ public:
   CudaArray(size_t size, std::vector<py::ssize_t> shape)
       : size(size), shape(shape) {
     strides.resize(shape.size());
-    strides[shape.size() - 1] = ELEM_SIZE;
-    for (int i = shape.size() - 2; i >= 0; --i) {
-      strides[i] = strides[i + 1] * shape[i + 1];
+    // Only calculate strides if we don't have a scalar
+    if (shape.size() > 0) {
+      strides[shape.size() - 1] = ELEM_SIZE;
+      for (int i = shape.size() - 2; i >= 0; --i) {
+        strides[i] = strides[i + 1] * shape[i + 1];
+      }
     }
     float *raw_ptr;
     CHECK_CUDA(cudaMalloc(&raw_ptr, size * ELEM_SIZE));

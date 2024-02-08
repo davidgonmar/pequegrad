@@ -14,7 +14,7 @@ class TestStorage:
         assert np.allclose(x.numpy(), y)
 
     @pytest.mark.parametrize(
-        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1), tuple()]
     )
     @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
     @pytest.mark.parametrize(
@@ -38,8 +38,12 @@ class TestStorage:
         lambdaopnp = lambdaop[1] if isinstance(lambdaop, list) else lambdaop
         lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
 
-        np1 = np.random.rand(*shape).astype(np.float32)
-        np2 = np.random.rand(*shape).astype(np.float32)
+        # random.randn returns a Python float, we need to wrap it in np.array
+        np1 = np.random.rand(*shape)
+        np1 = np.array(np1, dtype=np.float32)
+        np2 = np.random.rand(*shape)
+        np2 = np.array(np2, dtype=np.float32)
+
         x = class_storage(np1)
         y = class_storage(np2)
         res = lambdaoptensor(
