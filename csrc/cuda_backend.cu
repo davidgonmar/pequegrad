@@ -1,4 +1,5 @@
 #include "binary_ops_kernels.cuh"
+#include "matmul_kernels.cuh"
 #include "unary_ops_kernels.cuh"
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>
@@ -214,6 +215,50 @@ public:
     return value;
   }
 
+  int ndim() const { return shape.size(); }
+
+  CudaArray matMul(const CudaArray &other) const {
+    CudaArray a = this->asContiguous();
+    CudaArray b = other.asContiguous();
+    dim3 blockSize = dim3(DEFAULT_BLOCK_SIZE);
+    std::vector<py::ssize_t> newShape;
+    int size1, midsize, size2;
+    if (a.ndim() == 2 && b.ndim() == 2) {
+      size1 = a.shape.at(0);
+      midsize = a.shape.at(1);
+      size2 = b.shape.at(1);
+      newShape = {size1, size2};
+    } else if (a.ndim() == 1 && b.ndim() == 1) {
+      newShape = {1};
+      size1 = midsize = size2 = 1;
+    } else if (a.ndim() == 2 && b.ndim() == 1) {
+      size1 = a.shape.at(0);
+      midsize = a.shape.at(1);
+      size2 = 1;
+      newShape = {size1};
+    } else if (a.ndim() == 1 && b.ndim() == 2) {
+      size1 = 1;
+      midsize = b.shape.at(0);
+      size2 = b.shape.at(1);
+      newShape = {size2};
+    } else {
+      std::string error_message =
+          "Invalid shapes for matmul, only 1D/2D combinations, 2Dx2D and 1Dx1D "
+          "tensors supported";
+      throw std::runtime_error(error_message);
+    }
+
+    int newSize = size1 * size2;
+    dim3 gridSize(ceil(newSize / (float)DEFAULT_BLOCK_SIZE));
+    CudaArray out(newSize, newShape);
+    MatMulKernel<<<gridSize, blockSize>>>(a.ptr.get(), b.ptr.get(),
+                                          out.ptr.get(), size1, midsize, size2);
+    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaGetLastError());
+
+    return out;
+  }
+
   static CudaArray fromNumpy(py::array_t<float> np_array) {
     py::buffer_info buffer_info = np_array.request();
     std::vector<py::ssize_t> py_strides = buffer_info.strides;
@@ -411,6 +456,8 @@ PYBIND11_MODULE(pequegrad_cu, m) {
              return arr.permute(axes);
            })
       .def("is_contiguous", &CudaArray::isContiguous)
+      .def("matmul", [](const CudaArray &arr,
+                        const CudaArray &other) { return arr.matMul(other); })
       .def("__getitem__",
            [](const CudaArray &arr, std::vector<py::ssize_t> index) {
              return arr.getitem(index);

@@ -218,3 +218,24 @@ class TestStorage:
             x.swapaxes(axis1=axis_to_swap[0], axis2=axis_to_swap[1]),
             np.swapaxes(nparr, axis_to_swap[0], axis_to_swap[1]),
         )
+
+    # matmul tests
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            [(3, 3), (3, 3)],
+            [(3, 4), (4, 5)],
+            [(3, 4), (4,)],
+            [(4,), (4, 3)],
+            [(25, 20), (20, 25)],
+            [(22,), (22, 30)],
+        ],
+    )  # (from, to)
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    def test_matmul(self, shapes, class_storage):
+        from_shape, to_shape = shapes
+        nparr = np.random.rand(*from_shape).astype(np.float32)
+        nparr2 = np.random.rand(*to_shape).astype(np.float32)
+        x = class_storage(nparr)
+        y = class_storage(nparr2)
+        self._compare_with_numpy(x.matmul(y), np.matmul(nparr, nparr2))
