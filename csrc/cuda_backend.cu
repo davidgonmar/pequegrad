@@ -30,9 +30,9 @@ typedef void (*BinaryOpKernel)(const int *strides, const int *ostrides,
                                const int *shape, const int ndim, const float *a,
                                const float *b, float *out);
 
-typedef void (*ElementWiseOpKernel)(
-  const int *in_strides,const int *shape, const int num_dims,const float *in, float *out
-);
+typedef void (*ElementWiseOpKernel)(const int *in_strides, const int *shape,
+                                    const int num_dims, const float *in,
+                                    float *out);
 
 class CudaArray {
 public:
@@ -318,8 +318,8 @@ public:
                           cudaMemcpyHostToDevice));
 
     CudaArray out(size, shape);
-    Ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims,
-                                          this->ptr.get(), out.ptr.get());
+    Ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr.get(),
+                                   out.ptr.get());
 
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
@@ -327,9 +327,7 @@ public:
     return out;
   }
 
-  CudaArray asContiguous() const {
-    return elwiseop(CopyKernel);
-  }
+  CudaArray asContiguous() const { return elwiseop(CopyKernel); }
 
   int64_t ptr_as_int() const { return (int64_t)ptr.get(); }
 };
@@ -372,6 +370,10 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, DivKernel);
            })
+      .def("el_wise_max",
+           [](const CudaArray &arr, const CudaArray &other) {
+             return arr.binop(other, ElementWiseMaxKernel);
+           })
       .def("eq",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, EqualKernel);
@@ -397,15 +399,9 @@ PYBIND11_MODULE(pequegrad_cu, m) {
              return arr.binop(other, GreaterEqualKernel);
            })
       .def("contiguous",
-           [](const CudaArray &arr) { return arr.asContiguous();})
-      .def("exp",
-      [](const CudaArray &arr) {
-          return arr.elwiseop(ExpKernel);
-      }).
-      def("log",
-      [](const CudaArray &arr) {
-          return arr.elwiseop(LogKernel);
-      })
+           [](const CudaArray &arr) { return arr.asContiguous(); })
+      .def("exp", [](const CudaArray &arr) { return arr.elwiseop(ExpKernel); })
+      .def("log", [](const CudaArray &arr) { return arr.elwiseop(LogKernel); })
       .def("permute",
            [](const CudaArray &arr, std::vector<py::ssize_t> axes) {
              return arr.permute(axes);

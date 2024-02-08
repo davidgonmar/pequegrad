@@ -30,20 +30,26 @@ class TestStorage:
             lambda x, y: x <= y,
             lambda x, y: x > y,
             lambda x, y: x >= y,
+            [lambda x, y: x.el_wise_max(y), np.maximum],
         ],
     )
     def test_binop(self, shape, class_storage, lambdaop):
+        lambdaopnp = lambdaop[1] if isinstance(lambdaop, list) else lambdaop
+        lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
+
         np1 = np.random.rand(*shape).astype(np.float32)
         np2 = np.random.rand(*shape).astype(np.float32)
         x = class_storage(np1)
         y = class_storage(np2)
-        res = lambdaop(x, y)  # cast to float as of now (only in case of NPStorage)
+        res = lambdaoptensor(
+            x, y
+        )  # cast to float as of now (only in case of NPStorage)
         if class_storage == NPStorage:
             assert (
                 type(res) == NPStorage
             ), "Result should be of type NPStorage, op: " + str(lambdaop)
             res.data = res.data.astype(np.float32)
-        self._compare_with_numpy(res, lambdaop(np1, np2).astype(np.float32))
+        self._compare_with_numpy(res, lambdaopnp(np1, np2).astype(np.float32))
 
     # test for broadcasting shapes -> from, to
     @pytest.mark.parametrize(
