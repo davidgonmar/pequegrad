@@ -172,13 +172,13 @@ class Storage:
         raise NotImplementedError
 
     def pow(self, exponent: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.pow(exponent.data))
 
     def __pow__(self, exponent: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.pow(exponent)
 
     def power(self, exponent: "Storage") -> "Storage":
-        raise NotImplementedError
+        return self.pow(exponent)
 
     def log(self) -> "Storage":
         return Storage(self.data.log())

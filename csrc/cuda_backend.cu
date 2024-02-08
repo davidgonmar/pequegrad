@@ -374,6 +374,10 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, ElementWiseMaxKernel);
            })
+      .def("pow",
+           [](const CudaArray &arr, const CudaArray &other) {
+             return arr.binop(other, PowKernel);
+           })
       .def("eq",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, EqualKernel);

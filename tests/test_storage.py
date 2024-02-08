@@ -30,6 +30,7 @@ class TestStorage:
             lambda x, y: x <= y,
             lambda x, y: x > y,
             lambda x, y: x >= y,
+            lambda x, y: x**y,
             [lambda x, y: x.el_wise_max(y), np.maximum],
         ],
     )
@@ -92,15 +93,36 @@ class TestStorage:
             lambda x, y: x - y,
             lambda x, y: x * y,
             lambda x, y: x / y,
+            lambda x, y: x == y,
+            lambda x, y: x != y,
+            lambda x, y: x < y,
+            lambda x, y: x <= y,
+            lambda x, y: x > y,
+            lambda x, y: x >= y,
+            lambda x, y: x**y,
+            [lambda x, y: x.el_wise_max(y), np.maximum],
         ],
     )
     def test_binop_broadcast(self, shape, class_storage, lambdaop):
+        lambdaopnp = lambdaop[1] if isinstance(lambdaop, list) else lambdaop
+        lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
+
         from_shape, to_shape = shape
         nparr = np.random.rand(*from_shape).astype(np.float32)
         nparrbroadcasted = np.random.rand(*to_shape).astype(np.float32)
         x = class_storage(nparr)
         y = class_storage(nparrbroadcasted)
-        self._compare_with_numpy(lambdaop(x, y), lambdaop(nparr, nparrbroadcasted))
+        res = lambdaoptensor(
+            x, y
+        )  # cast to float as of now (only in case of NPStorage)
+        if class_storage == NPStorage:
+            assert (
+                type(res) == NPStorage
+            ), "Result should be of type NPStorage, op: " + str(lambdaop)
+            res.data = res.data.astype(np.float32)
+        self._compare_with_numpy(
+            res, lambdaopnp(nparr, nparrbroadcasted).astype(np.float32)
+        )
 
     @pytest.mark.parametrize(
         # shape, new_order
