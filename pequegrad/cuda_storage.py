@@ -109,7 +109,9 @@ class Storage:
         raise NotImplementedError
 
     def swapaxes(self, axis1: int, axis2: int) -> "Storage":
-        raise NotImplementedError
+        a = list(range(self.ndim))
+        a[axis1], a[axis2] = a[axis2], a[axis1]
+        return self.permute(*a)
 
     def squeeze(self, axis: int) -> "Storage":
         raise NotImplementedError

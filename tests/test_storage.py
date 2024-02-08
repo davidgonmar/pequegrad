@@ -198,3 +198,23 @@ class TestStorage:
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
         assert x.size == np.prod(shape)
+
+    @pytest.mark.parametrize(
+        "shape_and_axistoswap",
+        [
+            [(3, 4), (1, 0)],
+            [(1, 2, 3), (2, 0, 1)],
+            [(1, 2, 3), (0, 2)],
+            [(3, 1), (0, 1)],
+            [(1, 3, 1), (0, 2)],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    def test_swapaxes(self, shape_and_axistoswap, class_storage):
+        shape, axis_to_swap = shape_and_axistoswap
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        self._compare_with_numpy(
+            x.swapaxes(axis1=axis_to_swap[0], axis2=axis_to_swap[1]),
+            np.swapaxes(nparr, axis_to_swap[0], axis_to_swap[1]),
+        )
