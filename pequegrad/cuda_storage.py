@@ -43,6 +43,8 @@ class Storage:
             self.data = CudaArray.from_numpy(data.astype(np.float32))
         elif isinstance(data, CudaArray):
             self.data = data.clone()
+        elif isinstance(data, (int, float, np.float32, np.float64, np.int32, np.int64)):
+            self.data = CudaArray.from_numpy(np.array(data, dtype=np.float32))
         else:
             raise ValueError(
                 f"Data must be a numpy array or CudaArray, got {type(data)}"
@@ -135,7 +137,6 @@ class Storage:
         return Storage(self.data.ne(other.data))
 
     def __eq__(self, other: "Storage") -> "Storage":
-        print("eq", self.equal(other))
         return self.equal(other)
 
     def __gt__(self, other: "Storage") -> "Storage":
@@ -157,7 +158,7 @@ class Storage:
         raise NotImplementedError
 
     def __len__(self) -> int:
-        raise NotImplementedError
+        return self.shape[0]
 
     def __getitem__(self, key):
         return self.data[key]
@@ -193,4 +194,8 @@ class Storage:
         return Storage(self.data.permute(dims))
 
     def el_wise_max(self, other: "Storage") -> "Storage":
-        return Storage(self.data.el_wise_max(other.data))
+        return (
+            Storage(self.data.el_wise_max(other.data))
+            if isinstance(other, Storage)
+            else Storage(self.data.el_wise_max(Storage(other).data))
+        )

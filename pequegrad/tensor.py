@@ -190,7 +190,7 @@ class Tensor:
 
         np_one_hot = np.zeros((indices.data.size, num_classes))
 
-        np_one_hot[np.arange(indices.data.size), indices.data.astype(int).numpy()] = 1.0
+        np_one_hot[np.arange(indices.data.size), indices.numpy().astype(int)] = 1.0
 
         return Tensor(np_one_hot, requires_grad=requires_grad)
 
@@ -382,7 +382,9 @@ class Tensor:
         assert (
             dim >= 0
             if isinstance(dim, int)
-            else all(d >= 0 for d in dim) if dim is not None else True
+            else all(d >= 0 for d in dim)
+            if dim is not None
+            else True
         ), "only positive dims supported by now. Got {}".format(dim)
 
         N = (
