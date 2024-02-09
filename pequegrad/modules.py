@@ -12,6 +12,12 @@ def kaiming_init(shape):
 class Module:
     _parameters: List[Tensor] = []
 
+    def to(self, storage_type):
+        new_params = []
+        for p in self.parameters():
+            new_params.append(p.to(storage_type))
+        self._parameters = new_params
+
     def parameters(self):
         return self._parameters
 

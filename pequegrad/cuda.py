@@ -13,5 +13,9 @@ windows_vs_build_path = os.path.join(
 if os.path.exists(windows_vs_build_path):
     sys.path.append(windows_vs_build_path)
 
+try:
+    from pequegrad_cu import Array as CudaArray  # noqa: F401, E402
 
-from pequegrad_cu import Array as CudaArray  # noqa: F401, E402
+    CUDA_AVAILABLE = True
+except ImportError:
+    CUDA_AVAILABLE = False

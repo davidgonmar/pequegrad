@@ -33,13 +33,32 @@ class Function:
         *tensors: Tensor,
         **kwargs,
     ) -> Tensor:
-        tensors = [Tensor(t) if not isinstance(t, Tensor) else t for t in tensors]
+        # first, find first tensor that is a tensor
+        device = "np"
+        for t in tensors:
+            if isinstance(t, Tensor):
+                device = t.device
+                break
+        tensors = [
+            Tensor(t, storage=device) if not isinstance(t, Tensor) else t
+            for t in tensors
+        ]
+        # all devices should be the same
+        assert all(
+            t.device == device for t in tensors
+        ), "all tensors must be on the same device, got: {}".format(
+            [t.device for t in tensors]
+        )
 
         f = cls(*tensors, **kwargs)
         f.forward()
         should_store_grad = f.requires_grad and pequegrad_context.grad_enabled
         if should_store_grad:
             f.ret._ctx = f
+
+        assert (
+            f.ret.device == device
+        ), f"function output device {f.ret.device} does not match input device {device}"
 
         return f.ret
 
@@ -55,6 +74,7 @@ class Max(Function):
         self.ret = Tensor(
             self.a.data.max(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
         return self.ret
 
@@ -85,7 +105,9 @@ class Unsqueeze(Function):
 
     def forward(self):
         self.ret = Tensor(
-            self.a.data.expand_dims(axis=self.dim), requires_grad=self.requires_grad
+            self.a.data.expand_dims(axis=self.dim),
+            requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
         return self.ret
 
@@ -102,7 +124,9 @@ class Squeeze(Function):
 
     def forward(self):
         self.ret = Tensor(
-            self.a.data.squeeze(axis=self.dim), requires_grad=self.requires_grad
+            self.a.data.squeeze(axis=self.dim),
+            requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
         return self.ret
 
@@ -122,6 +146,7 @@ class Mean(Function):
         self.ret = Tensor(
             self.a.data.mean(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
         return self.ret
 
@@ -160,6 +185,7 @@ class Sum(Function):
         self.ret = Tensor(
             self.a.data.sum(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
         return self.ret
 
@@ -191,6 +217,7 @@ class Pow(Function):
         self.ret = Tensor(
             self.base.data.power(self.exponent.data),
             requires_grad=self.requires_grad,
+            storage=self.base.device,
         )
         return self.ret
 
@@ -216,6 +243,7 @@ class Log(Function):
         self.ret = Tensor(
             self.a.data.log(),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
 
     def backward(self):
@@ -232,6 +260,7 @@ class Exp(Function):
         self.ret = Tensor(
             self.a.data.exp(),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
 
     def backward(self):
@@ -249,6 +278,7 @@ class Permute(Function):
         self.ret = Tensor(
             self.a.data.permute(*self.dims),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
 
         return self.ret
@@ -273,6 +303,7 @@ class ReLU(Function):
         self.ret = Tensor(
             self.a.data.el_wise_max(0),
             requires_grad=self.requires_grad,
+            storage=self.a.device,
         )
         return self.ret
 
@@ -298,6 +329,7 @@ class Add(Function):
         self.ret = Tensor(
             self.x.data + self.y.data,
             requires_grad=self.requires_grad,
+            storage=self.x.device,
         )
         return self.ret
 
@@ -342,6 +374,7 @@ class Mul(Function):
         self.ret = Tensor(
             self.x.data * self.y.data,
             requires_grad=self.requires_grad,
+            storage=self.x.device,
         )
         return self.ret
 
@@ -386,6 +419,7 @@ class MatMul(Function):
         self.ret = Tensor(
             self.x.data @ self.y.data,
             requires_grad=self.requires_grad,
+            storage=self.x.device,
         )
         return self.ret
 
@@ -461,6 +495,7 @@ class Reshape(Function):
         self.ret = Tensor(
             self.input.data.reshape(self.output_shape),
             requires_grad=self.requires_grad,
+            storage=self.input.device,
         )
         return self.ret
 
@@ -483,6 +518,7 @@ class Unfold(Function):
         self.ret = Tensor(
             unfolded,
             requires_grad=self.requires_grad,
+            storage=self.input.device,
         )
         return self.ret
 
@@ -521,6 +557,7 @@ class Fold(Function):
         self.ret = Tensor(
             folded,
             requires_grad=self.requires_grad,
+            storage=self.input.device,
         )
         return self.ret
 
