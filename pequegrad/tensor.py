@@ -1,7 +1,7 @@
 from typing import List, Union, Type, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
-from .storage import AbstractStorage, NumpyStorage, CudaStorage
+from .storage import AbstractStorage, NumpyStorage, CudaStorage, CUDA_AVAILABLE # noqa
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -58,7 +58,6 @@ class Tensor:
         Moves the tensor to the given device, returns a copy
         """
         tensor = self.clone(storage=storage_type)
-        print(tensor)
         return tensor
 
     def to_(self, storage_type: str) -> None:
@@ -423,9 +422,7 @@ class Tensor:
         assert (
             dim >= 0
             if isinstance(dim, int)
-            else all(d >= 0 for d in dim)
-            if dim is not None
-            else True
+            else all(d >= 0 for d in dim) if dim is not None else True
         ), "only positive dims supported by now. Got {}".format(dim)
 
         N = (

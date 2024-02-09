@@ -1,7 +1,10 @@
 import numpy as np
 from typing import Union, Tuple
-from pequegrad.cuda import CudaArray
+from pequegrad.cuda import CudaArray, CUDA_AVAILABLE
 from .abstract_storage import AbstractStorage
+
+if not CUDA_AVAILABLE:
+    raise ImportError("CUDA is not available, still tried to import CudaStorage")
 
 
 class CudaStorage(AbstractStorage):

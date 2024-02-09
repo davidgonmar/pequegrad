@@ -1,5 +1,6 @@
 import os
 import sys
+import warnings
 
 
 class DummyCudaArray:
@@ -22,10 +23,21 @@ windows_vs_build_path = os.path.join(
 if os.path.exists(windows_vs_build_path):
     sys.path.append(windows_vs_build_path)
 
-try:
-    from pequegrad_cu import Array as CudaArray  # noqa: F401, E402
 
-    CUDA_AVAILABLE = True
+SHOULD_USE_CUDA = (
+    os.environ.get("PEQUEGRAD_USE_CUDA", "1") == "1"
+)  # by default, use cuda
+
+try:
+    if SHOULD_USE_CUDA:
+        from pequegrad_cu import Array as CudaArray  # noqa: F401, E402
+
+        CUDA_AVAILABLE = True
+    else:
+        CudaArray = DummyCudaArray
+        CUDA_AVAILABLE = False
+
 except ImportError:
+    warnings.warn("Tried to use cuda, but it is not available")
     CudaArray = DummyCudaArray
     CUDA_AVAILABLE = False

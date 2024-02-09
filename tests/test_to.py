@@ -1,9 +1,10 @@
-from pequegrad.tensor import Tensor
+from pequegrad.tensor import Tensor, CUDA_AVAILABLE
 import numpy as np
 import pytest
 
 
-class TestTensor:
+@pytest.mark.skipif(not CUDA_AVAILABLE, reason="CUDA is not available")
+class TestTo:
     @pytest.mark.parametrize("storage", ["np", "cuda"])
     def test_storage_type(self, storage):
         t = Tensor(np.array([1, 2, 3]), storage=storage)
