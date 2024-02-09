@@ -11,6 +11,7 @@ class TestStorage:
     def _compare_with_numpy(self, x: Storage, y: np.ndarray):
         assert x.shape == y.shape
         assert x.strides == y.strides
+
         assert np.allclose(x.numpy(), y)
 
     @pytest.mark.parametrize(
@@ -243,3 +244,36 @@ class TestStorage:
         x = class_storage(nparr)
         y = class_storage(nparr2)
         self._compare_with_numpy(x.matmul(y), np.matmul(nparr, nparr2))
+
+    # ternary operations
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            (3, 4),
+            (5,),
+            (1, 2, 3),
+            (3, 1),
+            (1,),
+            (1, 3, 1),
+            (3, 4, 5),
+            (1, 1, 1),
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize(
+        "lambdaop",
+        [
+            [lambda x, y, z: x.where(y, z), lambda x, y, z: np.where(y, x, z)],
+        ],
+    )
+    def test_ternary_op(self, shape, class_storage, lambdaop):
+        lambdaopnp = lambdaop[1] if isinstance(lambdaop, list) else lambdaop
+        lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
+        np1 = np.random.rand(*shape).astype(np.float32)
+        np2 = np.random.rand(*shape).astype(np.float32)
+        np3 = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(np1)
+        y = class_storage(np2)
+        z = class_storage(np3)
+        res = lambdaoptensor(x, y, z)
+        self._compare_with_numpy(res, lambdaopnp(np1, np2, np3))

@@ -1,6 +1,7 @@
 #include "binary_ops_kernels.cuh"
 #include "matmul_kernels.cuh"
 #include "unary_ops_kernels.cuh"
+#include "ternary_ops_kernels.cuh"
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -35,6 +36,13 @@ typedef void (*ElementWiseOpKernel)(const int *in_strides, const int *shape,
                                     const int num_dims, const float *in,
                                     float *out);
 
+typedef void (*TernaryOpKernel)( const int *first_strides, /* in bytes */                                   
+      const int *second_strides, /* in bytes */                                   
+      const int *third_strides, /* in bytes */ 
+      const int *shape,   /* both lhs and rhs should have equal shape, we dont \
+                             handle broadcasting here */                       
+      const int num_dims, /* equals len of strides and shape */                
+      const float *first, const float *second, const float *third, float *out);
 class CudaArray {
 public:
   std::shared_ptr<float> ptr;
@@ -195,6 +203,51 @@ public:
                           cudaMemcpyHostToDevice));
     Ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
                                    ptr.get(), other.ptr.get(), out.ptr.get());
+    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaGetLastError());
+    return out;
+  }
+
+
+  CudaArray ternaryop(const CudaArray &second, const CudaArray &third, TernaryOpKernel Ker) const {
+    if (second.shape != third.shape || shape != second.shape || shape != third.shape) {
+      throw std::invalid_argument("broadcasting is not supported in ternary operators");
+    }
+    dim3 block_size(DEFAULT_BLOCK_SIZE);
+    dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
+
+    // Default stride calculation
+    CudaArray out(size, shape);
+    int n_dims = shape.size();
+    int *d_first_strides, *d_second_strides, *d_third_strides, *d_shape;
+    CHECK_CUDA(cudaMalloc(&d_first_strides, n_dims * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_second_strides, n_dims * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_third_strides, n_dims * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(int)));
+
+    int *host_first_strides = (int *)malloc(n_dims * sizeof(int));
+    int *host_second_strides = (int *)malloc(n_dims * sizeof(int));
+    int *host_third_strides = (int *)malloc(n_dims * sizeof(int));
+    int *host_shape = (int *)malloc(n_dims * sizeof(int));
+
+    for (int i = 0; i < n_dims; i++) {
+      host_first_strides[i] = strides[i];
+      host_second_strides[i] = second.strides[i];
+      host_third_strides[i] = third.strides[i];
+      host_shape[i] = shape[i];
+    }
+
+    CHECK_CUDA(cudaMemcpy(d_first_strides, host_first_strides, n_dims * sizeof(int),
+                          cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_second_strides, host_second_strides, n_dims * sizeof(int),
+                          cudaMemcpyHostToDevice));
+
+    CHECK_CUDA(cudaMemcpy(d_third_strides, host_third_strides, n_dims * sizeof(int),
+                          cudaMemcpyHostToDevice));
+
+    CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
+                          cudaMemcpyHostToDevice));
+    Ker<<<grid_size, block_size>>>(d_first_strides, d_second_strides, d_third_strides, d_shape, shape.size(), ptr.get(), second.ptr.get(), third.ptr.get(), out.ptr.get());
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
     return out;
@@ -464,6 +517,10 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("is_contiguous", &CudaArray::isContiguous)
       .def("matmul", [](const CudaArray &arr,
                         const CudaArray &other) { return arr.matMul(other); })
+      .def("where",
+           [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
+             return cond.ternaryop(a, b, WhereKernel);
+           })
       .def("__getitem__",
            [](const CudaArray &arr, std::vector<py::ssize_t> index) {
              return arr.getitem(index);

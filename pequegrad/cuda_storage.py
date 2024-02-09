@@ -103,7 +103,7 @@ class Storage:
         return Storage(self.data.contiguous())
 
     def where(self, condition: "Storage", other: "Storage") -> "Storage":
-        raise NotImplementedError
+        return Storage(self.data.where(condition.data, other.data))
 
     def outer_product(self, other: "Storage") -> "Storage":
         raise NotImplementedError
