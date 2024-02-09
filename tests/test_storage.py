@@ -1,14 +1,10 @@
-from pequegrad.storage import Storage
-from pequegrad.cuda_storage import Storage as CudaStorage
+from pequegrad.storage import AbstractStorage, NumpyStorage, CudaStorage
 import pytest
 import numpy as np
 
-# We use float32 because it is the only dtype supported by CudaArray
-NPStorage = Storage
-
 
 class TestStorage:
-    def _compare_with_numpy(self, x: Storage, y: np.ndarray):
+    def _compare_with_numpy(self, x: AbstractStorage, y: np.ndarray):
         assert x.shape == y.shape
         assert x.strides == y.strides
 
@@ -17,7 +13,7 @@ class TestStorage:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1), tuple()]
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     @pytest.mark.parametrize(
         "lambdaop",
         [
@@ -50,9 +46,9 @@ class TestStorage:
         res = lambdaoptensor(
             x, y
         )  # cast to float as of now (only in case of NPStorage)
-        if class_storage == NPStorage:
+        if class_storage == NumpyStorage:
             assert (
-                type(res) == NPStorage
+                type(res) == NumpyStorage
             ), "Result should be of type NPStorage, op: " + str(lambdaop)
             res.data = res.data.astype(np.float32)
         self._compare_with_numpy(res, lambdaopnp(np1, np2).astype(np.float32))
@@ -69,7 +65,7 @@ class TestStorage:
             [(1, 3, 1), (2, 1, 3, 4)],
         ],
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_broadcast_to(self, shape, class_storage):
         from_shape, to_shape = shape
         nparr = np.random.rand(*from_shape).astype(np.float32)
@@ -90,7 +86,7 @@ class TestStorage:
             [(1, 3, 1), (2, 1, 3, 4)],
         ],
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     @pytest.mark.parametrize(
         "lambdaop",
         [
@@ -120,10 +116,10 @@ class TestStorage:
         res = lambdaoptensor(
             x, y
         )  # cast to float as of now (only in case of NPStorage)
-        if class_storage == NPStorage:
+        if class_storage == NumpyStorage:
             assert (
-                type(res) == NPStorage
-            ), "Result should be of type NPStorage, op: " + str(lambdaop)
+                type(res) == NumpyStorage
+            ), "Result should be of type NumpyStorage, got: " + str(type(res))
             res.data = res.data.astype(np.float32)
         self._compare_with_numpy(
             res, lambdaopnp(nparr, nparrbroadcasted).astype(np.float32)
@@ -134,7 +130,7 @@ class TestStorage:
         "data",
         [[(3, 4), (1, 0)], [(5,), (0,)], [(1, 2, 3), (2, 0, 1)]],
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_transpose_and_contiguous(self, data, class_storage):
         shape, new_order = data
         nparr = np.random.rand(*shape).astype(np.float32)
@@ -161,7 +157,7 @@ class TestStorage:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     @pytest.mark.parametrize(
         "lambdaop",  # tensor, np
         [
@@ -180,7 +176,7 @@ class TestStorage:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_T(self, shape, class_storage):
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
@@ -189,7 +185,7 @@ class TestStorage:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_ndim(self, shape, class_storage):
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
@@ -198,7 +194,7 @@ class TestStorage:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_size(self, shape, class_storage):
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
@@ -214,7 +210,7 @@ class TestStorage:
             [(1, 3, 1), (0, 2)],
         ],
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_swapaxes(self, shape_and_axistoswap, class_storage):
         shape, axis_to_swap = shape_and_axistoswap
         nparr = np.random.rand(*shape).astype(np.float32)
@@ -236,7 +232,7 @@ class TestStorage:
             [(22,), (22, 30)],
         ],
     )  # (from, to)
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     def test_matmul(self, shapes, class_storage):
         from_shape, to_shape = shapes
         nparr = np.random.rand(*from_shape).astype(np.float32)
@@ -259,7 +255,7 @@ class TestStorage:
             (1, 1, 1),
         ],
     )
-    @pytest.mark.parametrize("class_storage", [NPStorage, CudaStorage])
+    @pytest.mark.parametrize("class_storage", [NumpyStorage, CudaStorage])
     @pytest.mark.parametrize(
         "lambdaop",
         [

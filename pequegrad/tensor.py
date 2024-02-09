@@ -1,8 +1,7 @@
 from typing import List, Union, Type, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
-from .storage import Storage as NPStorage
-from .cuda_storage import Storage as CudaStorage
+from .storage import AbstractStorage, NumpyStorage, CudaStorage
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
@@ -13,11 +12,13 @@ class Tensor:
     Tensor implementation with autograd support
     """
 
+    storage: AbstractStorage
+
     def __init__(self, data: _ArrayLike, requires_grad=False, storage="np"):
         # Internally, we store the data as a numpy array\
         if isinstance(data, Tensor):
             data = data.numpy()
-        elif isinstance(data, (NPStorage, CudaStorage)):
+        elif isinstance(data, AbstractStorage):
             data = data.numpy()
         elif isinstance(data, (int, float)):
             data = np.array(data)
@@ -32,7 +33,7 @@ class Tensor:
         )
         storage = storage if storage else "np"  # default to numpy storage
         if storage == "np":
-            self.data: NPStorage = NPStorage(data)
+            self.data: NumpyStorage = NumpyStorage(data)
         elif storage == "cuda":
             self.data: CudaStorage = CudaStorage(data)
         else:
@@ -65,7 +66,7 @@ class Tensor:
         Moves the tensor to the given device in place
         """
         if storage_type == "np":
-            self.data = NPStorage(self.data.numpy())
+            self.data = NumpyStorage(self.data.numpy())
             if self._grad:
                 self._grad.to_(storage_type)
         elif storage_type == "cuda":

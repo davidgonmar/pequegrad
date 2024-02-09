@@ -1,0 +1,214 @@
+import numpy as np
+from typing import Union, Tuple
+from pequegrad.cuda import CudaArray
+from .abstract_storage import AbstractStorage
+
+
+class CudaStorage(AbstractStorage):
+    backend = "cuda"
+
+    data: CudaArray
+
+    def to_numpy(self) -> np.ndarray:
+        return self.data.to_numpy()
+
+    def numpy(self) -> np.ndarray:
+        return self.to_numpy()
+
+    @property
+    def shape(self) -> tuple:
+        return tuple(self.data.shape)
+
+    @property
+    def T(self) -> "CudaStorage":
+        axis = range(self.ndim)
+        return self.permute(*reversed(axis))
+
+    @property
+    def ndim(self) -> int:
+        return len(self.shape)
+
+    @property
+    def size(self) -> int:
+        return np.prod(self.shape)
+
+    def astype(self, dtype: Union[str, np.dtype]) -> "CudaStorage":
+        raise NotImplementedError("Only float32 is supported")
+
+    @property
+    def strides(self) -> tuple:
+        return tuple(self.data.strides)
+
+    def __init__(
+        self,
+        data: Union[
+            np.ndarray,
+            CudaArray,
+            int,
+            float,
+            np.float32,
+            np.float64,
+            np.int32,
+            np.int64,
+        ],
+    ):
+        if isinstance(data, np.ndarray):
+            self.data = CudaArray.from_numpy(data.astype(np.float32))
+        elif isinstance(data, CudaArray):
+            self.data = data.clone()
+        elif isinstance(data, (int, float, np.float32, np.float64, np.int32, np.int64)):
+            self.data = CudaArray.from_numpy(np.array(data, dtype=np.float32))
+        else:
+            raise ValueError(
+                f"Data must be a numpy array or CudaArray, got {type(data)}"
+            )
+
+    def is_contiguous(self) -> bool:
+        return self.data.is_contiguous()
+
+    def add(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.add(other.data))
+
+    def __add__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.add(other)
+
+    def __radd__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.add(other)
+
+    def sub(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.sub(other.data))
+
+    def __sub__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.sub(other)
+
+    def __rsub__(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(other.data.sub(self.data))
+
+    def mul(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.mul(other.data))
+
+    def __mul__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.mul(other)
+
+    def __rmul__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.mul(other)
+
+    def matmul(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.matmul(other.data))
+
+    def __matmul__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.matmul(other)
+
+    def div(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.div(other.data))
+
+    def __truediv__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.div(other)
+
+    def expand_dims(self, axis: int) -> "CudaStorage":
+        raise NotImplementedError
+
+    def sum(self, axis: int = None, keepdims: bool = False) -> "CudaStorage":
+        raise NotImplementedError
+
+    def broadcast_to(self, shape: tuple) -> "CudaStorage":
+        return CudaStorage(self.data.broadcast_to(shape))
+
+    def contiguous(self) -> "CudaStorage":
+        return CudaStorage(self.data.contiguous())
+
+    def where(self, condition: "CudaStorage", other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.where(condition.data, other.data))
+
+    def outer_product(self, other: "CudaStorage") -> "CudaStorage":
+        raise NotImplementedError
+
+    def swapaxes(self, axis1: int, axis2: int) -> "CudaStorage":
+        a = list(range(self.ndim))
+        a[axis1], a[axis2] = a[axis2], a[axis1]
+        return self.permute(*a)
+
+    def squeeze(self, axis: int) -> "CudaStorage":
+        raise NotImplementedError
+
+    def equal(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.eq(other.data))
+
+    def greater(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.gt(other.data))
+
+    def greater_equal(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.ge(other.data))
+
+    def less(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.lt(other.data))
+
+    def less_equal(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.le(other.data))
+
+    def not_equal(self, other: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.ne(other.data))
+
+    def __eq__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.equal(other)
+
+    def __gt__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.greater(other)
+
+    def __ge__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.greater_equal(other)
+
+    def __lt__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.less(other)
+
+    def __le__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.less_equal(other)
+
+    def __ne__(self, other: "CudaStorage") -> "CudaStorage":
+        return self.not_equal(other)
+
+    def reshape(self, *shape: Union[int, Tuple[int, ...]]) -> "CudaStorage":
+        raise NotImplementedError
+
+    def __len__(self) -> int:
+        return self.shape[0]
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError
+
+    def __repr__(self):
+        return f"CudaStorage({self.data})"
+
+    def max(self, axis: int, keepdims: bool = None) -> "CudaStorage":
+        raise NotImplementedError
+
+    def mean(self, axis: int, keepdims: bool = None) -> "CudaStorage":
+        raise NotImplementedError
+
+    def pow(self, exponent: "CudaStorage") -> "CudaStorage":
+        return CudaStorage(self.data.pow(exponent.data))
+
+    def __pow__(self, exponent: "CudaStorage") -> "CudaStorage":
+        return self.pow(exponent)
+
+    def power(self, exponent: "CudaStorage") -> "CudaStorage":
+        return self.pow(exponent)
+
+    def log(self) -> "CudaStorage":
+        return CudaStorage(self.data.log())
+
+    def exp(self) -> "CudaStorage":
+        return CudaStorage(self.data.exp())
+
+    def permute(self, *dims: int) -> "CudaStorage":
+        return CudaStorage(self.data.permute(dims))
+
+    def el_wise_max(self, other: "CudaStorage") -> "CudaStorage":
+        return (
+            CudaStorage(self.data.el_wise_max(other.data))
+            if isinstance(other, CudaStorage)
+            else CudaStorage(self.data.el_wise_max(CudaStorage(other).data))
+        )

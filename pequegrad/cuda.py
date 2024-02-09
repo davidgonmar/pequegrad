@@ -1,6 +1,15 @@
 import os
 import sys
 
+
+class DummyCudaArray:
+    def __getattr__(self, name):
+        def method(*args, **kwargs):
+            raise NotImplementedError("CUDA not available")
+
+        return method
+
+
 build_path = os.path.join(os.path.dirname(__file__), "..", "build")
 if os.path.exists(build_path):
     sys.path.append(build_path)
@@ -18,4 +27,5 @@ try:
 
     CUDA_AVAILABLE = True
 except ImportError:
+    CudaArray = DummyCudaArray
     CUDA_AVAILABLE = False
