@@ -44,12 +44,15 @@ typedef void (*TernaryOpKernel)(
                            handle broadcasting here */
     const int num_dims, /* equals len of strides and shape */
     const float *first, const float *second, const float *third, float *out);
+
+typedef std::vector<size_t> ShapeLike;
+
 class CudaArray {
 public:
   std::shared_ptr<float> ptr;
   size_t size;
-  std::vector<py::ssize_t> shape;
-  std::vector<py::ssize_t> strides;
+  ShapeLike shape;
+  ShapeLike strides;
 
   bool isContiguous() const {
     if (strides.size() != shape.size()) {
@@ -58,7 +61,7 @@ public:
     if (strides.size() == 0) { // scalar
       return true;
     }
-    std::vector<py::ssize_t> expected_strides(shape.size());
+    ShapeLike expected_strides(shape.size());
     expected_strides[shape.size() - 1] = ELEM_SIZE;
     for (int i = shape.size() - 2; i >= 0; --i) {
       expected_strides[i] = expected_strides[i + 1] * shape[i + 1];
@@ -68,17 +71,16 @@ public:
     }
     return true;
   }
-  CudaArray(size_t size, const std::vector<py::ssize_t> &shape,
-            const std::vector<py::ssize_t> &strides,
+  CudaArray(size_t size, const ShapeLike &shape, const ShapeLike &strides,
             const std::shared_ptr<float> &sharedPtr)
       : size(size), shape(shape), strides(strides), ptr(sharedPtr) {}
-  CudaArray permute(std::vector<py::ssize_t> axes) const {
+  CudaArray permute(ShapeLike axes) const {
     // TODO - check that axes is from 0 to shape.size - 1, in any order
     if (axes.size() != shape.size()) {
       throw std::runtime_error("axes must have same size as shape");
     }
-    std::vector<py::ssize_t> newShape(shape.size());
-    std::vector<py::ssize_t> newStrides(strides.size());
+    ShapeLike newShape(shape.size());
+    ShapeLike newStrides(strides.size());
 
     for (size_t i = 0; i < axes.size(); ++i) {
       newShape[i] = shape[axes[i]];
@@ -89,16 +91,14 @@ public:
     return out;
   }
 
-  CudaArray(size_t size, std::vector<py::ssize_t> shape,
-            std::vector<py::ssize_t> strides)
+  CudaArray(size_t size, ShapeLike shape, ShapeLike strides)
       : size(size), shape(shape), strides(strides) {
     float *raw_ptr;
     CHECK_CUDA(cudaMalloc(&raw_ptr, size * ELEM_SIZE));
     ptr = std::shared_ptr<float>(raw_ptr, [](float *p) { cudaFree(p); });
   }
 
-  CudaArray(size_t size, std::vector<py::ssize_t> shape)
-      : size(size), shape(shape) {
+  CudaArray(size_t size, ShapeLike shape) : size(size), shape(shape) {
     strides.resize(shape.size());
     // Only calculate strides if we don't have a scalar
     if (shape.size() > 0) {
@@ -112,9 +112,9 @@ public:
     ptr = std::shared_ptr<float>(raw_ptr, [](float *p) { cudaFree(p); });
   }
 
-  CudaArray broadcastTo(const std::vector<py::ssize_t> _shape) const {
-    const std::vector<py::ssize_t> shape_from = this->shape;
-    const std::vector<py::ssize_t> shape_to = _shape;
+  CudaArray broadcastTo(const ShapeLike _shape) const {
+    const ShapeLike shape_from = this->shape;
+    const ShapeLike shape_to = _shape;
     // determine if we can broadcast
     const int from_ndim = (const int)shape_from.size();
     const int to_ndim = (const int)shape_to.size();
@@ -127,7 +127,7 @@ public:
     }
 
     int new_size = 1;
-    std::vector<py::ssize_t> new_strides(to_ndim, 0);
+    ShapeLike new_strides(to_ndim, 0);
     // reverse test if the dim is 1 or they are equal
     for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
       py::ssize_t dim_to = shape_to[i];
@@ -259,7 +259,7 @@ public:
     return out;
   }
 
-  float getitem(std::vector<py::ssize_t> index) const {
+  float getitem(ShapeLike index) const {
     if (index.size() != shape.size()) {
       throw std::runtime_error("Index dimension mismatch");
     }
@@ -286,8 +286,8 @@ public:
     CudaArray a = this->asContiguous();
     CudaArray b = other.asContiguous();
     dim3 blockSize = dim3(DEFAULT_BLOCK_SIZE);
-    std::vector<py::ssize_t> newShape;
-    int size1, midsize, size2;
+    ShapeLike newShape;
+    size_t size1, midsize, size2;
     if (a.ndim() == 2 && b.ndim() == 2) {
       size1 = a.shape.at(0);
       midsize = a.shape.at(1);
@@ -327,11 +327,12 @@ public:
   static CudaArray fromNumpy(py::array_t<float> np_array) {
     py::buffer_info buffer_info = np_array.request();
     std::vector<py::ssize_t> py_strides = buffer_info.strides;
-    std::vector<size_t> strides(py_strides.begin(), py_strides.end());
+    ShapeLike strides(py_strides.begin(), py_strides.end());
     auto size = buffer_info.size;
     auto *ptr = static_cast<float *>(buffer_info.ptr);
     std::vector<py::ssize_t> py_shape = buffer_info.shape;
-    CudaArray arr(size, py_shape, py_strides);
+    ShapeLike shape(py_shape.begin(), py_shape.end());
+    CudaArray arr(size, shape, strides);
     CHECK_CUDA(cudaMemcpy(arr.ptr.get(), ptr, size * ELEM_SIZE,
                           cudaMemcpyHostToDevice));
     return arr;
@@ -516,10 +517,8 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr) { return arr.asContiguous(); })
       .def("exp", [](const CudaArray &arr) { return arr.elwiseop(ExpKernel); })
       .def("log", [](const CudaArray &arr) { return arr.elwiseop(LogKernel); })
-      .def("permute",
-           [](const CudaArray &arr, std::vector<py::ssize_t> axes) {
-             return arr.permute(axes);
-           })
+      .def("permute", [](const CudaArray &arr,
+                         ShapeLike axes) { return arr.permute(axes); })
       .def("is_contiguous", &CudaArray::isContiguous)
       .def("matmul", [](const CudaArray &arr,
                         const CudaArray &other) { return arr.matMul(other); })
@@ -527,8 +526,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
              return cond.ternaryop(a, b, WhereKernel);
            })
-      .def("__getitem__",
-           [](const CudaArray &arr, std::vector<py::ssize_t> index) {
-             return arr.getitem(index);
-           });
+      .def("__getitem__", [](const CudaArray &arr, ShapeLike index) {
+        return arr.getitem(index);
+      });
 }
