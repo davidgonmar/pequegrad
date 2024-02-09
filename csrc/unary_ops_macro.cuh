@@ -1,7 +1,9 @@
+#pragma once
+
 #define DEF_UNARY_OP_KERNEL(KERNEL_NAME, FN)                                   \
-  extern "C" __global__ void KERNEL_NAME(const int *in_strides,                \
-                                         const int *shape, const int num_dims, \
-                                         const float *in, float *out) {        \
+  __global__ void KERNEL_NAME(const int *in_strides, const int *shape,         \
+                              const int num_dims, const float *in,             \
+                              float *out) {                                    \
     const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
     int totalEls = 1;                                                          \
     for (int i = 0; i < num_dims; i++) {                                       \

@@ -1,5 +1,7 @@
+#pragma once
+
 #define DEF_TERNARY_OP_KERNEL(KERNEL_NAME, FN)                                 \
-  extern "C" __global__ void KERNEL_NAME(                                      \
+  __global__ void KERNEL_NAME(                                                 \
       const int *first_strides,  /* in bytes */                                \
       const int *second_strides, /* in bytes */                                \
       const int *third_strides,  /* in bytes */                                \

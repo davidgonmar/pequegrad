@@ -18,6 +18,9 @@ find_package(CUDA REQUIRED)
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 include_directories(csrc)
 
+# Collect all .cu files in the csrc directory
+file(GLOB CUDA_SOURCES csrc/*.cu)
+
 # add library from /csrc
 pybind11_add_module(pequegrad_cu csrc/cuda_backend.cu)
 
