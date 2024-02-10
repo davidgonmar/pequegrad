@@ -90,8 +90,8 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
              return cond.ternaryop(a, b, where_kernel);
            })
-      .def("sum", [](const CudaArray &arr,
-                     int axis) { return arr.sum_one_axis(axis); })
+      .def("sum", [](const CudaArray &arr, int axis) { return arr.sum(axis); })
+      .def("sum", [](const CudaArray &arr) { return arr.sum(); })
       .def("__getitem__", [](const CudaArray &arr, shape_t index) {
         return arr.getitem(index);
       });

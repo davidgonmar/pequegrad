@@ -56,8 +56,9 @@ public:
   CudaArray mat_mul(const CudaArray &other) const;
   CudaArray permute(shape_t axes) const;
   CudaArray as_contiguous() const;
-  CudaArray sum_one_axis(size_t axis) const;
-  CudaArray sum_one_axis() const;
+  CudaArray sum(size_t axis) const;
+  CudaArray sum() const;
+  CudaArray sum(shape_t axis) const;
 
   static CudaArray from_numpy(py::array_t<float> np_array);
   py::array_t<float> to_numpy() const;
