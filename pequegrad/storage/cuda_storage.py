@@ -136,7 +136,7 @@ class CudaStorage(AbstractStorage):
         return self.permute(*a)
 
     def squeeze(self, axis: int) -> "CudaStorage":
-        raise NotImplementedError
+        return CudaStorage(self.data.squeeze(axis))
 
     def equal(self, other: "CudaStorage") -> "CudaStorage":
         return CudaStorage(self.data.eq(other.data))

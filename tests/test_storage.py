@@ -334,3 +334,21 @@ class TestStorage:
             self._compare_with_numpy(
                 x.max(axis=axis, keepdims=True), np.max(nparr, axis=axis, keepdims=True)
             )
+
+    # test squeeze
+    @pytest.mark.parametrize("shape", [[(3, 1, 4), 1], [(1, 2, 3), 0]])
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_squeeze(self, shape, class_storage):
+        shape, axis = shape
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        self._compare_with_numpy(x.squeeze(axis), np.squeeze(nparr, axis))
+
+    @pytest.mark.parametrize("shape", [[(3, 1, 4), 0], [(1, 2, 3), 1]])
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_squeeze_invalid(self, shape, class_storage):
+        shape, axis = shape
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        with pytest.raises(BaseException):
+            x.squeeze(axis)

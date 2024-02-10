@@ -333,6 +333,18 @@ CudaArray CudaArray::max(size_t axis) const {
   return out;
 }
 
+CudaArray CudaArray::squeeze(size_t axis) const {
+  if (shape.size() <= axis) throw std::invalid_argument("requested axis is out of bounds");
+  if (shape[axis] != 1) throw std::invalid_argument("cannot squeeze on a dimension that is not 1, got " + std::to_string(shape[axis]));
+
+  CudaArray out(*this);
+
+  out.shape.erase(out.shape.begin() + axis);
+  out.strides.erase(out.strides.begin() + axis);
+
+  return out;
+
+}
 CudaArray CudaArray::from_numpy(py::array_t<float> np_array) {
   py::buffer_info buffer_info = np_array.request();
   std::vector<py::ssize_t> py_strides = buffer_info.strides;

@@ -63,6 +63,8 @@ public:
   CudaArray max() const;
   CudaArray max(shape_t axis) const;
 
+  CudaArray squeeze(size_t axis) const;
+
   static CudaArray from_numpy(py::array_t<float> np_array);
   py::array_t<float> to_numpy() const;
 
