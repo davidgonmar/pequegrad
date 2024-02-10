@@ -14,6 +14,7 @@ class TestStorage:
         assert x.shape == y.shape
         assert x.strides == y.strides
 
+        print(x.numpy(), y)
         assert np.allclose(x.numpy(), y)
 
     @pytest.mark.parametrize(
@@ -279,3 +280,30 @@ class TestStorage:
         z = class_storage(np3)
         res = lambdaoptensor(x, y, z)
         self._compare_with_numpy(res, lambdaopnp(np1, np2, np3))
+
+    @pytest.mark.parametrize(
+        "params",  # shape, dim
+        [
+            [(3, 4), 0],
+            [(3, 4), 1],
+            [(3, 4, 2), 2],
+            [(3, 4, 2), 1],
+            [(3, 4, 2), 0],
+            [(3, 4, 2, 5), 3],
+            [(3, 4, 2, 5), 2],
+            [(3, 4, 2, 5), 1],
+            [(3, 4, 2, 5), 0],
+            [(5,), 0],
+            [(2,), 0],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_sum(self, params, class_storage):
+        shape, axis = params
+
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+
+        self._compare_with_numpy(
+            x.sum(keepdims=True, axis=axis), np.sum(nparr, keepdims=True, axis=axis)
+        )

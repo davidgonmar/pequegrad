@@ -112,7 +112,7 @@ class CudaStorage(AbstractStorage):
         raise NotImplementedError
 
     def sum(self, axis: int = None, keepdims: bool = False) -> "CudaStorage":
-        raise NotImplementedError
+        return CudaStorage(self.data.sum(axis))
 
     def broadcast_to(self, shape: tuple) -> "CudaStorage":
         return CudaStorage(self.data.broadcast_to(shape))

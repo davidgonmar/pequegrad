@@ -1,9 +1,13 @@
 #include "binary_ops_kernels.cuh"
 #include "cuda_array.cuh"
 #include "matmul_kernels.cuh"
+#include "reduce_ops_kernels.cuh"
 #include "ternary_ops_kernels.cuh"
 #include "unary_ops_kernels.cuh"
 #include "utils.cuh"
+#include <cmath>
+
+#define MAX_THREADS_PER_BLOCK 512
 
 bool CudaArray::is_contiguous() const {
   if (strides.size() != shape.size()) {
@@ -233,6 +237,34 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
   CHECK_CUDA(cudaGetLastError());
 
   return out;
+}
+
+CudaArray CudaArray::sum_one_axis() const { return sum_one_axis(0); }
+CudaArray CudaArray::sum_one_axis(size_t axis) const {
+  if (!is_contiguous()) {
+    return as_contiguous().sum_one_axis(axis);
+  }
+  shape_t new_shape = shape;
+  new_shape[axis] = 1;
+  size_t new_size = size / shape[axis];
+  size_t n_dims = shape.size();
+  if (size <= MAX_THREADS_PER_BLOCK) {
+    CudaArray out(new_size, new_shape);
+    size_t *d_strides, *d_shape;
+    CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(size_t)));
+    CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(size_t)));
+    CHECK_CUDA(cudaMemcpy(d_strides, strides.data(), n_dims * sizeof(size_t),
+                          cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_shape, shape.data(), n_dims * sizeof(size_t),
+                          cudaMemcpyHostToDevice));
+    dim3 block_size(DEFAULT_BLOCK_SIZE);
+    dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
+    sum_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides,
+                                          d_shape, n_dims, axis);
+    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaGetLastError());
+    return out;
+  }
 }
 
 CudaArray CudaArray::from_numpy(py::array_t<float> np_array) {
