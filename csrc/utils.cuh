@@ -1,3 +1,5 @@
+#pragma once
+
 #define CHECK_CUDA(x)                                                          \
   do {                                                                         \
     cudaError_t _err = x;                                                      \
@@ -11,3 +13,8 @@
 
 #define ELEM_SIZE sizeof(float)
 #define DEFAULT_BLOCK_SIZE 256
+
+__device__ int get_idx_from_strides(const size_t *shape, const size_t *strides,
+                                    const size_t num_dims, const int abs_idx);
+
+__device__ int get_max_idx(const size_t *shape, const size_t num_dims);

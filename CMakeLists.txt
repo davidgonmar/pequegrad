@@ -21,9 +21,10 @@ include_directories(csrc)
 # Collect all .cu files in the csrc directory
 file(GLOB CUDA_SOURCES csrc/*.cu)
 
-
 # add library from /csrc
 pybind11_add_module(pequegrad_cu ${CUDA_SOURCES})
 
+# Set the relocatable device code flag for nvcc
+set_property(TARGET pequegrad_cu PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
 set_target_properties(pequegrad_cu PROPERTIES OUTPUT_NAME "pequegrad_cu")
