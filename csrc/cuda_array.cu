@@ -287,6 +287,52 @@ CudaArray CudaArray::sum(size_t axis) const {
   return out;
 }
 
+CudaArray CudaArray::max() const {
+  // check if the array is already reduced
+  if (std::all_of(shape.begin(), shape.end(),
+                  [](size_t i) { return i == 1; })) {
+    return *this;
+  }
+  CudaArray result = *this;
+  for (size_t axis = 0; axis < shape.size(); ++axis) {
+    result = result.max(axis);
+  }
+  return result;
+}
+
+CudaArray CudaArray::max(shape_t axes) const {
+  CudaArray result = *this;
+  for (size_t axis : axes) {
+    result = result.max(axis);
+  }
+  return result;
+}
+
+CudaArray CudaArray::max(size_t axis) const {
+  if (!is_contiguous()) {
+    return as_contiguous().max(axis);
+  }
+  shape_t new_shape = shape;
+  new_shape[axis] = 1;
+  size_t new_size = size / shape[axis];
+  size_t n_dims = shape.size();
+  CudaArray out(new_size, new_shape);
+  size_t *d_strides, *d_shape;
+  CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMemcpy(d_strides, strides.data(), n_dims * sizeof(size_t),
+                        cudaMemcpyHostToDevice));
+  CHECK_CUDA(cudaMemcpy(d_shape, shape.data(), n_dims * sizeof(size_t),
+                        cudaMemcpyHostToDevice));
+  dim3 block_size(DEFAULT_BLOCK_SIZE);
+  dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
+  max_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides,
+                                        d_shape, n_dims, axis);
+  cudaDeviceSynchronize();
+  CHECK_CUDA(cudaGetLastError());
+  return out;
+}
+
 CudaArray CudaArray::from_numpy(py::array_t<float> np_array) {
   py::buffer_info buffer_info = np_array.request();
   std::vector<py::ssize_t> py_strides = buffer_info.strides;

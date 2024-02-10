@@ -319,12 +319,18 @@ class TestStorage:
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
-    def test_sum(self, params, class_storage):
+    @pytest.mark.parametrize("op", ["sum", "max"])
+    def test_reduce(self, params, class_storage, op):
         shape, axis = params
 
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
 
-        self._compare_with_numpy(
-            x.sum(keepdims=True, axis=axis), np.sum(nparr, keepdims=True, axis=axis)
-        )
+        if op == "sum":
+            self._compare_with_numpy(
+                x.sum(axis=axis, keepdims=True), np.sum(nparr, axis=axis, keepdims=True)
+            )
+        elif op == "max":
+            self._compare_with_numpy(
+                x.max(axis=axis, keepdims=True), np.max(nparr, axis=axis, keepdims=True)
+            )

@@ -190,7 +190,9 @@ class CudaStorage(AbstractStorage):
         return f"CudaStorage({self.data})"
 
     def max(self, axis: int, keepdims: bool = None) -> "CudaStorage":
-        raise NotImplementedError
+        if axis is None:
+            return CudaStorage(self.data.max())
+        return CudaStorage(self.data.max(axis))
 
     def mean(self, axis: int, keepdims: bool = None) -> "CudaStorage":
         raise NotImplementedError

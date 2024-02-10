@@ -59,6 +59,9 @@ public:
   CudaArray sum(size_t axis) const;
   CudaArray sum() const;
   CudaArray sum(shape_t axis) const;
+  CudaArray max(size_t axis) const;
+  CudaArray max() const;
+  CudaArray max(shape_t axis) const;
 
   static CudaArray from_numpy(py::array_t<float> np_array);
   py::array_t<float> to_numpy() const;
