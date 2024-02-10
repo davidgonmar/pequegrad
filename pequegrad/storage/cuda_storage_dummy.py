@@ -1,5 +1,4 @@
 class DummyCudaStorage:
-
     def __getattr__(self, name):
         def method(*args, **kwargs):
             raise NotImplementedError("CUDA not available")
