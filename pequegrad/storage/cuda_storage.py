@@ -88,7 +88,11 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(other.data.sub(self.data))
 
     def mul(self, other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.mul(other.data))
+        return (
+            CudaStorage(self.data.mul(other.data))
+            if isinstance(other, CudaStorage)
+            else CudaStorage(self.data.mul(CudaStorage(other).data))
+        )
 
     def __mul__(self, other: "CudaStorage") -> "CudaStorage":
         return self.mul(other)

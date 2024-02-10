@@ -221,7 +221,12 @@ class Tensor:
         )
 
     @staticmethod
-    def one_hot(num_classes: int, indices: "Tensor", requires_grad=False) -> "Tensor":
+    def one_hot(
+        num_classes: int,
+        indices: "Tensor",
+        requires_grad=False,
+        storage_type: str = "np",
+    ) -> "Tensor":
         assert indices.dim == 1, "indices must be a vector"
         assert np.all(indices.numpy() >= 0), "indices must be positive integers (>= 0)"
         assert np.all(
@@ -232,7 +237,7 @@ class Tensor:
 
         np_one_hot[np.arange(indices.data.size), indices.numpy().astype(int)] = 1.0
 
-        return Tensor(np_one_hot, requires_grad=requires_grad)
+        return Tensor(np_one_hot, requires_grad=requires_grad, storage=storage_type)
 
     def numpy(self) -> np.ndarray:
         return self.data.numpy()
@@ -334,7 +339,9 @@ class Tensor:
             self.shape[0] == target.shape[0]
         ), "input and target must have the same batch size"
 
-        one_hot_target = Tensor.one_hot(self.shape[1], target)
+        one_hot_target = Tensor.one_hot(
+            self.shape[1], target, storage_type=self.storage_type
+        )
 
         return self.cross_entropy_loss_probs(one_hot_target)
 
@@ -422,9 +429,7 @@ class Tensor:
         assert (
             dim >= 0
             if isinstance(dim, int)
-            else all(d >= 0 for d in dim)
-            if dim is not None
-            else True
+            else all(d >= 0 for d in dim) if dim is not None else True
         ), "only positive dims supported by now. Got {}".format(dim)
 
         N = (

@@ -17,6 +17,7 @@ class Module:
         for p in self.parameters():
             new_params.append(p.to(storage_type))
         self._parameters = new_params
+        return self
 
     def parameters(self):
         return self._parameters
