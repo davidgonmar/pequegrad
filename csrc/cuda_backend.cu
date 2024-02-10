@@ -100,7 +100,8 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("max", [](const CudaArray &arr) { return arr.max(); })
       .def("max",
            [](const CudaArray &arr, shape_t axes) { return arr.max(axes); })
-      .def("squeeze", [](const CudaArray &arr, size_t axis) { return arr.squeeze(axis); })
+      .def("squeeze",
+           [](const CudaArray &arr, size_t axis) { return arr.squeeze(axis); })
       .def("__getitem__", [](const CudaArray &arr, shape_t index) {
         return arr.getitem(index);
       });

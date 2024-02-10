@@ -198,8 +198,20 @@ class CudaStorage(AbstractStorage):
             return CudaStorage(self.data.max())
         return CudaStorage(self.data.max(axis))
 
-    def mean(self, axis: int, keepdims: bool = None) -> "CudaStorage":
-        raise NotImplementedError
+    def mean(
+        self, axis: Union[int, None, Tuple] = None, keepdims: bool = False
+    ) -> "CudaStorage":
+        if axis is None:
+            sum = self.data.sum()
+            N = np.prod(self.shape)
+        else:
+            sum = self.data.sum(axis)
+            if isinstance(axis, int):
+                N = self.shape[axis]
+            else:
+                N = np.prod([self.shape[i] for i in axis])
+
+        return CudaStorage(sum.div(CudaStorage(N).data))
 
     def pow(self, exponent: "CudaStorage") -> "CudaStorage":
         return CudaStorage(self.data.pow(exponent.data))

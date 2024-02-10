@@ -429,7 +429,9 @@ class Tensor:
         assert (
             dim >= 0
             if isinstance(dim, int)
-            else all(d >= 0 for d in dim) if dim is not None else True
+            else all(d >= 0 for d in dim)
+            if dim is not None
+            else True
         ), "only positive dims supported by now. Got {}".format(dim)
 
         N = (

@@ -319,7 +319,7 @@ class TestStorage:
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
-    @pytest.mark.parametrize("op", ["sum", "max"])
+    @pytest.mark.parametrize("op", ["sum", "max", "mean"])
     def test_reduce(self, params, class_storage, op):
         shape, axis = params
 
@@ -333,6 +333,11 @@ class TestStorage:
         elif op == "max":
             self._compare_with_numpy(
                 x.max(axis=axis, keepdims=True), np.max(nparr, axis=axis, keepdims=True)
+            )
+        elif op == "mean":
+            self._compare_with_numpy(
+                x.mean(axis=axis, keepdims=True),
+                np.mean(nparr, axis=axis, keepdims=True),
             )
 
     # test squeeze
