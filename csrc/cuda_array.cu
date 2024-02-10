@@ -248,8 +248,16 @@ CudaArray CudaArray::sum() const {
   // simply sum along all axes
   CudaArray result = *this;
   for (size_t axis = 0; axis < shape.size(); ++axis) {
-    result = result.sum(axis); // Assuming sum(axis) correctly reduces the array
-                               // along the given axis
+    result = result.sum(axis);
+  }
+  return result;
+}
+
+CudaArray CudaArray::sum(shape_t axes) const {
+  // simply sum along all axes requested
+  CudaArray result = *this;
+  for (size_t axis : axes) {
+    result = result.sum(axis);
   }
   return result;
 }
