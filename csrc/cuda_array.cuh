@@ -8,21 +8,21 @@
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
-typedef void (*binary_op_kernel)(const int *strides, const int *ostrides,
-                               const int *shape, const int ndim, const float *a,
-                               const float *b, float *out);
+typedef void (*binary_op_kernel)(const size_t *strides, const size_t *ostrides,
+                                 const size_t *shape, const size_t ndim,
+                                 const float *a, const float *b, float *out);
 
-typedef void (*element_wise_op_kernel)(const int *in_strides, const int *shape,
-                                    const int num_dims, const float *in,
-                                    float *out);
+typedef void (*element_wise_op_kernel)(const size_t *in_strides,
+                                       const size_t *shape,
+                                       const size_t num_dims, const float *in,
+                                       float *out);
 
-typedef void (*ternary_op_kernel)(
-    const int *first_strides,
-    const int *second_strides, 
-    const int *third_strides,  
-    const int *shape,
-    const int num_dims,
-    const float *first, const float *second, const float *third, float *out);
+typedef void (*ternary_op_kernel)(const size_t *first_strides,
+                                  const size_t *second_strides,
+                                  const size_t *third_strides,
+                                  const size_t *shape, const size_t num_dims,
+                                  const float *first, const float *second,
+                                  const float *third, float *out);
 
 using shape_t = std::vector<size_t>;
 

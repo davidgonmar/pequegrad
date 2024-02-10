@@ -2,12 +2,12 @@
 
 #define DEF_TERNARY_OP_KERNEL(KERNEL_NAME, FN)                                 \
   __global__ void KERNEL_NAME(                                                 \
-      const int *first_strides,  /* in bytes */                                \
-      const int *second_strides, /* in bytes */                                \
-      const int *third_strides,  /* in bytes */                                \
-      const int *shape,   /* both lhs and rhs should have equal shape, we dont \
-                             handle broadcasting here */                       \
-      const int num_dims, /* equals len of strides and shape */                \
+      const size_t *first_strides,  /* in bytes */                             \
+      const size_t *second_strides, /* in bytes */                             \
+      const size_t *third_strides,  /* in bytes */                             \
+      const size_t *shape,   /* both lhs and rhs should have equal shape, we   \
+                             dont   handle broadcasting here */                                                 \
+      const size_t num_dims, /* equals len of strides and shape */             \
       const float *first, const float *second, const float *third,             \
       float *out) {                                                            \
     const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
@@ -26,11 +26,12 @@
     for (int d = num_dims - 1; d >= 0; d--) {                                  \
       int dim = tmp_i % shape[d];                                              \
       idx_f += (dim *                                                          \
-               first_strides[d]); /* Convert byte stride to element stride */  \
-      idx_s += (dim *                                                          \
-               second_strides[d]); /* Convert byte stride to element stride */ \
+                first_strides[d]); /* Convert byte stride to element stride */ \
+      idx_s +=                                                                 \
+          (dim *                                                               \
+           second_strides[d]); /* Convert byte stride to element stride */     \
       idx_t += (dim *                                                          \
-               third_strides[d]); /* Convert byte stride to element stride */  \
+                third_strides[d]); /* Convert byte stride to element stride */ \
       tmp_i /= shape[d];                                                       \
     }                                                                          \
     idx_f /= sizeof(float); /* Convert byte index to element index */          \

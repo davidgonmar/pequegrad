@@ -78,11 +78,11 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, greater_equal_kernel);
            })
-      .def("contiguous",&CudaArray::as_contiguous )
+      .def("contiguous", &CudaArray::as_contiguous)
       .def("exp", [](const CudaArray &arr) { return arr.elwiseop(exp_kernel); })
       .def("log", [](const CudaArray &arr) { return arr.elwiseop(log_kernel); })
-      .def("permute", [](const CudaArray &arr,
-                         shape_t axes) { return arr.permute(axes); })
+      .def("permute",
+           [](const CudaArray &arr, shape_t axes) { return arr.permute(axes); })
       .def("is_contiguous", &CudaArray::is_contiguous)
       .def("matmul", [](const CudaArray &arr,
                         const CudaArray &other) { return arr.mat_mul(other); })

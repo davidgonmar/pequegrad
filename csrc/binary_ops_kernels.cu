@@ -4,7 +4,7 @@
 
 DEF_BIN_OP_KERNEL(add_kernel, x + y)
 DEF_BIN_OP_KERNEL(sub_kernel, x - y)
-DEF_BIN_OP_KERNEL(mult_kernel, x * y)
+DEF_BIN_OP_KERNEL(mult_kernel, x *y)
 DEF_BIN_OP_KERNEL(div_kernel, x / y)
 DEF_BIN_OP_KERNEL(greater_kernel, x > y)
 DEF_BIN_OP_KERNEL(less_kernel, x < y)

@@ -1,9 +1,8 @@
 #pragma once
 
-#define KERNEL_PARAMS_BIN                                                  \
-  const int *lhs_strides, const int *rhs_strides, const int *shape,            \
-      int num_dims, const float *lhs, const float *rhs, float *out
-
+#define KERNEL_PARAMS_BIN                                                      \
+  const size_t *lhs_strides, const size_t *rhs_strides, const size_t *shape,   \
+      const size_t num_dims, const float *lhs, const float *rhs, float *out
 
 __global__ void add_kernel(KERNEL_PARAMS_BIN);
 __global__ void sub_kernel(KERNEL_PARAMS_BIN);

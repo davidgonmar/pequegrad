@@ -23,8 +23,7 @@ bool CudaArray::is_contiguous() const {
   return true;
 }
 
-CudaArray::CudaArray(size_t size, const shape_t &shape,
-                     const shape_t &strides,
+CudaArray::CudaArray(size_t size, const shape_t &shape, const shape_t &strides,
                      const std::shared_ptr<float> &ptr)
     : size(size), shape(shape), strides(strides), ptr(ptr) {}
 
@@ -117,27 +116,16 @@ CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   // Default stride calculation
   CudaArray out(size, shape);
-  int n_dims = shape.size();
-  int *d_strides, *d_other_strides, *d_shape;
-  CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(int)));
-  CHECK_CUDA(cudaMalloc(&d_other_strides, n_dims * sizeof(int)));
-  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(int)));
-
-  int *host_strides = (int *)malloc(n_dims * sizeof(int));
-  int *host_other_strides = (int *)malloc(n_dims * sizeof(int));
-  int *host_shape = (int *)malloc(n_dims * sizeof(int));
-
-  for (int i = 0; i < n_dims; i++) {
-    host_strides[i] = strides[i];
-    host_other_strides[i] = other.strides[i];
-    host_shape[i] = shape[i];
-  }
-
-  CHECK_CUDA(cudaMemcpy(d_strides, host_strides, n_dims * sizeof(int),
+  size_t n_dims = shape.size();
+  size_t *d_strides, *d_other_strides, *d_shape;
+  CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_other_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMemcpy(d_strides, strides.data(), n_dims * sizeof(size_t),
                         cudaMemcpyHostToDevice));
-  CHECK_CUDA(cudaMemcpy(d_other_strides, host_other_strides,
-                        n_dims * sizeof(int), cudaMemcpyHostToDevice));
-  CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
+  CHECK_CUDA(cudaMemcpy(d_other_strides, other.strides.data(),
+                        n_dims * sizeof(size_t), cudaMemcpyHostToDevice));
+  CHECK_CUDA(cudaMemcpy(d_shape, shape.data(), n_dims * sizeof(size_t),
                         cudaMemcpyHostToDevice));
   ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
                                  ptr.get(), other.ptr.get(), out.ptr.get());
@@ -158,34 +146,22 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
 
   // Default stride calculation
   CudaArray out(size, shape);
-  int n_dims = shape.size();
-  int *d_first_strides, *d_second_strides, *d_third_strides, *d_shape;
-  CHECK_CUDA(cudaMalloc(&d_first_strides, n_dims * sizeof(int)));
-  CHECK_CUDA(cudaMalloc(&d_second_strides, n_dims * sizeof(int)));
-  CHECK_CUDA(cudaMalloc(&d_third_strides, n_dims * sizeof(int)));
-  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(int)));
+  size_t n_dims = shape.size();
+  size_t *d_first_strides, *d_second_strides, *d_third_strides, *d_shape;
+  CHECK_CUDA(cudaMalloc(&d_first_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_second_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_third_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(size_t)));
 
-  int *host_first_strides = (int *)malloc(n_dims * sizeof(int));
-  int *host_second_strides = (int *)malloc(n_dims * sizeof(int));
-  int *host_third_strides = (int *)malloc(n_dims * sizeof(int));
-  int *host_shape = (int *)malloc(n_dims * sizeof(int));
+  CHECK_CUDA(cudaMemcpy(d_first_strides, strides.data(),
+                        n_dims * sizeof(size_t), cudaMemcpyHostToDevice));
+  CHECK_CUDA(cudaMemcpy(d_second_strides, second.strides.data(),
+                        n_dims * sizeof(size_t), cudaMemcpyHostToDevice));
 
-  for (int i = 0; i < n_dims; i++) {
-    host_first_strides[i] = strides[i];
-    host_second_strides[i] = second.strides[i];
-    host_third_strides[i] = third.strides[i];
-    host_shape[i] = shape[i];
-  }
+  CHECK_CUDA(cudaMemcpy(d_third_strides, third.strides.data(),
+                        n_dims * sizeof(size_t), cudaMemcpyHostToDevice));
 
-  CHECK_CUDA(cudaMemcpy(d_first_strides, host_first_strides,
-                        n_dims * sizeof(int), cudaMemcpyHostToDevice));
-  CHECK_CUDA(cudaMemcpy(d_second_strides, host_second_strides,
-                        n_dims * sizeof(int), cudaMemcpyHostToDevice));
-
-  CHECK_CUDA(cudaMemcpy(d_third_strides, host_third_strides,
-                        n_dims * sizeof(int), cudaMemcpyHostToDevice));
-
-  CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
+  CHECK_CUDA(cudaMemcpy(d_shape, shape.data(), n_dims * sizeof(size_t),
                         cudaMemcpyHostToDevice));
   ker<<<grid_size, block_size>>>(
       d_first_strides, d_second_strides, d_third_strides, d_shape, shape.size(),
@@ -251,8 +227,8 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
   int newSize = size1 * size2;
   dim3 gridSize(ceil(newSize / (float)DEFAULT_BLOCK_SIZE));
   CudaArray out(newSize, new_shape);
-  matmul_kernel<<<gridSize, block_size>>>(a.ptr.get(), b.ptr.get(), out.ptr.get(),
-                                        size1, midsize, size2);
+  matmul_kernel<<<gridSize, block_size>>>(a.ptr.get(), b.ptr.get(),
+                                          out.ptr.get(), size1, midsize, size2);
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
 
@@ -277,30 +253,26 @@ py::array_t<float> CudaArray::to_numpy() const {
   py::array_t<float> result(shape, strides);
   CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr.get(), size * ELEM_SIZE,
                         cudaMemcpyDeviceToHost));
-  float *host = (float *)malloc(size * ELEM_SIZE);
-  if (host == nullptr) {
-    throw std::runtime_error("failed to allocate host memory");
-  }
-  cudaDeviceSynchronize();
+  float *host = new float[size];
   CHECK_CUDA(
       cudaMemcpy(host, ptr.get(), size * ELEM_SIZE, cudaMemcpyDeviceToHost));
+  delete[] host;
   return result;
 }
 
 std::string CudaArray::to_string() const {
-  std::stringstream ss;
-  ss << "CudaArray(" << size << ") [";
-  float *host = (float *)malloc(size * ELEM_SIZE);
-  if (host == nullptr) {
-    throw std::runtime_error("failed to allocate host memory");
-  }
+  float *host = new float[size];
   CHECK_CUDA(
       cudaMemcpy(host, ptr.get(), size * ELEM_SIZE, cudaMemcpyDeviceToHost));
+
+  std::stringstream ss;
+  ss << "CudaArray(" << size << ") [";
   for (size_t i = 0; i < size; i++) {
     ss << host[i] << " ";
   }
-  free(host);
   ss << "]";
+
+  delete[] host;
   return ss.str();
 }
 
@@ -344,23 +316,15 @@ CudaArray CudaArray::clone() const {
 CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
-  int n_dims = shape.size();
-  int *d_strides, *d_shape;
+  size_t n_dims = shape.size();
+  size_t *d_strides, *d_shape;
 
-  CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(int)));
-  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(int)));
+  CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(size_t)));
 
-  int *host_strides = (int *)malloc(n_dims * sizeof(int));
-  int *host_shape = (int *)malloc(n_dims * sizeof(int));
-
-  for (int i = 0; i < n_dims; i++) {
-    host_strides[i] = strides[i];
-    host_shape[i] = shape[i];
-  }
-
-  CHECK_CUDA(cudaMemcpy(d_strides, host_strides, n_dims * sizeof(int),
+  CHECK_CUDA(cudaMemcpy(d_strides, strides.data(), n_dims * sizeof(size_t),
                         cudaMemcpyHostToDevice));
-  CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
+  CHECK_CUDA(cudaMemcpy(d_shape, shape.data(), n_dims * sizeof(size_t),
                         cudaMemcpyHostToDevice));
 
   CudaArray out(size, shape);

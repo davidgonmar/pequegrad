@@ -1,7 +1,7 @@
 #pragma once
 
-#define KERNEL_PARAMS_UN                                                   \
-  const int *in_strides, const int *shape, const int num_dims,                 \
+#define KERNEL_PARAMS_UN                                                       \
+  const size_t *in_strides, const size_t *shape, const size_t num_dims,        \
       const float *in, float *out
 
 __global__ void copy_kernel(KERNEL_PARAMS_UN);
