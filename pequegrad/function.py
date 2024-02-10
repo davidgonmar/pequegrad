@@ -50,6 +50,8 @@ class Function:
             [t.device for t in tensors]
         )
 
+        cls.storage = device
+
         f = cls(*tensors, **kwargs)
         f.forward()
         should_store_grad = f.requires_grad and pequegrad_context.grad_enabled
@@ -74,7 +76,7 @@ class Max(Function):
         self.ret = Tensor(
             self.a.data.max(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
         return self.ret
 
@@ -93,7 +95,8 @@ class Max(Function):
             ret_broadcasted = ret_data.broadcast_to(self.a.shape)
 
             self.a._grad += Tensor(
-                grad_broadcasted.where(self.a.data == ret_broadcasted, 0)
+                grad_broadcasted.where(self.a.data == ret_broadcasted, 0),
+                storage=self.storage,
             )
 
 
@@ -107,13 +110,15 @@ class Unsqueeze(Function):
         self.ret = Tensor(
             self.a.data.expand_dims(axis=self.dim),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
         return self.ret
 
     def backward(self):
         if self.a.requires_grad:
-            self.a._grad += Tensor(self.ret.grad.data.squeeze(axis=self.dim))
+            self.a._grad += Tensor(
+                self.ret.grad.data.squeeze(axis=self.dim), storage=self.storage
+            )
 
 
 class Squeeze(Function):
@@ -126,13 +131,15 @@ class Squeeze(Function):
         self.ret = Tensor(
             self.a.data.squeeze(axis=self.dim),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
         return self.ret
 
     def backward(self):
         if self.a.requires_grad:
-            self.a._grad += Tensor(self.ret.grad.data.expand_dims(axis=self.dim))
+            self.a._grad += Tensor(
+                self.ret.grad.data.expand_dims(axis=self.dim), storage=self.storage
+            )
 
 
 class Mean(Function):
@@ -146,7 +153,7 @@ class Mean(Function):
         self.ret = Tensor(
             self.a.data.mean(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
         return self.ret
 
@@ -171,7 +178,7 @@ class Mean(Function):
                 total_els = 1
                 for d in self.dim:
                     total_els *= self.a.shape[d]
-            self.a._grad += Tensor(grad_broadcasted) / total_els
+            self.a._grad += Tensor(grad_broadcasted, storage=self.storage) / total_els
 
 
 class Sum(Function):
@@ -185,7 +192,7 @@ class Sum(Function):
         self.ret = Tensor(
             self.a.data.sum(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
         return self.ret
 
@@ -201,14 +208,14 @@ class Sum(Function):
             # Now we can broadcast the gradient to the shape of the input tensor
             grad_broadcasted = grad_output.broadcast_to(self.a.shape)
 
-            self.a._grad += Tensor(grad_broadcasted)
+            self.a._grad += Tensor(grad_broadcasted, storage=self.storage)
 
 
 class Pow(Function):
     def __init__(self, base: Tensor, exponent: Union[float, int, Tensor]):
         self.base = base
         if not isinstance(exponent, Tensor):
-            exponent = Tensor(exponent)
+            exponent = Tensor(exponent, requires_grad=False, storage=self.base.device)
         self.exponent = exponent
 
         super().__init__(base, exponent)
@@ -217,7 +224,7 @@ class Pow(Function):
         self.ret = Tensor(
             self.base.data.power(self.exponent.data),
             requires_grad=self.requires_grad,
-            storage=self.base.device,
+            storage=self.storage,
         )
         return self.ret
 
@@ -226,11 +233,13 @@ class Pow(Function):
             self.base._grad += Tensor(
                 self.ret.grad.data
                 * self.exponent.data
-                * self.base.data.power(self.exponent.data - 1)
+                * self.base.data.power(self.exponent.data - 1),
+                storage=self.storage,
             )
         if self.exponent.requires_grad:
             self.exponent._grad += Tensor(
-                self.ret.grad.data * self.ret.data * self.base.data.log()
+                self.ret.grad.data * self.ret.data * self.base.data.log(),
+                storage=self.storage,
             )
 
 
@@ -243,7 +252,7 @@ class Log(Function):
         self.ret = Tensor(
             self.a.data.log(),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
 
     def backward(self):
@@ -260,7 +269,7 @@ class Exp(Function):
         self.ret = Tensor(
             self.a.data.exp(),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
 
     def backward(self):
@@ -288,7 +297,9 @@ class Permute(Function):
             self.dims
         )  # computes the indices that would sort the dims back
         if self.a.requires_grad:
-            self.a._grad += Tensor(self.ret.grad.data.permute(*bw_dims))
+            self.a._grad += Tensor(
+                self.ret.grad.data.permute(*bw_dims), storage=self.storage
+            )
 
 
 class ReLU(Function):
@@ -303,7 +314,7 @@ class ReLU(Function):
         self.ret = Tensor(
             self.a.data.el_wise_max(0),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            storage=self.storage,
         )
         return self.ret
 
@@ -313,6 +324,7 @@ class ReLU(Function):
             self.a._grad += (
                 Tensor(
                     np.where(self.a.data.numpy() > 0, 1, 0),
+                    storage=self.storage,
                 )
                 * self.ret.grad
             )
@@ -348,7 +360,7 @@ class Add(Function):
 
             grad = grad_output.sum(axis=tuple(axes_to_sum), keepdims=True)
 
-            self.x._grad += Tensor(grad).reshape(self.x.shape)
+            self.x._grad += Tensor(grad, storage=self.storage).reshape(self.x.shape)
 
         if self.y.requires_grad:
             # Sum the gradient over axes that were broadcasted during the forward pass
@@ -360,7 +372,7 @@ class Add(Function):
 
             grad = grad_output.sum(axis=tuple(axes_to_sum), keepdims=True)
 
-            self.y._grad += Tensor(grad).reshape(self.y.shape)
+            self.y._grad += Tensor(grad, storage=self.storage).reshape(self.y.shape)
 
 
 class Mul(Function):
@@ -393,7 +405,7 @@ class Mul(Function):
 
             grad = grad_output * self.y.data
             grad = grad.sum(axis=tuple(axes_to_sum), keepdims=True)
-            self.x._grad += Tensor(grad).reshape(self.x.shape)
+            self.x._grad += Tensor(grad, storage=self.storage).reshape(self.x.shape)
 
         if self.y.requires_grad:
             # Sum the gradient over axes that were broadcasted during the forward pass
@@ -404,7 +416,7 @@ class Mul(Function):
             ]
             grad = grad_output * self.x.data
             grad = grad.sum(axis=tuple(axes_to_sum), keepdims=True)
-            self.y._grad += Tensor(grad).reshape(self.y.shape)
+            self.y._grad += Tensor(grad, storage=self.storage).reshape(self.y.shape)
 
 
 class MatMul(Function):
@@ -433,16 +445,19 @@ class MatMul(Function):
         if self.x.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
                 # Just multiply the gradients if both are vectors, since grad is a scalar
-                self.x._grad += Tensor(grad_output * self.y.data)
+                self.x._grad += Tensor(grad_output * self.y.data, storage=self.storage)
             elif self.x.dim == 1:
                 # Vector x Matrix
-                self.x._grad += Tensor(grad_output @ self.y.data.T)
+                self.x._grad += Tensor(
+                    grad_output @ self.y.data.T, storage=self.storage
+                )
             elif self.y.dim == 1:
                 # Matrix x Vector
                 diff = self.y.dim - self.x.dim
                 axis_to_sum_over = tuple(range(diff))
                 self.x._grad += Tensor(
-                    grad_output.outer_product(self.y.data).sum(axis=axis_to_sum_over)
+                    grad_output.outer_product(self.y.data).sum(axis=axis_to_sum_over),
+                    storage=self.storage,
                 )
             else:
                 # Matrix x Matrix
@@ -451,17 +466,22 @@ class MatMul(Function):
                 self.x._grad += Tensor(
                     (grad_output @ self.y.data.swapaxes(-1, -2)).sum(
                         axis=axis_to_sum_over
-                    )
+                    ),
+                    storage=self.storage,
                 )
 
         if self.y.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
-                self.y._grad += Tensor(self.x.data * grad_output)
+                self.y._grad += Tensor(self.x.data * grad_output, storage=self.storage)
             elif self.x.dim == 1:
-                self.y._grad += Tensor(self.x.data.outer_product(grad_output))
+                self.y._grad += Tensor(
+                    self.x.data.outer_product(grad_output), storage=self.storage
+                )
             elif self.y.dim == 1:
                 # Matrix x Vector
-                self.y._grad += Tensor(self.x.data.T @ grad_output)
+                self.y._grad += Tensor(
+                    self.x.data.T @ grad_output, storage=self.storage
+                )
             else:
                 # Matrix x Matrix
                 diff = self.x.dim - self.y.dim
@@ -469,7 +489,8 @@ class MatMul(Function):
                 self.y._grad += Tensor(
                     (self.x.data.swapaxes(-1, -2) @ grad_output).sum(
                         axis=axis_to_sum_over
-                    )
+                    ),
+                    storage=self.storage,
                 )
 
         if self.x.requires_grad:
@@ -501,7 +522,9 @@ class Reshape(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            self.input._grad += Tensor(self.ret.grad.data).reshape(self.input_shape)
+            self.input._grad += Tensor(
+                self.ret.grad.data, storage=self.storage
+            ).reshape(self.input_shape)
 
 
 class Unfold(Function):
