@@ -17,20 +17,20 @@
       return;                                                                  \
     }                                                                          \
     /* calculate correct index based on strides */                             \
-    int idxLhs = 0;                                                            \
-    int idxRhs = 0;                                                            \
-    int tmpI = idx;                                                            \
+    int idx_lhs = 0;                                                            \
+    int idx_rhs = 0;                                                            \
+    int tmp_idx = idx;                                                            \
     for (int d = num_dims - 1; d >= 0; d--) {                                  \
-      int dim = tmpI % shape[d];                                               \
-      idxLhs +=                                                                \
+      int dim = tmp_idx % shape[d];                                               \
+      idx_lhs +=                                                                \
           (dim * lhs_strides[d]); /* Convert byte stride to element stride */  \
-      idxRhs +=                                                                \
+      idx_rhs +=                                                                \
           (dim * rhs_strides[d]); /* Convert byte stride to element stride */  \
-      tmpI /= shape[d];                                                        \
+      tmp_idx /= shape[d];                                                        \
     }                                                                          \
-    idxLhs /= sizeof(float); /* Convert byte index to element index */         \
-    idxRhs /= sizeof(float); /* Convert byte index to element index */         \
-    float x = lhs[idxLhs];                                                     \
-    float y = rhs[idxRhs];                                                     \
+    idx_lhs /= sizeof(float); /* Convert byte index to element index */         \
+    idx_rhs /= sizeof(float); /* Convert byte index to element index */         \
+    float x = lhs[idx_lhs];                                                     \
+    float y = rhs[idx_rhs];                                                     \
     out[idx] = FN;                                                             \
   }

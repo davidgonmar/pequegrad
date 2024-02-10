@@ -23,75 +23,74 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def_readonly("shape", &CudaArray::shape)
       .def_readonly("strides", &CudaArray::strides)
       .def("clone", &CudaArray::clone)
-      .def("broadcast_to", &CudaArray::broadcastTo)
-      .def("to_numpy", &CudaArray::toNumpy)
+      .def("broadcast_to", &CudaArray::broadcast_to)
+      .def("to_numpy", &CudaArray::to_numpy)
       .def("from_numpy",
            [](py::array_t<float> np_array) {
-             return CudaArray::fromNumpy(np_array);
+             return CudaArray::from_numpy(np_array);
            })
-      .def("__repr__", [](const CudaArray &arr) { return arr.toString(); })
+      .def("__repr__", [](const CudaArray &arr) { return arr.to_string(); })
       .def("add",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, AddKernel);
+             return arr.binop(other, add_kernel);
            })
       .def("sub",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, SubKernel);
+             return arr.binop(other, sub_kernel);
            })
       .def("mul",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, MultKernel);
+             return arr.binop(other, mult_kernel);
            })
       .def("div",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, DivKernel);
+             return arr.binop(other, div_kernel);
            })
       .def("el_wise_max",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, ElementWiseMaxKernel);
+             return arr.binop(other, element_wise_max_kernel);
            })
       .def("pow",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, PowKernel);
+             return arr.binop(other, pow_kernel);
            })
       .def("eq",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, EqualKernel);
+             return arr.binop(other, equal_kernel);
            })
       .def("ne",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, NotEqualKernel);
+             return arr.binop(other, not_equal_kernel);
            })
       .def("lt",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, LessKernel);
+             return arr.binop(other, less_kernel);
            })
       .def("le",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, LessEqualKernel);
+             return arr.binop(other, less_equal_kernel);
            })
       .def("gt",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, GreaterKernel);
+             return arr.binop(other, greater_kernel);
            })
       .def("ge",
            [](const CudaArray &arr, const CudaArray &other) {
-             return arr.binop(other, GreaterEqualKernel);
+             return arr.binop(other, greater_equal_kernel);
            })
-      .def("contiguous",
-           [](const CudaArray &arr) { return arr.asContiguous(); })
-      .def("exp", [](const CudaArray &arr) { return arr.elwiseop(ExpKernel); })
-      .def("log", [](const CudaArray &arr) { return arr.elwiseop(LogKernel); })
+      .def("contiguous",&CudaArray::as_contiguous )
+      .def("exp", [](const CudaArray &arr) { return arr.elwiseop(exp_kernel); })
+      .def("log", [](const CudaArray &arr) { return arr.elwiseop(log_kernel); })
       .def("permute", [](const CudaArray &arr,
-                         ShapeLike axes) { return arr.permute(axes); })
-      .def("is_contiguous", &CudaArray::isContiguous)
+                         shape_t axes) { return arr.permute(axes); })
+      .def("is_contiguous", &CudaArray::is_contiguous)
       .def("matmul", [](const CudaArray &arr,
-                        const CudaArray &other) { return arr.matMul(other); })
+                        const CudaArray &other) { return arr.mat_mul(other); })
       .def("where",
            [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
-             return cond.ternaryop(a, b, WhereKernel);
+             return cond.ternaryop(a, b, where_kernel);
            })
-      .def("__getitem__", [](const CudaArray &arr, ShapeLike index) {
+      .def("__getitem__", [](const CudaArray &arr, shape_t index) {
         return arr.getitem(index);
       });
 }

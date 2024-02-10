@@ -8,37 +8,36 @@
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
-typedef void (*BinaryOpKernel)(const int *strides, const int *ostrides,
+typedef void (*binary_op_kernel)(const int *strides, const int *ostrides,
                                const int *shape, const int ndim, const float *a,
                                const float *b, float *out);
 
-typedef void (*ElementWiseOpKernel)(const int *in_strides, const int *shape,
+typedef void (*element_wise_op_kernel)(const int *in_strides, const int *shape,
                                     const int num_dims, const float *in,
                                     float *out);
 
-typedef void (*TernaryOpKernel)(
-    const int *first_strides,  /* in bytes */
-    const int *second_strides, /* in bytes */
-    const int *third_strides,  /* in bytes */
-    const int *shape,   /* both lhs and rhs should have equal shape, we dont \
-                           handle broadcasting here */
-    const int num_dims, /* equals len of strides and shape */
+typedef void (*ternary_op_kernel)(
+    const int *first_strides,
+    const int *second_strides, 
+    const int *third_strides,  
+    const int *shape,
+    const int num_dims,
     const float *first, const float *second, const float *third, float *out);
 
-using ShapeLike = std::vector<size_t>;
+using shape_t = std::vector<size_t>;
 
 class CudaArray {
 public:
-  bool isContiguous() const;
+  bool is_contiguous() const;
   std::shared_ptr<float> ptr;
   size_t size;
-  ShapeLike shape;
-  ShapeLike strides;
+  shape_t shape;
+  shape_t strides;
 
-  CudaArray(size_t size, const ShapeLike &shape, const ShapeLike &strides,
-            const std::shared_ptr<float> &sharedPtr);
-  CudaArray(size_t size, ShapeLike shape, ShapeLike strides);
-  CudaArray(size_t size, ShapeLike shape);
+  CudaArray(size_t size, const shape_t &shape, const shape_t &strides,
+            const std::shared_ptr<float> &shared_ptr);
+  CudaArray(size_t size, shape_t shape, shape_t strides);
+  CudaArray(size_t size, shape_t shape);
 
   ~CudaArray();
   CudaArray(const CudaArray &other);
@@ -47,19 +46,19 @@ public:
   CudaArray &operator=(CudaArray &&other);
   CudaArray clone() const;
 
-  CudaArray broadcastTo(const ShapeLike _shape) const;
-  CudaArray binop(const CudaArray &other, BinaryOpKernel Ker) const;
+  CudaArray broadcast_to(const shape_t _shape) const;
+  CudaArray binop(const CudaArray &other, binary_op_kernel Ker) const;
   CudaArray ternaryop(const CudaArray &second, const CudaArray &third,
-                      TernaryOpKernel Ker) const;
-  CudaArray elwiseop(ElementWiseOpKernel Ker) const;
-  float getitem(ShapeLike index) const;
+                      ternary_op_kernel ker) const;
+  CudaArray elwiseop(element_wise_op_kernel ker) const;
+  float getitem(shape_t index) const;
   int ndim() const;
-  CudaArray matMul(const CudaArray &other) const;
-  CudaArray permute(ShapeLike axes) const;
-  CudaArray asContiguous() const;
+  CudaArray mat_mul(const CudaArray &other) const;
+  CudaArray permute(shape_t axes) const;
+  CudaArray as_contiguous() const;
 
-  static CudaArray fromNumpy(py::array_t<float> np_array);
-  py::array_t<float> toNumpy() const;
+  static CudaArray from_numpy(py::array_t<float> np_array);
+  py::array_t<float> to_numpy() const;
 
-  std::string toString() const;
+  std::string to_string() const;
 };

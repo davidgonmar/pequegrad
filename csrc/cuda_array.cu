@@ -5,14 +5,14 @@
 #include "unary_ops_kernels.cuh"
 #include "utils.cuh"
 
-bool CudaArray::isContiguous() const {
+bool CudaArray::is_contiguous() const {
   if (strides.size() != shape.size()) {
     return false;
   }
   if (strides.size() == 0) { // scalar
     return true;
   }
-  ShapeLike expected_strides(shape.size());
+  shape_t expected_strides(shape.size());
   expected_strides[shape.size() - 1] = ELEM_SIZE;
   for (int i = shape.size() - 2; i >= 0; --i) {
     expected_strides[i] = expected_strides[i + 1] * shape[i + 1];
@@ -23,19 +23,19 @@ bool CudaArray::isContiguous() const {
   return true;
 }
 
-CudaArray::CudaArray(size_t size, const ShapeLike &shape,
-                     const ShapeLike &strides,
-                     const std::shared_ptr<float> &sharedPtr)
-    : size(size), shape(shape), strides(strides), ptr(sharedPtr) {}
+CudaArray::CudaArray(size_t size, const shape_t &shape,
+                     const shape_t &strides,
+                     const std::shared_ptr<float> &ptr)
+    : size(size), shape(shape), strides(strides), ptr(ptr) {}
 
-CudaArray::CudaArray(size_t size, ShapeLike shape, ShapeLike strides)
+CudaArray::CudaArray(size_t size, shape_t shape, shape_t strides)
     : size(size), shape(shape), strides(strides) {
   float *raw_ptr;
   CHECK_CUDA(cudaMalloc(&raw_ptr, size * ELEM_SIZE));
   ptr = std::shared_ptr<float>(raw_ptr, [](float *p) { cudaFree(p); });
 }
 
-CudaArray::CudaArray(size_t size, ShapeLike shape) : size(size), shape(shape) {
+CudaArray::CudaArray(size_t size, shape_t shape) : size(size), shape(shape) {
   strides.resize(shape.size());
   // Only calculate strides if we don't have a scalar
   if (shape.size() > 0) {
@@ -49,9 +49,9 @@ CudaArray::CudaArray(size_t size, ShapeLike shape) : size(size), shape(shape) {
   ptr = std::shared_ptr<float>(raw_ptr, [](float *p) { cudaFree(p); });
 }
 
-CudaArray CudaArray::broadcastTo(const ShapeLike _shape) const {
-  const ShapeLike shape_from = this->shape;
-  const ShapeLike shape_to = _shape;
+CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
+  const shape_t shape_from = this->shape;
+  const shape_t shape_to = _shape;
   // determine if we can broadcast
   const int from_ndim = (const int)shape_from.size();
   const int to_ndim = (const int)shape_to.size();
@@ -64,7 +64,7 @@ CudaArray CudaArray::broadcastTo(const ShapeLike _shape) const {
   }
 
   int new_size = 1;
-  ShapeLike new_strides(to_ndim, 0);
+  shape_t new_strides(to_ndim, 0);
   // reverse test if the dim is 1 or they are equal
   for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
     py::ssize_t dim_to = shape_to[i];
@@ -89,13 +89,13 @@ CudaArray CudaArray::broadcastTo(const ShapeLike _shape) const {
   return out;
 }
 
-CudaArray CudaArray::binop(const CudaArray &other, BinaryOpKernel Ker) const {
+CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
   if (shape != other.shape) {
     // try to broadcast, from smaller to larger
     if (shape.size() < other.shape.size()) {
-      return broadcastTo(other.shape).binop(other, Ker);
+      return broadcast_to(other.shape).binop(other, ker);
     } else if (shape.size() > other.shape.size()) {
-      return binop(other.broadcastTo(shape), Ker);
+      return binop(other.broadcast_to(shape), ker);
     } else {
       // we need to check the one with less product of shape, and try to
       // broadcast
@@ -106,9 +106,9 @@ CudaArray CudaArray::binop(const CudaArray &other, BinaryOpKernel Ker) const {
         prod_other_shape *= other.shape[i];
       }
       if (prod_shape < prod_other_shape) {
-        return broadcastTo(other.shape).binop(other, Ker);
+        return broadcast_to(other.shape).binop(other, ker);
       } else {
-        return binop(other.broadcastTo(shape), Ker);
+        return binop(other.broadcast_to(shape), ker);
       }
     }
   }
@@ -139,7 +139,7 @@ CudaArray CudaArray::binop(const CudaArray &other, BinaryOpKernel Ker) const {
                         n_dims * sizeof(int), cudaMemcpyHostToDevice));
   CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
                         cudaMemcpyHostToDevice));
-  Ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
+  ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
                                  ptr.get(), other.ptr.get(), out.ptr.get());
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
@@ -147,7 +147,7 @@ CudaArray CudaArray::binop(const CudaArray &other, BinaryOpKernel Ker) const {
 }
 
 CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
-                               TernaryOpKernel Ker) const {
+                               ternary_op_kernel ker) const {
   if (second.shape != third.shape || shape != second.shape ||
       shape != third.shape) {
     throw std::invalid_argument(
@@ -187,7 +187,7 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
 
   CHECK_CUDA(cudaMemcpy(d_shape, host_shape, n_dims * sizeof(int),
                         cudaMemcpyHostToDevice));
-  Ker<<<grid_size, block_size>>>(
+  ker<<<grid_size, block_size>>>(
       d_first_strides, d_second_strides, d_third_strides, d_shape, shape.size(),
       ptr.get(), second.ptr.get(), third.ptr.get(), out.ptr.get());
   cudaDeviceSynchronize();
@@ -195,7 +195,7 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
   return out;
 }
 
-float CudaArray::getitem(ShapeLike index) const {
+float CudaArray::getitem(shape_t index) const {
   if (index.size() != shape.size()) {
     throw std::runtime_error("Index dimension mismatch");
   }
@@ -217,30 +217,30 @@ float CudaArray::getitem(ShapeLike index) const {
 
 int CudaArray::ndim() const { return shape.size(); }
 
-CudaArray CudaArray::matMul(const CudaArray &other) const {
-  CudaArray a = this->asContiguous();
-  CudaArray b = other.asContiguous();
-  dim3 blockSize = dim3(DEFAULT_BLOCK_SIZE);
-  ShapeLike newShape;
+CudaArray CudaArray::mat_mul(const CudaArray &other) const {
+  CudaArray a = this->as_contiguous();
+  CudaArray b = other.as_contiguous();
+  dim3 block_size = dim3(DEFAULT_BLOCK_SIZE);
+  shape_t new_shape;
   size_t size1, midsize, size2;
   if (a.ndim() == 2 && b.ndim() == 2) {
     size1 = a.shape.at(0);
     midsize = a.shape.at(1);
     size2 = b.shape.at(1);
-    newShape = {size1, size2};
+    new_shape = {size1, size2};
   } else if (a.ndim() == 1 && b.ndim() == 1) {
-    newShape = {1};
+    new_shape = {1};
     size1 = midsize = size2 = 1;
   } else if (a.ndim() == 2 && b.ndim() == 1) {
     size1 = a.shape.at(0);
     midsize = a.shape.at(1);
     size2 = 1;
-    newShape = {size1};
+    new_shape = {size1};
   } else if (a.ndim() == 1 && b.ndim() == 2) {
     size1 = 1;
     midsize = b.shape.at(0);
     size2 = b.shape.at(1);
-    newShape = {size2};
+    new_shape = {size2};
   } else {
     std::string error_message =
         "Invalid shapes for matmul, only 1D/2D combinations, 2Dx2D and 1Dx1D "
@@ -250,8 +250,8 @@ CudaArray CudaArray::matMul(const CudaArray &other) const {
 
   int newSize = size1 * size2;
   dim3 gridSize(ceil(newSize / (float)DEFAULT_BLOCK_SIZE));
-  CudaArray out(newSize, newShape);
-  MatMulKernel<<<gridSize, blockSize>>>(a.ptr.get(), b.ptr.get(), out.ptr.get(),
+  CudaArray out(newSize, new_shape);
+  matmul_kernel<<<gridSize, block_size>>>(a.ptr.get(), b.ptr.get(), out.ptr.get(),
                                         size1, midsize, size2);
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
@@ -259,21 +259,21 @@ CudaArray CudaArray::matMul(const CudaArray &other) const {
   return out;
 }
 
-CudaArray CudaArray::fromNumpy(py::array_t<float> np_array) {
+CudaArray CudaArray::from_numpy(py::array_t<float> np_array) {
   py::buffer_info buffer_info = np_array.request();
   std::vector<py::ssize_t> py_strides = buffer_info.strides;
-  ShapeLike strides(py_strides.begin(), py_strides.end());
+  shape_t strides(py_strides.begin(), py_strides.end());
   auto size = buffer_info.size;
   auto *ptr = static_cast<float *>(buffer_info.ptr);
   std::vector<py::ssize_t> py_shape = buffer_info.shape;
-  ShapeLike shape(py_shape.begin(), py_shape.end());
+  shape_t shape(py_shape.begin(), py_shape.end());
   CudaArray arr(size, shape, strides);
   CHECK_CUDA(
       cudaMemcpy(arr.ptr.get(), ptr, size * ELEM_SIZE, cudaMemcpyHostToDevice));
   return arr;
 }
 
-py::array_t<float> CudaArray::toNumpy() const {
+py::array_t<float> CudaArray::to_numpy() const {
   py::array_t<float> result(shape, strides);
   CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr.get(), size * ELEM_SIZE,
                         cudaMemcpyDeviceToHost));
@@ -287,7 +287,7 @@ py::array_t<float> CudaArray::toNumpy() const {
   return result;
 }
 
-std::string CudaArray::toString() const {
+std::string CudaArray::to_string() const {
   std::stringstream ss;
   ss << "CudaArray(" << size << ") [";
   float *host = (float *)malloc(size * ELEM_SIZE);
@@ -341,7 +341,7 @@ CudaArray CudaArray::clone() const {
   return out;
 }
 
-CudaArray CudaArray::elwiseop(ElementWiseOpKernel Ker) const {
+CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   int n_dims = shape.size();
@@ -364,7 +364,7 @@ CudaArray CudaArray::elwiseop(ElementWiseOpKernel Ker) const {
                         cudaMemcpyHostToDevice));
 
   CudaArray out(size, shape);
-  Ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr.get(),
+  ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr.get(),
                                  out.ptr.get());
 
   cudaDeviceSynchronize();
@@ -373,21 +373,21 @@ CudaArray CudaArray::elwiseop(ElementWiseOpKernel Ker) const {
   return out;
 }
 
-CudaArray CudaArray::asContiguous() const { return elwiseop(CopyKernel); }
+CudaArray CudaArray::as_contiguous() const { return elwiseop(copy_kernel); }
 
-CudaArray CudaArray::permute(ShapeLike axes) const {
+CudaArray CudaArray::permute(shape_t axes) const {
   // TODO - check that axes is from 0 to shape.size - 1, in any order
   if (axes.size() != shape.size()) {
     throw std::runtime_error("axes must have same size as shape");
   }
-  ShapeLike newShape(shape.size());
-  ShapeLike newStrides(strides.size());
+  shape_t new_shape(shape.size());
+  shape_t new_strides(strides.size());
 
   for (size_t i = 0; i < axes.size(); ++i) {
-    newShape[i] = shape[axes[i]];
-    newStrides[i] = strides[axes[i]];
+    new_shape[i] = shape[axes[i]];
+    new_strides[i] = strides[axes[i]];
   }
 
-  CudaArray out(size, newShape, newStrides, ptr);
+  CudaArray out(size, new_shape, new_strides, ptr);
   return out;
 }
