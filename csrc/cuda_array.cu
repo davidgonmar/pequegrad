@@ -244,11 +244,21 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     throw std::runtime_error(error_message);
   }
 
-  int newSize = size1 * size2;
-  dim3 gridSize(ceil(newSize / (float)DEFAULT_BLOCK_SIZE));
-  CudaArray out(newSize, new_shape);
+  int new_size = size1 * size2;
+  dim3 gridSize(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
+  CudaArray out(new_size, new_shape);
+  size_t *lhs_shape, *rhs_shape;
+  CHECK_CUDA(cudaMalloc(&lhs_shape, a.ndim() * sizeof(size_t)));
+  CHECK_CUDA(cudaMalloc(&rhs_shape, b.ndim() * sizeof(size_t)));
+
+  CHECK_CUDA(cudaMemcpy(lhs_shape, a.shape.data(), a.ndim() * sizeof(size_t),
+                        cudaMemcpyHostToDevice));
+  CHECK_CUDA(cudaMemcpy(rhs_shape, b.shape.data(), b.ndim() * sizeof(size_t),
+                        cudaMemcpyHostToDevice));
+
   matmul_kernel<<<gridSize, block_size>>>(a.ptr.get(), b.ptr.get(),
-                                          out.ptr.get(), size1, midsize, size2);
+                                          out.ptr.get(), lhs_shape, rhs_shape,
+                                          a.ndim(), b.ndim());
 
   CHECK_CUDA(cudaGetLastError());
 
