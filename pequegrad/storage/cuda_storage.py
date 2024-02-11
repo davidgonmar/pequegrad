@@ -179,6 +179,9 @@ class CudaStorage(AbstractStorage):
         return self.not_equal(other)
 
     def reshape(self, *shape: Union[int, Tuple[int, ...]]) -> "CudaStorage":
+        if len(shape) == 1 and isinstance(shape[0], tuple):
+            shape = shape[0]
+
         return CudaStorage(self.data.reshape(shape))
 
     def __len__(self) -> int:
