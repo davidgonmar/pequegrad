@@ -129,7 +129,11 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(self.data.contiguous())
 
     def where(self, condition: "CudaStorage", other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.where(condition.data, other.data))
+        return (
+            CudaStorage(self.data.where(condition.data, other.data))
+            if isinstance(other, CudaStorage) and isinstance(condition, CudaStorage)
+            else CudaStorage(self.data.where(condition.data, CudaStorage(other).data))
+        )
 
     def outer_product(self, other: "CudaStorage") -> "CudaStorage":
         raise NotImplementedError
@@ -217,7 +221,11 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(sum.div(CudaStorage(N).data))
 
     def pow(self, exponent: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.pow(exponent.data))
+        return (
+            CudaStorage(self.data.pow(exponent.data))
+            if isinstance(exponent, CudaStorage)
+            else CudaStorage(self.data.pow(CudaStorage(exponent).data))
+        )
 
     def __pow__(self, exponent: "CudaStorage") -> "CudaStorage":
         return self.pow(exponent)

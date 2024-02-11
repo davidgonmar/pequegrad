@@ -274,7 +274,7 @@ class Exp(Function):
 
     def backward(self):
         if self.a.requires_grad:
-            self.a._grad += self.ret.grad * Tensor(self.ret.data)
+            self.a._grad += self.ret.grad * Tensor(self.ret.data, storage=self.storage)
 
 
 class Permute(Function):
@@ -553,7 +553,7 @@ class Unfold(Function):
                 self.input.shape[-2:],
                 stride=self.stride,
             )
-            self.input._grad += Tensor(folded_grad)
+            self.input._grad += Tensor(folded_grad, storage=self.storage)
 
 
 class Fold(Function):
@@ -589,4 +589,4 @@ class Fold(Function):
             unfolded = im2col(
                 self.ret.grad.data.numpy(), self.kernel_shape, stride=self.stride
             )
-            self.input._grad += Tensor(unfolded)
+            self.input._grad += Tensor(unfolded, storage=self.storage)

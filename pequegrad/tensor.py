@@ -14,7 +14,7 @@ class Tensor:
 
     storage: AbstractStorage
 
-    def __init__(self, data: _ArrayLike, requires_grad=False, storage="np"):
+    def __init__(self, data: _ArrayLike, requires_grad=False, storage=None):
         # Internally, we store the data as a numpy array\
         if isinstance(data, Tensor):
             data = data.numpy()
@@ -112,7 +112,11 @@ class Tensor:
         # We start with the gradient of the output node, defaulting to 1.0 if it's a scalar
         # This is called implicit gradient creation
         self._grad = (
-            gradient if gradient is not None else Tensor(1.0) if self.dim == 0 else None
+            gradient
+            if gradient is not None
+            else Tensor(1.0, storage=self.storage_type)
+            if self.dim == 0
+            else None
         )
 
         if not isinstance(self._grad, Tensor):
@@ -183,7 +187,9 @@ class Tensor:
                 "cannot call zero_grad on a tensor that doesn't require grad"
             )
 
-        self._grad = Tensor.zeros(self.shape)
+        self._grad = Tensor.zeros(
+            self.shape, requires_grad=False, storage=self.storage_type
+        )
 
     ##### INITIALIZATION METHODS #####
 
