@@ -15,7 +15,6 @@ mnist_url = "http://yann.lecun.com/exdb/mnist/"
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Train a simple MLP on MNIST")
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
     args = parser.parse_args()

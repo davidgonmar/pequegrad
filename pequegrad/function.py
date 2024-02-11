@@ -321,9 +321,12 @@ class ReLU(Function):
     def backward(self):
         # grad = 1 if a > 0 else 0
         if self.a.requires_grad:
+            concrete_class = self.a.data.__class__
             self.a._grad += (
                 Tensor(
-                    np.where(self.a.data.numpy() > 0, 1, 0),
+                    # steal the concrete class from tensor storage
+                    concrete_class.where_static(self.a.data > 0, 1, 0),
+                    requires_grad=False,
                     storage=self.storage,
                 )
                 * self.ret.grad

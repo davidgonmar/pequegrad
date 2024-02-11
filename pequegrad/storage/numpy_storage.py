@@ -122,7 +122,27 @@ class NumpyStorage(AbstractStorage):
         return (
             NumpyStorage(np.where(condition.data, self.data, other.data))
             if isinstance(other, NumpyStorage)
+            and isinstance(condition, NumpyStorage)
+            and isinstance(other, NumpyStorage)
             else NumpyStorage(np.where(condition.data, self.data, other))
+        )
+
+    @staticmethod
+    def where_static(
+        condition: "NumpyStorage", x: "NumpyStorage", y: "NumpyStorage"
+    ) -> "NumpyStorage":
+        return (
+            NumpyStorage(np.where(condition.data, x.data, y.data))
+            if isinstance(y, NumpyStorage)
+            and isinstance(x, NumpyStorage)
+            and isinstance(condition, NumpyStorage)
+            else NumpyStorage(
+                np.where(
+                    NumpyStorage(condition).data,
+                    NumpyStorage(x).data,
+                    NumpyStorage(y).data,
+                )
+            )
         )
 
     def outer_product(self, other: "NumpyStorage") -> "NumpyStorage":

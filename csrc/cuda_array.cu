@@ -488,8 +488,7 @@ CudaArray::~CudaArray() {}
 
 CudaArray::CudaArray(const CudaArray &other)
     : size(other.size), shape(other.shape), strides(other.strides),
-      ptr(other.ptr) {
-      }
+      ptr(other.ptr) {}
 
 CudaArray &CudaArray::operator=(const CudaArray &other) {
   if (this != &other) {
@@ -503,8 +502,7 @@ CudaArray &CudaArray::operator=(const CudaArray &other) {
 
 CudaArray::CudaArray(CudaArray &&other)
     : size(other.size), shape(std::move(other.shape)),
-      strides(std::move(other.strides)), ptr(std::move(other.ptr)) {
-      }
+      strides(std::move(other.strides)), ptr(std::move(other.ptr)) {}
 
 CudaArray &CudaArray::operator=(CudaArray &&other) {
   if (this != &other) {
@@ -540,7 +538,6 @@ CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
   CudaArray out(size, shape);
   ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr.get(),
                                  out.ptr.get());
-
 
   CHECK_CUDA(cudaGetLastError());
 

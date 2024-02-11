@@ -56,11 +56,15 @@ class CudaStorage(AbstractStorage):
         ],
     ):
         if isinstance(data, np.ndarray):
-            self.data = CudaArray.from_numpy(data.astype(np.float32))
+            self.data = CudaArray.from_numpy(
+                data if data.dtype == np.float32 else data.astype(np.float32)
+            )
         elif isinstance(data, CudaArray):
-            self.data = data.clone()
+            self.data = data
         elif isinstance(data, (int, float, np.float32, np.float64, np.int32, np.int64)):
             self.data = CudaArray.from_numpy(np.array(data, dtype=np.float32))
+        elif isinstance(data, CudaStorage):
+            self.data = data.data
         else:
             raise ValueError(
                 f"Data must be a numpy array or CudaArray, got {type(data)}"
@@ -139,6 +143,22 @@ class CudaStorage(AbstractStorage):
             else CudaStorage(self.data.where(condition.data, CudaStorage(other).data))
         )
 
+    @staticmethod
+    def where_static(
+        condition: "CudaStorage", x: "CudaStorage", y: "CudaStorage"
+    ) -> "CudaStorage":
+        return (
+            CudaStorage(x.data.where(condition.data, y.data))
+            if isinstance(x, CudaStorage)
+            and isinstance(y, CudaStorage)
+            and isinstance(condition, CudaStorage)
+            else CudaStorage(
+                CudaStorage(x).data.where(
+                    CudaStorage(condition).data, CudaStorage(y).data
+                )
+            )
+        )
+
     def outer_product(self, other: "CudaStorage") -> "CudaStorage":
         raise NotImplementedError
 
@@ -154,7 +174,11 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(self.data.eq(other.data))
 
     def greater(self, other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.gt(other.data))
+        return (
+            CudaStorage(self.data.gt(other.data))
+            if isinstance(other, CudaStorage)
+            else CudaStorage(self.data.gt(CudaStorage(other).data))
+        )
 
     def greater_equal(self, other: "CudaStorage") -> "CudaStorage":
         return CudaStorage(self.data.ge(other.data))

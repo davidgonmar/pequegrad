@@ -17,20 +17,14 @@ class Tensor:
     def __init__(self, data: _ArrayLike, requires_grad=False, storage="np"):
         # Internally, we store the data as a numpy array\
         if isinstance(data, Tensor):
-            data = data.numpy()
+            data = data.numpy() if storage == "np" else data
         elif isinstance(data, AbstractStorage):
-            data = data.numpy()
+            data = data.numpy() if storage == "np" else data
         elif isinstance(data, (int, float)):
             data = np.array(data)
         elif isinstance(data, list):
             data = np.array(data)
 
-        assert isinstance(
-            data, np.ndarray
-        ), "data must be a numpy array, not {}".format(type(data))
-        assert data.dtype != object, "Data type not supported, got {}".format(
-            data.dtype
-        )
         storage = storage if storage else "np"  # default to numpy storage
         if storage == "np":
             self.data: NumpyStorage = NumpyStorage(data)
