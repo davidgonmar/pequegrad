@@ -282,62 +282,93 @@ class TestStorage:
         self._compare_with_numpy(res, lambdaopnp(np1, np2, np3))
 
     @pytest.mark.parametrize(
-        "params",  # shape, dim
+        "params",  # shape, dim, keepdims
         [
             # test for single dimension
-            [(3, 4), 0],
-            [(3, 4), 1],
-            [(3, 4, 2), 2],
-            [(3, 4, 2), 1],
-            [(3, 4, 2), 0],
-            [(3, 4, 2, 5), 3],
-            [(3, 4, 2, 5), 2],
-            [(3, 4, 2, 5), 1],
-            [(3, 4, 2, 5), 0],
-            [(5,), 0],
-            [(2,), 0],
-            [(2, 3, 5, 8, 9), 2],
-            [(2, 3, 5, 8, 9), 3],
-            [(2, 3, 5, 8, 9), 4],
-            [(2, 3, 5, 8, 9), 1],
-            [(2, 3, 5, 8, 9), 0],
+            [(3, 4), 0, True],
+            [(3, 4), 0, False],
+            [(3, 4), 1, True],
+            [(3, 4), 1, False],
+            [(3, 4, 2), 2, True],
+            [(3, 4, 2), 2, False],
+            [(3, 4, 2), 1, True],
+            [(3, 4, 2), 1, False],
+            [(3, 4, 2), 0, True],
+            [(3, 4, 2), 0, False],
+            [(3, 4, 2, 5), 3, True],
+            [(3, 4, 2, 5), 3, False],
+            [(3, 4, 2, 5), 2, True],
+            [(3, 4, 2, 5), 2, False],
+            [(3, 4, 2, 5), 1, True],
+            [(3, 4, 2, 5), 1, False],
+            [(3, 4, 2, 5), 0, True],
+            [(3, 4, 2, 5), 0, False],
+            [(5,), 0, True],
+            [(5,), 0, False],
+            [(2,), 0, True],
+            [(2,), 0, False],
+            [(2, 3, 5, 8, 9), 2, True],
+            [(2, 3, 5, 8, 9), 2, False],
+            [(2, 3, 5, 8, 9), 3, True],
+            [(2, 3, 5, 8, 9), 3, False],
+            [(2, 3, 5, 8, 9), 4, True],
+            [(2, 3, 5, 8, 9), 4, False],
+            [(2, 3, 5, 8, 9), 1, True],
+            [(2, 3, 5, 8, 9), 1, False],
+            [(2, 3, 5, 8, 9), 0, True],
+            [(2, 3, 5, 8, 9), 0, False],
             # test for 'all dimensions'
-            [(3, 4), None],
-            [(3, 4, 2), None],
-            [(3, 4, 2, 5), None],
-            [(5,), None],
-            [(2,), None],
-            [(2, 3, 5, 8, 9), None],
+            [(3, 4), None, True],
+            [(3, 4), None, False],
+            [(3, 4, 2), None, True],
+            [(3, 4, 2), None, False],
+            [(3, 4, 2, 5), None, True],
+            [(3, 4, 2, 5), None, False],
+            [(5,), None, True],
+            [(5,), None, False],
+            [(2,), None, True],
+            [(2,), None, False],
+            [(2, 3, 5, 8, 9), None, True],
+            [(2, 3, 5, 8, 9), None, False],
             # test for tuples of dimensions
-            [(3, 4), (0, 1)],
-            [(3, 4, 2), (0, 2)],
-            [(3, 4, 2, 5), (1, 3)],
-            [(5,), (0,)],
-            [(2,), (0,)],
-            [(2, 3, 5, 8, 9), (2, 3)],
-            [(2, 3, 5, 8, 9), (0, 1, 2, 3, 4)],
+            [(3, 4), (0, 1), True],
+            [(3, 4), (0, 1), False],
+            [(3, 4, 2), (0, 2), True],
+            [(3, 4, 2), (0, 2), False],
+            [(3, 4, 2, 5), (1, 3), True],
+            [(3, 4, 2, 5), (1, 3), False],
+            [(5,), (0,), True],
+            [(5,), (0,), False],
+            [(2,), (0,), True],
+            [(2,), (0,), False],
+            [(2, 3, 5, 8, 9), (2, 3), True],
+            [(2, 3, 5, 8, 9), (2, 3), False],
+            [(2, 3, 5, 8, 9), (0, 1, 2, 3, 4), True],
+            [(2, 3, 5, 8, 9), (0, 1, 2, 3, 4), False],
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     @pytest.mark.parametrize("op", ["sum", "max", "mean"])
     def test_reduce(self, params, class_storage, op):
-        shape, axis = params
+        shape, axis, keepdims = params
 
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
 
         if op == "sum":
             self._compare_with_numpy(
-                x.sum(axis=axis, keepdims=True), np.sum(nparr, axis=axis, keepdims=True)
+                x.sum(axis=axis, keepdims=keepdims),
+                np.sum(nparr, axis=axis, keepdims=keepdims),
             )
         elif op == "max":
             self._compare_with_numpy(
-                x.max(axis=axis, keepdims=True), np.max(nparr, axis=axis, keepdims=True)
+                x.max(axis=axis, keepdims=keepdims),
+                np.max(nparr, axis=axis, keepdims=keepdims),
             )
         elif op == "mean":
             self._compare_with_numpy(
-                x.mean(axis=axis, keepdims=True),
-                np.mean(nparr, axis=axis, keepdims=True),
+                x.mean(axis=axis, keepdims=keepdims),
+                np.mean(nparr, axis=axis, keepdims=keepdims),
             )
 
     # test squeeze

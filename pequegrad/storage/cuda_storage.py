@@ -118,9 +118,9 @@ class CudaStorage(AbstractStorage):
     def sum(self, axis: int = None, keepdims: bool = False) -> "CudaStorage":
         if axis is None:
             return CudaStorage(
-                self.data.sum()
+                self.data.sum(keepdims)
             )  # todo - find a way not to have to do this if
-        return CudaStorage(self.data.sum(axis))
+        return CudaStorage(self.data.sum(axis, keepdims))
 
     def broadcast_to(self, shape: tuple) -> "CudaStorage":
         return CudaStorage(self.data.broadcast_to(shape))
@@ -196,19 +196,19 @@ class CudaStorage(AbstractStorage):
     def __repr__(self):
         return f"CudaStorage({self.data})"
 
-    def max(self, axis: int, keepdims: bool = None) -> "CudaStorage":
+    def max(self, axis: int, keepdims: bool = False) -> "CudaStorage":
         if axis is None:
-            return CudaStorage(self.data.max())
-        return CudaStorage(self.data.max(axis))
+            return CudaStorage(self.data.max(keepdims))
+        return CudaStorage(self.data.max(axis, keepdims))
 
     def mean(
         self, axis: Union[int, None, Tuple] = None, keepdims: bool = False
     ) -> "CudaStorage":
         if axis is None:
-            sum = self.data.sum()
+            sum = self.data.sum(keepdims)
             N = np.prod(self.shape)
         else:
-            sum = self.data.sum(axis)
+            sum = self.data.sum(axis, keepdims)
             if isinstance(axis, int):
                 N = self.shape[axis]
             else:

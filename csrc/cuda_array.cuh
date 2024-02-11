@@ -56,14 +56,15 @@ public:
   CudaArray mat_mul(const CudaArray &other) const;
   CudaArray permute(shape_t axes) const;
   CudaArray as_contiguous() const;
-  CudaArray sum(size_t axis) const;
-  CudaArray sum() const;
-  CudaArray sum(shape_t axis) const;
-  CudaArray max(size_t axis) const;
-  CudaArray max() const;
-  CudaArray max(shape_t axis) const;
+  CudaArray sum(size_t axis, bool keepdims) const;
+  CudaArray sum(bool keepdims) const;
+  CudaArray sum(shape_t axis, bool keepdims) const;
+  CudaArray max(size_t axis, bool keepdims) const;
+  CudaArray max(bool keepdims) const;
+  CudaArray max(shape_t axis, bool keepdims) const;
 
   CudaArray squeeze(size_t axis) const;
+  CudaArray squeeze() const;
   CudaArray unsqueeze(size_t axis) const;
 
   CudaArray reshape(const shape_t &new_shape) const;
@@ -72,4 +73,6 @@ public:
   py::array_t<float> to_numpy() const;
 
   std::string to_string() const;
+
+private:
 };

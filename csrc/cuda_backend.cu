@@ -90,16 +90,18 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
              return cond.ternaryop(a, b, where_kernel);
            })
-      .def("sum",
-           [](const CudaArray &arr, size_t axis) { return arr.sum(axis); })
-      .def("sum", [](const CudaArray &arr) { return arr.sum(); })
-      .def("sum",
-           [](const CudaArray &arr, shape_t axes) { return arr.sum(axes); })
-      .def("max",
-           [](const CudaArray &arr, size_t axis) { return arr.max(axis); })
-      .def("max", [](const CudaArray &arr) { return arr.max(); })
-      .def("max",
-           [](const CudaArray &arr, shape_t axes) { return arr.max(axes); })
+      .def("sum", [](const CudaArray &arr, size_t axis,
+                     bool keepdims) { return arr.sum(axis, keepdims); })
+      .def("sum", [](const CudaArray &arr,
+                     bool keepdims) { return arr.sum(keepdims); })
+      .def("sum", [](const CudaArray &arr, shape_t axes,
+                     bool keepdims) { return arr.sum(axes, keepdims); })
+      .def("max", [](const CudaArray &arr,
+                     bool keepdims) { return arr.max(keepdims); })
+      .def("max", [](const CudaArray &arr, size_t axis,
+                     bool keepdims) { return arr.max(axis, keepdims); })
+      .def("max", [](const CudaArray &arr, shape_t axes,
+                     bool keepdims) { return arr.max(axes, keepdims); })
       .def("squeeze",
            [](const CudaArray &arr, size_t axis) { return arr.squeeze(axis); })
       .def("unsqueeze", [](const CudaArray &arr,

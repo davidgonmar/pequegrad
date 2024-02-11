@@ -239,7 +239,7 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
   return out;
 }
 
-CudaArray CudaArray::sum() const {
+CudaArray CudaArray::sum(bool keepdims) const {
   // check if the array is already reduced
   if (std::all_of(shape.begin(), shape.end(),
                   [](size_t i) { return i == 1; })) {
@@ -248,23 +248,29 @@ CudaArray CudaArray::sum() const {
   // simply sum along all axes
   CudaArray result = *this;
   for (size_t axis = 0; axis < shape.size(); ++axis) {
-    result = result.sum(axis);
+    result = result.sum(axis, true);
   }
-  return result;
+  if (keepdims) {
+    return result;
+  }
+  return result.squeeze();
 }
 
-CudaArray CudaArray::sum(shape_t axes) const {
+CudaArray CudaArray::sum(shape_t axes, bool keepdims) const {
   // simply sum along all axes requested
   CudaArray result = *this;
   for (size_t axis : axes) {
-    result = result.sum(axis);
+    result = result.sum(axis, true);
   }
-  return result;
+  if (keepdims) {
+    return result;
+  }
+  return result.squeeze();
 }
 
-CudaArray CudaArray::sum(size_t axis) const {
+CudaArray CudaArray::sum(size_t axis, bool keepdims) const {
   if (!is_contiguous()) {
-    return as_contiguous().sum(axis);
+    return as_contiguous().sum(axis, keepdims);
   }
   shape_t new_shape = shape;
   new_shape[axis] = 1;
@@ -284,10 +290,14 @@ CudaArray CudaArray::sum(size_t axis) const {
                                         d_shape, n_dims, axis);
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
-  return out;
+
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze();
 }
 
-CudaArray CudaArray::max() const {
+CudaArray CudaArray::max(bool keepdims) const {
   // check if the array is already reduced
   if (std::all_of(shape.begin(), shape.end(),
                   [](size_t i) { return i == 1; })) {
@@ -295,22 +305,28 @@ CudaArray CudaArray::max() const {
   }
   CudaArray result = *this;
   for (size_t axis = 0; axis < shape.size(); ++axis) {
-    result = result.max(axis);
+    result = result.max(axis, true);
   }
-  return result;
+  if (keepdims) {
+    return result;
+  }
+  return result.squeeze();
 }
 
-CudaArray CudaArray::max(shape_t axes) const {
+CudaArray CudaArray::max(shape_t axes, bool keepdims) const {
   CudaArray result = *this;
   for (size_t axis : axes) {
-    result = result.max(axis);
+    result = result.max(axis, true);
   }
-  return result;
+  if (keepdims) {
+    return result;
+  }
+  return result.squeeze();
 }
 
-CudaArray CudaArray::max(size_t axis) const {
+CudaArray CudaArray::max(size_t axis, bool keepdims) const {
   if (!is_contiguous()) {
-    return as_contiguous().max(axis);
+    return as_contiguous().max(axis, keepdims);
   }
   shape_t new_shape = shape;
   new_shape[axis] = 1;
@@ -330,7 +346,10 @@ CudaArray CudaArray::max(size_t axis) const {
                                         d_shape, n_dims, axis);
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
-  return out;
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze();
 }
 
 CudaArray CudaArray::squeeze(size_t axis) const {
@@ -346,6 +365,34 @@ CudaArray CudaArray::squeeze(size_t axis) const {
   out.shape.erase(out.shape.begin() + axis);
   out.strides.erase(out.strides.begin() + axis);
 
+  return out;
+}
+
+CudaArray CudaArray::squeeze() const {
+  CudaArray out(*this);
+  // squeezes all dims that are 1
+  shape_t indices_to_squeeze;
+
+  for (int i = 0; i < shape.size(); i++) {
+    if (shape[i] == 1) {
+      indices_to_squeeze.push_back(i);
+    }
+  }
+
+  shape_t new_shape(shape.size() - indices_to_squeeze.size());
+  shape_t new_strides(strides.size() - indices_to_squeeze.size());
+
+  for (int i = 0, j = 0; i < shape.size(); i++) {
+    if (std::find(indices_to_squeeze.begin(), indices_to_squeeze.end(), i) ==
+        indices_to_squeeze.end()) {
+      new_shape[j] = shape[i];
+      new_strides[j] = strides[i];
+      j++;
+    }
+  }
+
+  out.shape = new_shape;
+  out.strides = new_strides;
   return out;
 }
 
