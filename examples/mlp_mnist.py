@@ -100,7 +100,6 @@ def train(model, X_train, Y_train, X_test, Y_test, epochs=8, batch_size=512):
 
             # Compute loss and backpropagate
             loss = prediction.cross_entropy_loss_indices(batch_Y)
-
             loss.backward()
 
             # Update the weights

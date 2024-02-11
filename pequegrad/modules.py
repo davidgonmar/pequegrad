@@ -13,10 +13,8 @@ class Module:
     _parameters: List[Tensor] = []
 
     def to(self, storage_type):
-        new_params = []
-        for p in self.parameters():
-            new_params.append(p.to(storage_type))
-        self._parameters = new_params
+        for p in self._parameters:
+            p.to_(storage_type)
         return self
 
     def parameters(self):
@@ -29,6 +27,7 @@ class Module:
 
 class Linear(Module):
     def __init__(self, in_features, out_features):
+        super().__init__()
         self.weights = kaiming_init((in_features, out_features))
         self.bias = Tensor.zeros(out_features, requires_grad=True)
         self._parameters = [self.weights, self.bias]
@@ -43,6 +42,7 @@ class Linear(Module):
 
 class Conv2d(Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        super().__init__()
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )

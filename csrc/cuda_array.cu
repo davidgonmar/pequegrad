@@ -412,7 +412,6 @@ CudaArray CudaArray::squeeze() const {
   return out;
 }
 
-
 CudaArray CudaArray::unsqueeze(shape_t axes) const {
   CudaArray out(*this);
   for (size_t axis : axes) {
@@ -420,7 +419,6 @@ CudaArray CudaArray::unsqueeze(shape_t axes) const {
   }
   return out;
 }
-
 
 CudaArray CudaArray::unsqueeze(size_t axis) const {
   if (axis > shape.size()) {
@@ -433,7 +431,6 @@ CudaArray CudaArray::unsqueeze(size_t axis) const {
   out.strides.insert(out.strides.begin() + axis, new_stride);
   return out;
 }
-
 
 CudaArray CudaArray::reshape(const shape_t &new_shape) const {
   const auto total_new = std::accumulate(new_shape.cbegin(), new_shape.cend(),

@@ -170,13 +170,14 @@ class Tensor:
             An independent copy of the tensor
         """
 
-        return Tensor(
+        t = Tensor(
             self.numpy().copy(),
             requires_grad=(
                 requires_grad if requires_grad is not None else self.requires_grad
             ),
             storage=storage if storage is not None else self.storage_type,
         )
+        return t
 
     def zero_grad(self):
         """

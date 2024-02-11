@@ -107,7 +107,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("unsqueeze", [](const CudaArray &arr,
                            size_t axis) { return arr.unsqueeze(axis); })
       .def("unsqueeze", [](const CudaArray &arr,
-                            shape_t axes) { return arr.unsqueeze(axes); })
+                           shape_t axes) { return arr.unsqueeze(axes); })
       .def("reshape", [](const CudaArray &arr,
                          shape_t new_shape) { return arr.reshape(new_shape); })
       .def("__getitem__", [](const CudaArray &arr, shape_t index) {
