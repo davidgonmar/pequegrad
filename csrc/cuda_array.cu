@@ -237,6 +237,12 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     midsize = b.shape.at(0);
     size2 = b.shape.at(1);
     new_shape = {size2};
+  } else if (a.ndim() == 3 && b.ndim() == 3) {
+    // assert that a batchsize = b batchsize
+    size1 = a.shape.at(1);
+    midsize = a.shape.at(2);
+    size2 = b.shape.at(2);
+    new_shape = {a.shape.at(0), size1, size2};
   } else {
     std::string error_message =
         "Invalid shapes for matmul, only 1D/2D combinations, 2Dx2D and 1Dx1D "
@@ -244,7 +250,8 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     throw std::runtime_error(error_message);
   }
 
-  int new_size = size1 * size2;
+  int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                 std::multiplies<int>());
   dim3 gridSize(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
   CudaArray out(new_size, new_shape);
   size_t *lhs_shape, *rhs_shape;

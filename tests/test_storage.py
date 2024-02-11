@@ -14,7 +14,7 @@ class TestStorage:
         assert x.shape == y.shape
         assert x.strides == y.strides
 
-        print(x.numpy(), y)
+        print(x.numpy(), "\n ================\n", y)
         assert np.allclose(x.numpy(), y)
 
     @pytest.mark.parametrize(
@@ -237,6 +237,7 @@ class TestStorage:
             [(4,), (4, 3)],
             [(25, 20), (20, 25)],
             [(22,), (22, 30)],
+            [(2, 3, 1), (2, 1, 3)],
         ],
     )  # (from, to)
     @pytest.mark.parametrize("class_storage", storages_to_test)
