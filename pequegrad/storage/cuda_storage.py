@@ -79,7 +79,11 @@ class CudaStorage(AbstractStorage):
         return self.add(other)
 
     def sub(self, other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.sub(other.data))
+        return (
+            CudaStorage(self.data.sub(other.data))
+            if isinstance(other, CudaStorage)
+            else CudaStorage(self.data.sub(CudaStorage(other).data))
+        )
 
     def __sub__(self, other: "CudaStorage") -> "CudaStorage":
         return self.sub(other)
