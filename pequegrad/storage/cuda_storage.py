@@ -179,7 +179,7 @@ class CudaStorage(AbstractStorage):
         return self.not_equal(other)
 
     def reshape(self, *shape: Union[int, Tuple[int, ...]]) -> "CudaStorage":
-        raise NotImplementedError
+        return CudaStorage(self.data.reshape(shape))
 
     def __len__(self) -> int:
         return self.shape[0]

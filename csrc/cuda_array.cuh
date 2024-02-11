@@ -66,6 +66,8 @@ public:
   CudaArray squeeze(size_t axis) const;
   CudaArray unsqueeze(size_t axis) const;
 
+  CudaArray reshape(const shape_t &new_shape) const;
+
   static CudaArray from_numpy(py::array_t<float> np_array);
   py::array_t<float> to_numpy() const;
 

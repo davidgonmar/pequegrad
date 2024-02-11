@@ -366,3 +366,15 @@ class TestStorage:
         nparr = np.random.rand(*shape).astype(np.float32)
         x = class_storage(nparr)
         self._compare_with_numpy(x.expand_dims(axis), np.expand_dims(nparr, axis))
+
+    # test reshape
+    @pytest.mark.parametrize(
+        "shape",
+        [[(3, 4), (2, 6)], [(3, 4), (12,)], [(3, 4), (3, 4)]],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_reshape(self, shape, class_storage):
+        from_shape, to_shape = shape
+        nparr = np.random.rand(*from_shape).astype(np.float32)
+        x = class_storage(nparr)
+        self._compare_with_numpy(x.reshape(*to_shape), np.reshape(nparr, to_shape))

@@ -361,6 +361,22 @@ CudaArray CudaArray::unsqueeze(size_t axis) const {
   return out;
 }
 
+CudaArray CudaArray::reshape(const shape_t &new_shape) const {
+  const auto total_new = std::accumulate(new_shape.cbegin(), new_shape.cend(),
+                                         1, std::multiplies<int>{});
+  const auto total_old =
+      std::accumulate(shape.cbegin(), shape.cend(), 1, std::multiplies<int>{});
+  if (total_new != total_old)
+    throw std::invalid_argument("got incompatible shapes");
+
+  CudaArray out(total_new, new_shape);
+
+  CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), total_new * ELEM_SIZE,
+                        cudaMemcpyDeviceToDevice));
+  cudaDeviceSynchronize();
+  return out;
+}
+
 CudaArray CudaArray::from_numpy(py::array_t<float> np_array) {
   py::buffer_info buffer_info = np_array.request();
   std::vector<py::ssize_t> py_strides = buffer_info.strides;
