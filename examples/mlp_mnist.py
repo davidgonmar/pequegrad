@@ -7,12 +7,15 @@ from pequegrad.optim import SGD
 from pequegrad.modules import Linear
 from pequegrad.context import no_grad
 import argparse
+import cProfile
+import pstats
 
 mnist_url = "http://yann.lecun.com/exdb/mnist/"
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="Train a simple MLP on MNIST")
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
     args = parser.parse_args()
@@ -138,6 +141,14 @@ if __name__ == "__main__":
 
     X_train, y_train, X_test, y_test = get_dataset()
 
+    profiler = cProfile.Profile()
+
+    profiler.enable()
     mlp = MLP()
     mlp.zero_grad()
     train(mlp, X_train, y_train, X_test, y_test)
+    profiler.disable()
+
+    stats = pstats.Stats(profiler).sort_stats("cumulative")
+
+    stats.print_stats()
