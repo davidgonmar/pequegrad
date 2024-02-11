@@ -113,7 +113,7 @@ class CudaStorage(AbstractStorage):
         return self.div(other)
 
     def expand_dims(self, axis: int) -> "CudaStorage":
-        raise NotImplementedError
+        return CudaStorage(self.data.unsqueeze(axis))
 
     def sum(self, axis: int = None, keepdims: bool = False) -> "CudaStorage":
         if axis is None:

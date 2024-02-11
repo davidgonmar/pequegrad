@@ -348,6 +348,19 @@ CudaArray CudaArray::squeeze(size_t axis) const {
 
   return out;
 }
+
+CudaArray CudaArray::unsqueeze(size_t axis) const {
+  if (axis > shape.size()) {
+    throw std::invalid_argument("Axis out of bounds for unsqueeze operation");
+  }
+  CudaArray out(*this);
+  out.shape.insert(out.shape.begin() + axis, 1);
+  size_t new_stride =
+      (axis < strides.size()) ? strides[std::max(0, (int)axis - 1)] : ELEM_SIZE;
+  out.strides.insert(out.strides.begin() + axis, new_stride);
+  return out;
+}
+
 CudaArray CudaArray::from_numpy(py::array_t<float> np_array) {
   py::buffer_info buffer_info = np_array.request();
   std::vector<py::ssize_t> py_strides = buffer_info.strides;

@@ -357,3 +357,12 @@ class TestStorage:
         x = class_storage(nparr)
         with pytest.raises(BaseException):
             x.squeeze(axis)
+
+    # test unsqueeze
+    @pytest.mark.parametrize("shape", [[(3, 4, 3), 1], [(1, 2, 3), 0], [(1, 2, 3), 2]])
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_expand_dims(self, shape, class_storage):
+        shape, axis = shape
+        nparr = np.random.rand(*shape).astype(np.float32)
+        x = class_storage(nparr)
+        self._compare_with_numpy(x.expand_dims(axis), np.expand_dims(nparr, axis))
