@@ -66,6 +66,7 @@ public:
   CudaArray squeeze(size_t axis) const;
   CudaArray squeeze() const;
   CudaArray unsqueeze(size_t axis) const;
+  CudaArray unsqueeze(shape_t axes) const;
 
   CudaArray reshape(const shape_t &new_shape) const;
 

@@ -390,7 +390,9 @@ class TestStorage:
             x.squeeze(axis)
 
     # test unsqueeze
-    @pytest.mark.parametrize("shape", [[(3, 4, 3), 1], [(1, 2, 3), 0], [(1, 2, 3), 2]])
+    @pytest.mark.parametrize(
+        "shape", [[(3, 4, 3), 1], [(1, 2, 3), 0], [(1, 2, 3), 2], [(1, 2, 3), (0, 2)]]
+    )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_expand_dims(self, shape, class_storage):
         shape, axis = shape
