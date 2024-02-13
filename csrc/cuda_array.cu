@@ -225,8 +225,20 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(1);
     new_shape = {size1, size2};
   } else if (a.ndim() == 1 && b.ndim() == 1) {
-    new_shape = {1};
-    size1 = midsize = size2 = 1;
+    if (a.shape != b.shape) throw std::invalid_argument("shapes must be equal in vector dot prod");
+    // vector_dot_product_accum accumulates vector_a * vector_b, but if the size is too large, it will not
+    // accumulate all of that into a single value, but rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1
+    // check its implementation for more details
+    int new_size = (a.shape.at(0) / MAX_THREADS_PER_BLOCK) + 1;
+    CudaArray out(new_size, {(size_t)new_size});
+    vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK, MAX_THREADS_PER_BLOCK * ELEM_SIZE>>>(a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
+    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaGetLastError());
+    if (new_size > 1) {
+      return out.sum(false);
+    }
+    return out.squeeze();
+
   } else if (a.ndim() == 2 && b.ndim() == 1) {
     size1 = a.shape.at(0);
     midsize = a.shape.at(1);
@@ -267,6 +279,7 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
                                           out.ptr.get(), lhs_shape, rhs_shape,
                                           a.ndim(), b.ndim());
 
+  cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
 
   return out;

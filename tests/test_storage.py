@@ -238,6 +238,10 @@ class TestStorage:
             [(25, 20), (20, 25)],
             [(22,), (22, 30)],
             [(2, 3, 1), (2, 1, 3)],
+            [(3,), (3,)],  # vector x vector dot
+            [(200,), (200,)],
+            [(5000,), (5000,)],
+            [(500000,), (500000,)],
         ],
     )  # (from, to)
     @pytest.mark.parametrize("class_storage", storages_to_test)
