@@ -6,7 +6,12 @@ import torch
 
 
 def _compare_fn_with_torch(
-    shapes, pequegrad_fn, torch_fn=None, tol: float = 1e-5, backward=True
+    shapes,
+    pequegrad_fn,
+    torch_fn=None,
+    tol: float = 1e-5,
+    backward=True,
+    pq_storage: str = "np",
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
@@ -18,7 +23,8 @@ def _compare_fn_with_torch(
     # Use a uniform distribution to initialize the arrays with 'good numbers' so that there are no numerical stability issues
     np_arr = [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
     tensors = [
-        Tensor(arr.astype(np.float64), requires_grad=True) for arr in np_arr
+        Tensor(arr.astype(np.float64), requires_grad=True, storage=pq_storage)
+        for arr in np_arr
     ]  # Using double precision
     torch_tensors = [
         torch_tensor(arr, dtype=torch.float64, requires_grad=True) for arr in np_arr
@@ -28,8 +34,8 @@ def _compare_fn_with_torch(
     torch_res = torch_fn(*torch_tensors)
 
     def _compare(t: Tensor, torch_t: TorchTensor, tol: float = 1e-5):
-        list1 = np.array(t.tolist()) if t is not None else None
-        list2 = np.array(torch_t.tolist()) if torch_t is not None else None
+        list1 = np.array(t.numpy()) if t is not None else None
+        list2 = np.array(torch_t.detach().numpy()) if torch_t is not None else None
 
         assert type(list1) == type(list2)
 
@@ -46,14 +52,16 @@ def _compare_fn_with_torch(
     if backward:
         # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
         nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
-        peq_res.backward(Tensor(nparr.astype(np.float64)))
+        peq_res.backward(Tensor(nparr.astype(np.float64), storage=pq_storage))
         torch_res.backward(torch_tensor(nparr, dtype=torch.float64))
 
         for t, torch_t in zip(tensors, torch_tensors):
             _compare(t.grad, torch_t.grad, tol)
 
 
-class TestOps:
+class _TestOps:
+    storage: str
+
     @pytest.mark.parametrize(
         "shape", [(2, 3), (3, 2), (6, 1), (1, 6), (6,), (1, 1, 6), (1, 2, 3), (2, 3, 1)]
     )
@@ -62,6 +70,7 @@ class TestOps:
             [shape],
             lambda x: x.reshape(shape),
             lambda x: x.reshape(shape),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -74,9 +83,7 @@ class TestOps:
     )
     def test_pow(self, shapes):
         _compare_fn_with_torch(
-            shapes,
-            lambda x, y: x**y,
-            lambda x, y: x**y,
+            shapes, lambda x, y: x**y, lambda x, y: x**y, pq_storage=self.storage
         )
 
     @pytest.mark.parametrize(
@@ -98,6 +105,7 @@ class TestOps:
             [shape],
             lambda x: x.mean(dim=dim, keepdim=False),
             lambda x: x.mean(dim=dim, keepdim=False),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -111,17 +119,13 @@ class TestOps:
     )
     def test_add(self, shapes):
         _compare_fn_with_torch(
-            shapes,
-            lambda x, y: x + y,
-            lambda x, y: x + y,
+            shapes, lambda x, y: x + y, lambda x, y: x + y, pq_storage=self.storage
         )
 
     @pytest.mark.parametrize("shapes", [[(3,)], [(2, 3)], [(1, 2, 3)], [(2, 4, 1)]])
     def test_exp(self, shapes):
         _compare_fn_with_torch(
-            shapes,
-            lambda x: x.exp(),
-            lambda x: x.exp(),
+            shapes, lambda x: x.exp(), lambda x: x.exp(), pq_storage=self.storage
         )
 
     @pytest.mark.parametrize(
@@ -141,7 +145,9 @@ class TestOps:
             mse = torch.nn.MSELoss(reduction="mean")
             return mse(x, y)
 
-        _compare_fn_with_torch(shape * 2, lambda x, y: x.mse_loss(y), torch_fn)
+        _compare_fn_with_torch(
+            shape * 2, lambda x, y: x.mse_loss(y), torch_fn, pq_storage=self.storage
+        )
 
     @pytest.mark.parametrize(
         "shapes",
@@ -152,7 +158,9 @@ class TestOps:
         ],
     )
     def test_mul(self, shapes):
-        _compare_fn_with_torch(shapes, lambda x, y: x * y, lambda x, y: x * y)
+        _compare_fn_with_torch(
+            shapes, lambda x, y: x * y, lambda x, y: x * y, pq_storage=self.storage
+        )
 
     @pytest.mark.parametrize(
         "shape",
@@ -170,7 +178,7 @@ class TestOps:
         ],
     )
     def test_relu(self, shape):
-        _compare_fn_with_torch(shape, lambda x: x.relu())
+        _compare_fn_with_torch(shape, lambda x: x.relu(), pq_storage=self.storage)
 
     @pytest.mark.parametrize(
         "data",
@@ -194,6 +202,7 @@ class TestOps:
                 keepdim=False,
             ),
             lambda x: x.sum(dim=dim, keepdim=False),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -208,6 +217,7 @@ class TestOps:
             [shape],
             lambda x: x.transpose(dim0, dim1),
             lambda x: x.transpose(dim0, dim1),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -229,6 +239,7 @@ class TestOps:
             [shape],
             lambda x: x.permute(*permutation_dims),
             lambda x: x.permute(*permutation_dims),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -240,7 +251,9 @@ class TestOps:
         ],
     )
     def test_max(self, shape):
-        _compare_fn_with_torch(shape, lambda x: x.max(), lambda x: x.max())
+        _compare_fn_with_torch(
+            shape, lambda x: x.max(), lambda x: x.max(), pq_storage=self.storage
+        )
 
     @pytest.mark.parametrize(
         "shape",
@@ -253,6 +266,7 @@ class TestOps:
             shape,
             lambda x: x.softmax(dim=-1),
             lambda x: x.softmax(dim=-1),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -266,6 +280,7 @@ class TestOps:
             shape,
             lambda x: x.log_softmax(dim=-1),
             lambda x: x.log_softmax(dim=-1),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize("shape", [[(3,)], [(2, 3)], [(1, 2, 3)]])
@@ -275,7 +290,10 @@ class TestOps:
             return nn_cross_entropy(x, y)
 
         _compare_fn_with_torch(
-            shape * 2, lambda x, y: x.cross_entropy_loss_probs(y), torch_fn
+            shape * 2,
+            lambda x, y: x.cross_entropy_loss_probs(y),
+            torch_fn,
+            pq_storage=self.storage,
         )
 
     # batch, classes
@@ -290,7 +308,10 @@ class TestOps:
             return nn_cross_entropy(x, correct_index_torch)
 
         _compare_fn_with_torch(
-            [shape], lambda x: x.cross_entropy_loss_indices(correct_index), torch_fn
+            [shape],
+            lambda x: x.cross_entropy_loss_indices(correct_index),
+            torch_fn,
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -309,6 +330,7 @@ class TestOps:
             [shape],
             lambda x: x.unsqueeze(dim),
             lambda x: x.unsqueeze(dim),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -324,6 +346,7 @@ class TestOps:
             [shape],
             lambda x: x.squeeze(dim),
             lambda x: x.squeeze(dim),
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -337,9 +360,7 @@ class TestOps:
     )
     def test_log(self, shapes):
         _compare_fn_with_torch(
-            shapes,
-            lambda x: x.log(),
-            lambda x: x.log(),
+            shapes, lambda x: x.log(), lambda x: x.log(), pq_storage=self.storage
         )
 
     @pytest.mark.parametrize(
@@ -358,7 +379,9 @@ class TestOps:
         ],
     )
     def test_matmul(self, shapes):
-        _compare_fn_with_torch(shapes, lambda x, y: x @ y, lambda x, y: x @ y)
+        _compare_fn_with_torch(
+            shapes, lambda x, y: x @ y, lambda x, y: x @ y, pq_storage=self.storage
+        )
 
     @pytest.mark.parametrize(
         "data",
@@ -401,6 +424,7 @@ class TestOps:
             arr,
             peq_fn,
             torch_fn,
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -424,7 +448,10 @@ class TestOps:
             return torch.nn.functional.unfold(x, kernel_size, stride=stride)
 
         _compare_fn_with_torch(
-            [shape_input], lambda x: x.unfold(kernel_size, stride=stride), torch_fn
+            [shape_input],
+            lambda x: x.unfold(kernel_size, stride=stride),
+            torch_fn,
+            pq_storage=self.storage,
         )
 
     @pytest.mark.parametrize(
@@ -454,7 +481,7 @@ class TestOps:
             unfolded = x.unfold(kernel_size, stride=stride)
             return unfolded.fold(kernel_size, x.shape[2:], stride=stride)
 
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_storage=self.storage)
 
     @pytest.mark.parametrize(
         "data",
@@ -477,7 +504,7 @@ class TestOps:
         def peq_fn(x):
             return x.max_pool2d(kernel_size)
 
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_storage=self.storage)
 
     @pytest.mark.parametrize(
         "data",
@@ -526,13 +553,7 @@ class TestOps:
         def peq_fn(x):
             return x.std(dim=dim, keepdim=keepdim)
 
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
-
-        def torch_fn(x):
-            return torch.var(x, dim=dim, keepdim=keepdim)
-
-        def peq_fn(x):
-            return x.var(dim=dim, keepdim=keepdim)
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_storage=self.storage)
 
     @pytest.mark.parametrize(
         "data",
@@ -554,4 +575,13 @@ class TestOps:
         def peq_fn(x):
             return x.layer_norm(normalized_shape, eps=eps)
 
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn)
+        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_storage=self.storage)
+
+
+# Run the tests for the different storage types
+class TestOpsNP(_TestOps):
+    storage = "np"
+
+
+class TestOpsCuda(_TestOps):
+    storage = "cuda"
