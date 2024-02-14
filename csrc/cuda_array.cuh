@@ -79,6 +79,7 @@ public:
 
   CudaArray squeeze(axis_t axis) const;
   CudaArray squeeze() const;
+  CudaArray squeeze(axes_t axes) const;
   CudaArray unsqueeze(axis_t axis) const;
   CudaArray unsqueeze(axes_t axes) const;
 

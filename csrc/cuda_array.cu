@@ -351,7 +351,7 @@ CudaArray CudaArray::sum(axes_t axes, bool keepdims) const {
   if (keepdims) {
     return result;
   }
-  return result.squeeze();
+  return result.squeeze(axes);
 }
 
 CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
@@ -386,7 +386,7 @@ CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
   if (keepdims) {
     return out;
   }
-  return out.squeeze();
+  return out.squeeze(axis);
 }
 
 CudaArray CudaArray::max(bool keepdims) const {
@@ -413,7 +413,7 @@ CudaArray CudaArray::max(axes_t axes, bool keepdims) const {
   if (keepdims) {
     return result;
   }
-  return result.squeeze();
+  return result.squeeze(axes);
 }
 
 CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
@@ -446,7 +446,7 @@ CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
   if (keepdims) {
     return out;
   }
-  return out.squeeze();
+  return out.squeeze(axis);
 }
 
 CudaArray CudaArray::squeeze(axis_t axis) const {
@@ -465,6 +465,24 @@ CudaArray CudaArray::squeeze(axis_t axis) const {
   out.shape.erase(out.shape.begin() + axis);
   out.strides.erase(out.strides.begin() + axis);
 
+  return out;
+}
+
+CudaArray CudaArray::squeeze(axes_t _axes) const {
+  CudaArray out(*this);
+  // since axes may not be sorted, we need to sort them first, substituting
+  // negatives first and then sorting
+  axes_t axes = _axes;
+  for (int i = 0; i < axes.size(); i++) {
+    if (axes[i] < 0) {
+      axes[i] = shape.size() + axes[i];
+    }
+  }
+  // squeeze in reverse order
+  std::sort(axes.begin(), axes.end(), std::greater<int>());
+  for (size_t axis : axes) {
+    out = out.squeeze(axis);
+  }
   return out;
 }
 

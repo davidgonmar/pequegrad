@@ -350,6 +350,7 @@ class TestStorage:
             [(2, 3, 5, 8, 9), (2, 3), False],
             [(2, 3, 5, 8, 9), (0, 1, 2, 3, 4), True],
             [(2, 3, 5, 8, 9), (0, 1, 2, 3, 4), False],
+            [(1, 2, 3, 4, 5), 3, False],
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)

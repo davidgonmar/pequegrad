@@ -136,6 +136,9 @@ PYBIND11_MODULE(pequegrad_cu, m) {
                      bool keepdims) { return arr.max(axes, keepdims); })
       .def("squeeze",
            [](const CudaArray &arr, axis_t axis) { return arr.squeeze(axis); })
+      .def("squeeze",
+           [](const CudaArray &arr, axes_t axes) { return arr.squeeze(axes); })
+      .def("squeeze", [](const CudaArray &arr) { return arr.squeeze(); })
       .def("unsqueeze", [](const CudaArray &arr,
                            axis_t axis) { return arr.unsqueeze(axis); })
       .def("unsqueeze", [](const CudaArray &arr,
