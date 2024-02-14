@@ -74,7 +74,7 @@ class CudaStorage(AbstractStorage):
         return self.data.is_contiguous()
 
     def add(self, other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.add(other.data))
+        return CudaStorage(self.data.add(other.data)) if isinstance(other, CudaStorage) else CudaStorage(self.data.add(CudaStorage(other).data))
 
     def __add__(self, other: "CudaStorage") -> "CudaStorage":
         return self.add(other)

@@ -94,7 +94,7 @@ if __name__ == "__main__":
 
     def train(model, X_train, Y_train, X_test, Y_test, epochs=8, batch_size=2048):
         # weights of the network printed
-        optim = SGD(model.parameters(), lr=0.004, weight_decay=0)
+        optim = SGD(model.parameters(), lr=0.004, weight_decay=0, momentum=0.05)
         for epoch in range(epochs):
             for i in range(0, len(X_train), batch_size):
                 # Determine the end index of the current batch
