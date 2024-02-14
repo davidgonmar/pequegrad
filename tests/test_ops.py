@@ -96,8 +96,8 @@ class TestOps:
         shape, dim = data
         _compare_fn_with_torch(
             [shape],
-            lambda x: x.mean(dim=dim),
-            lambda x: x.mean(dim=dim),
+            lambda x: x.mean(dim=dim, keepdim=False),
+            lambda x: x.mean(dim=dim, keepdim=False),
         )
 
     @pytest.mark.parametrize(
@@ -191,8 +191,9 @@ class TestOps:
             [shape],
             lambda x: x.sum(
                 dim=dim,
+                keepdim=False,
             ),
-            lambda x: x.sum(dim=dim),
+            lambda x: x.sum(dim=dim, keepdim=False),
         )
 
     @pytest.mark.parametrize(
@@ -241,8 +242,8 @@ class TestOps:
     def test_max(self, shape):
         _compare_fn_with_torch(
             shape,
-            lambda x: x.max(),
-            lambda x: x.max(),
+            lambda x: x.max(keepdim=False),
+            lambda x: x.max(keepdim=False),
         )
 
     @pytest.mark.parametrize(

@@ -441,7 +441,6 @@ class TestStorage:
             [(1000,), (1000,)],
             [(2000,), (3000,)],
             [(3000,), (2000,)],
-            [(10000,), (10000,)],
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)

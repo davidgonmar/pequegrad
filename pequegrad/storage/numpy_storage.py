@@ -328,10 +328,10 @@ class NumpyStorage(AbstractStorage):
         assert type(self.data) == np.ndarray
         return f"NumpyStorage(npdata={self.data})"
 
-    def max(self, axis: int, keepdims: bool = None) -> "NumpyStorage":
+    def max(self, axis: int, keepdims: bool = False) -> "NumpyStorage":
         return NumpyStorage(np.max(self.data, axis, keepdims=keepdims))
 
-    def mean(self, axis: int, keepdims: bool = None) -> "NumpyStorage":
+    def mean(self, axis: int, keepdims: bool = False) -> "NumpyStorage":
         return NumpyStorage(np.mean(self.data, axis, keepdims=keepdims))
 
     def pow(self, exponent: "NumpyStorage") -> "NumpyStorage":
