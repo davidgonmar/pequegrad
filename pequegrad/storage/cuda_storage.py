@@ -119,7 +119,11 @@ class CudaStorage(AbstractStorage):
         return self.matmul(other)
 
     def div(self, other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.div(other.data))
+        return (
+            CudaStorage(self.data.div(other.data))
+            if isinstance(other, CudaStorage)
+            else CudaStorage(self.data.div(other))
+        )
 
     def __truediv__(self, other: "CudaStorage") -> "CudaStorage":
         return self.div(other)

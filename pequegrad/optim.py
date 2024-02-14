@@ -31,3 +31,40 @@ class SGD:
 
         if zero:
             self.zero()
+
+
+class Adam:
+    def __init__(
+        self,
+        parameters: List[Tensor],
+        lr: float = 0.001,
+        b1 = 0.9,
+        b2 = 0.999,
+        eps=1e-08
+    ):
+        self.params = parameters    
+        self.lr = lr
+        self.b1 = b1
+        self.b2 = b2
+        self.mt_last = [0] * len(parameters)
+        self.vt_last = [0] * len(parameters)
+        self.t = 1
+        self.eps = eps
+
+    def zero(self):
+        for p in self.params:
+            p.zero_grad()
+
+    def step(self, zero: bool = True):
+        for i, p in enumerate(self.params):
+            gt = p.grad.data
+            mt = self.b1 * self.mt_last[i] + (1 - self.b1) * gt
+            vt = self.b2 * self.vt_last[i] + (1 - self.b2) * (gt * gt)
+            mt_hat = mt / (1 - self.b1 ** self.t)
+            vt_hat = vt / (1 - self.b2 ** self.t)
+            self.vt_last[i] = vt
+            self.mt_last[i] = mt
+            p.data -= self.lr * mt_hat / (vt_hat ** 0.5 + self.eps)
+            self.t += 1
+        if zero:
+            self.zero()

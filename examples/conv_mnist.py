@@ -3,7 +3,7 @@ from urllib.request import urlretrieve
 import gzip
 import numpy as np
 from pequegrad.tensor import Tensor
-from pequegrad.optim import SGD
+from pequegrad.optim import Adam
 from pequegrad.modules import Linear, Conv2d
 from pequegrad.context import no_grad
 import argparse
@@ -115,9 +115,9 @@ if __name__ == "__main__":
 
         return X_train, y_train, X_test, y_test
 
-    def train(model, X_train, Y_train, X_test, Y_test, epochs=200, batch_size=32):
+    def train(model, X_train, Y_train, X_test, Y_test, epochs=100, batch_size=128):
         # weights of the network printed
-        optim = SGD(model.parameters(), lr=0.07, momentum=0.9, weight_decay=0.001)
+        optim = Adam(model.parameters(), lr=0.01)
         for epoch in range(epochs):
             indices = np.random.choice(len(X_train), batch_size)
             batch_X = Tensor(X_train[indices], storage="cuda" if CUDA else "np")
