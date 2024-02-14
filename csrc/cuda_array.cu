@@ -8,6 +8,18 @@
 #include <cmath>
 
 #define MAX_THREADS_PER_BLOCK 512
+template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
+  std::stringstream ss;
+  ss << "[";
+  for (size_t i = 0; i < vec.size(); ++i) {
+    ss << vec[i];
+    if (i < vec.size() - 1) {
+      ss << ", ";
+    }
+  }
+  ss << "]";
+  return ss.str();
+}
 
 bool CudaArray::is_contiguous() const {
   if (strides.size() != shape.size()) {
@@ -360,7 +372,7 @@ CudaArray CudaArray::sum(size_t axis, bool keepdims) const {
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
   sum_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides,
                                         d_shape, n_dims, axis);
-  cudaDeviceSynchronize();                                   
+  cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
 
   if (keepdims) {
@@ -488,13 +500,34 @@ CudaArray CudaArray::unsqueeze(size_t axis) const {
   return out;
 }
 
-CudaArray CudaArray::reshape(const shape_t &new_shape) const {
-  const auto total_new = std::accumulate(new_shape.cbegin(), new_shape.cend(),
-                                         1, std::multiplies<int>{});
-  const auto total_old =
-      std::accumulate(shape.cbegin(), shape.cend(), 1, std::multiplies<int>{});
-  if (total_new != total_old)
-    throw std::invalid_argument("got incompatible shapes");
+CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
+  shape_t new_shape(_new_shape.size());
+  size_t total_new = 1;
+
+  int neg_pos = -1;
+  for (size_t i = 0; i < _new_shape.size(); i++) {
+    if (_new_shape[i] < 0) {
+      if (neg_pos != -1) {
+        throw std::runtime_error("Can only specify one unknown dimension");
+      }
+      neg_pos = i;
+    }
+    new_shape[i] = _new_shape[i];
+    total_new *= new_shape[i] == -1 ? 1 : new_shape[i];
+  }
+
+  size_t total_old =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  if (neg_pos != -1) {
+    new_shape[neg_pos] = total_old / total_new;
+    if (total_old % total_new != 0) {
+      throw std::runtime_error("New shape is not compatible with old shape: " +
+                               vec_to_string(shape) + " not compatible with " +
+                               vec_to_string(_new_shape));
+    }
+  }
+
+  total_new = total_old;
 
   CudaArray out(total_new, new_shape);
 

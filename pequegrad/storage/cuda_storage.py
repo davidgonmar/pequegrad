@@ -218,7 +218,7 @@ class CudaStorage(AbstractStorage):
         if len(shape) == 1 and isinstance(shape[0], tuple):
             shape = shape[0]
 
-        return CudaStorage(self.data.reshape(shape))
+        return CudaStorage(self.data.reshape(list(shape)))
 
     def __len__(self) -> int:
         return self.shape[0]
