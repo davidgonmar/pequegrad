@@ -537,8 +537,8 @@ class Unfold(Function):
         self.stride = stride
 
     def forward(self) -> Tensor:
-        unfolded =  self.input.to("np").data.im2col(
-           self.kernel_shape, stride=self.stride
+        unfolded = self.input.to("np").data.im2col(
+            self.kernel_shape, stride=self.stride
         )
         self.ret = Tensor(
             unfolded,

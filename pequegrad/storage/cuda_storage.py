@@ -283,6 +283,6 @@ class CudaStorage(AbstractStorage):
 
     def im2col(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
         raise NotImplementedError
-    
+
     def col2im(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
         raise NotImplementedError

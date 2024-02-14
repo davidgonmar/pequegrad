@@ -144,6 +144,7 @@ class NumpyStorage(AbstractStorage):
                 )
             )
         )
+
     def im2col(self, kernel_shape: Tuple[int, int], stride: int = 1) -> np.ndarray:
         """
         Unfold a numpy array to a 3D array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
@@ -177,13 +178,12 @@ class NumpyStorage(AbstractStorage):
             for j in range(0, out_w):
                 start_j = j * stride
                 end_j = start_j + k_w
-                cols[:, :, i * out_w + j] = x[:, :, start_i:end_i, start_j:end_j].reshape(
-                    batch_size, -1
-                )
+                cols[:, :, i * out_w + j] = x[
+                    :, :, start_i:end_i, start_j:end_j
+                ].reshape(batch_size, -1)
 
         return cols
 
-    
     def col2im(
         self,
         kernel_shape: Tuple[int, int],
@@ -230,7 +230,6 @@ class NumpyStorage(AbstractStorage):
                 )
 
         return out
-
 
     def outer_product(self, other: "NumpyStorage") -> "NumpyStorage":
         return NumpyStorage(np.outer(self.data, other.data))

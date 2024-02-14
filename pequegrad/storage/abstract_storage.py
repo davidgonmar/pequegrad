@@ -163,5 +163,7 @@ class AbstractStorage(ABC):
         pass
 
     @abstractmethod
-    def col2im(self, input_shape: tuple, kernel_size: int, stride: int) -> "AbstractStorage":
+    def col2im(
+        self, input_shape: tuple, kernel_size: int, stride: int
+    ) -> "AbstractStorage":
         pass
