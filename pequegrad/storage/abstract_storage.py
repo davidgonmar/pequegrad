@@ -157,3 +157,11 @@ class AbstractStorage(ABC):
     @abstractmethod
     def el_wise_max(self, other: "AbstractStorage") -> "AbstractStorage":
         pass
+
+    @abstractmethod
+    def im2col(self, kernel_size: int, stride: int) -> "AbstractStorage":
+        pass
+
+    @abstractmethod
+    def col2im(self, input_shape: tuple, kernel_size: int, stride: int) -> "AbstractStorage":
+        pass

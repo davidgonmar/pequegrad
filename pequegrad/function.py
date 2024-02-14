@@ -1,6 +1,5 @@
 from typing import Optional, Set, Tuple, Union
 from .tensor import Tensor
-from .util import im2col, col2im
 from .context import pequegrad_context
 import numpy as np
 
@@ -538,8 +537,8 @@ class Unfold(Function):
         self.stride = stride
 
     def forward(self) -> Tensor:
-        unfolded = im2col(
-            self.input.data.numpy(), self.kernel_shape, stride=self.stride
+        unfolded =  self.input.to("np").data.im2col(
+           self.kernel_shape, stride=self.stride
         )
         self.ret = Tensor(
             unfolded,
@@ -550,8 +549,7 @@ class Unfold(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            folded_grad = col2im(
-                self.ret.grad.data.numpy(),
+            folded_grad = self.ret.grad.to("np").data.col2im(
                 self.kernel_shape,
                 self.input.shape[-2:],
                 stride=self.stride,
@@ -574,8 +572,7 @@ class Fold(Function):
         self.stride = stride
 
     def forward(self) -> Tensor:
-        folded = col2im(
-            self.input.data.numpy(),
+        folded = self.input.to("np").data.col2im(
             self.kernel_shape,
             self.output_shape,
             stride=self.stride,
@@ -589,7 +586,7 @@ class Fold(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            unfolded = im2col(
-                self.ret.grad.data.numpy(), self.kernel_shape, stride=self.stride
+            unfolded = self.ret.grad.to("np").data.im2col(
+                self.kernel_shape, stride=self.stride
             )
             self.input._grad += Tensor(unfolded, storage=self.storage)

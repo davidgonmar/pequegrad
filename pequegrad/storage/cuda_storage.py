@@ -280,3 +280,9 @@ class CudaStorage(AbstractStorage):
             if isinstance(other, CudaStorage)
             else CudaStorage(self.data.el_wise_max(CudaStorage(other).data))
         )
+
+    def im2col(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
+        raise NotImplementedError
+    
+    def col2im(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
+        raise NotImplementedError
