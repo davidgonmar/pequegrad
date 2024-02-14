@@ -137,7 +137,7 @@ CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
                         cudaMemcpyHostToDevice));
   ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
                                  ptr.get(), other.ptr.get(), out.ptr.get());
-
+  cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
   return out;
 }
@@ -208,7 +208,7 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
   ker<<<grid_size, block_size>>>(
       d_first_strides, d_second_strides, d_third_strides, d_shape, shape.size(),
       ptr.get(), second.ptr.get(), third.ptr.get(), out.ptr.get());
-
+  cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
   return out;
 }
@@ -360,6 +360,7 @@ CudaArray CudaArray::sum(size_t axis, bool keepdims) const {
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
   sum_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides,
                                         d_shape, n_dims, axis);
+  cudaDeviceSynchronize();                                   
   CHECK_CUDA(cudaGetLastError());
 
   if (keepdims) {
@@ -415,7 +416,7 @@ CudaArray CudaArray::max(size_t axis, bool keepdims) const {
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
   max_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides,
                                         d_shape, n_dims, axis);
-
+  cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
   if (keepdims) {
     return out;
@@ -594,7 +595,7 @@ CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
   CudaArray out(size, shape);
   ker<<<grid_size, block_size>>>(d_strides, d_shape, n_dims, this->ptr.get(),
                                  out.ptr.get());
-
+  cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
 
   return out;
