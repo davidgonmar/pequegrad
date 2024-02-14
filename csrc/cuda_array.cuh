@@ -77,10 +77,10 @@ public:
   CudaArray max(bool keepdims) const;
   CudaArray max(axes_t axis, bool keepdims) const;
 
-  CudaArray squeeze(size_t axis) const;
+  CudaArray squeeze(axis_t axis) const;
   CudaArray squeeze() const;
-  CudaArray unsqueeze(size_t axis) const;
-  CudaArray unsqueeze(shape_t axes) const;
+  CudaArray unsqueeze(axis_t axis) const;
+  CudaArray unsqueeze(axes_t axes) const;
 
   CudaArray reshape(std::vector<int> &new_shape) const;
 

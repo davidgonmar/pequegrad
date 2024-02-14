@@ -377,7 +377,9 @@ class TestStorage:
             )
 
     # test squeeze
-    @pytest.mark.parametrize("shape", [[(3, 1, 4), 1], [(1, 2, 3), 0]])
+    @pytest.mark.parametrize(
+        "shape", [[(3, 1, 4), 1], [(1, 2, 3), 0], [(3, 2, 1), -1], [(1, 2, 3), -3]]
+    )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_squeeze(self, shape, class_storage):
         shape, axis = shape
@@ -385,7 +387,18 @@ class TestStorage:
         x = class_storage(nparr)
         self._compare_with_numpy(x.squeeze(axis), np.squeeze(nparr, axis))
 
-    @pytest.mark.parametrize("shape", [[(3, 1, 4), 0], [(1, 2, 3), 1]])
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(3, 1, 4), 0],
+            [(1, 2, 3), 1],
+            [(1, 2, 3), 2],
+            [(1, 2, 3), (0, 2)],
+            [(1, 2, 3), (-1, 2)],
+            [(1, 2, 3), (-1, 0)],
+            [(1, 2, 3), (-1, -2)],
+        ],
+    )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_squeeze_invalid(self, shape, class_storage):
         shape, axis = shape
@@ -396,7 +409,16 @@ class TestStorage:
 
     # test unsqueeze
     @pytest.mark.parametrize(
-        "shape", [[(3, 4, 3), 1], [(1, 2, 3), 0], [(1, 2, 3), 2], [(1, 2, 3), (0, 2)]]
+        "shape",
+        [
+            [(3, 4, 3), 1],
+            [(1, 2, 3), 0],
+            [(1, 2, 3), 2],
+            [(1, 2, 3), (0, 2)],
+            [(1, 2, 3), (-1, 2)],
+            [(1, 2, 3), (-1, 0)],
+            [(1, 2, 3), (-1, -2)],
+        ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_expand_dims(self, shape, class_storage):

@@ -135,11 +135,11 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("max", [](const CudaArray &arr, axes_t axes,
                      bool keepdims) { return arr.max(axes, keepdims); })
       .def("squeeze",
-           [](const CudaArray &arr, size_t axis) { return arr.squeeze(axis); })
+           [](const CudaArray &arr, axis_t axis) { return arr.squeeze(axis); })
       .def("unsqueeze", [](const CudaArray &arr,
-                           size_t axis) { return arr.unsqueeze(axis); })
+                           axis_t axis) { return arr.unsqueeze(axis); })
       .def("unsqueeze", [](const CudaArray &arr,
-                           shape_t axes) { return arr.unsqueeze(axes); })
+                           axes_t axes) { return arr.unsqueeze(axes); })
       .def("reshape",
            [](const CudaArray &arr, std::vector<int> new_shape) {
              return arr.reshape(new_shape);

@@ -240,11 +240,7 @@ class TestOps:
         ],
     )
     def test_max(self, shape):
-        _compare_fn_with_torch(
-            shape,
-            lambda x: x.max(keepdim=False),
-            lambda x: x.max(keepdim=False),
-        )
+        _compare_fn_with_torch(shape, lambda x: x.max(), lambda x: x.max())
 
     @pytest.mark.parametrize(
         "shape",

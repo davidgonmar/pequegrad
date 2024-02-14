@@ -449,7 +449,10 @@ CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
   return out.squeeze();
 }
 
-CudaArray CudaArray::squeeze(size_t axis) const {
+CudaArray CudaArray::squeeze(axis_t axis) const {
+  if (axis < 0) {
+    axis = shape.size() + axis;
+  }
   if (shape.size() <= axis)
     throw std::invalid_argument("requested axis is out of bounds");
   if (shape[axis] != 1)
@@ -493,7 +496,7 @@ CudaArray CudaArray::squeeze() const {
   return out;
 }
 
-CudaArray CudaArray::unsqueeze(shape_t axes) const {
+CudaArray CudaArray::unsqueeze(axes_t axes) const {
   CudaArray out(*this);
   for (size_t axis : axes) {
     out = out.unsqueeze(axis);
@@ -501,7 +504,10 @@ CudaArray CudaArray::unsqueeze(shape_t axes) const {
   return out;
 }
 
-CudaArray CudaArray::unsqueeze(size_t axis) const {
+CudaArray CudaArray::unsqueeze(axis_t axis) const {
+  if (axis < 0) {
+    axis = shape.size() + axis + 1;
+  }
   if (axis > shape.size()) {
     throw std::invalid_argument("Axis out of bounds for unsqueeze operation");
   }
