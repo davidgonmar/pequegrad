@@ -48,7 +48,16 @@ public:
 
   CudaArray broadcast_to(const shape_t _shape) const;
   CudaArray binop(const CudaArray &other, binary_op_kernel Ker) const;
+  CudaArray binop(const py::array_t<float> &other, binary_op_kernel Ker) const;
+
   CudaArray ternaryop(const CudaArray &second, const CudaArray &third,
+                      ternary_op_kernel ker) const;
+  CudaArray ternaryop(const py::array_t<float> &second,
+                      const py::array_t<float> &third,
+                      ternary_op_kernel ker) const;
+  CudaArray ternaryop(const CudaArray &second, const py::array_t<float> &third,
+                      ternary_op_kernel ker) const;
+  CudaArray ternaryop(const py::array_t<float> &second, const CudaArray &third,
                       ternary_op_kernel ker) const;
   CudaArray elwiseop(element_wise_op_kernel ker) const;
   float getitem(shape_t index) const;

@@ -91,7 +91,11 @@ CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
                         cudaMemcpyDeviceToDevice));
   return out;
 }
-
+CudaArray CudaArray::binop(const py::array_t<float> &np_array,
+                           binary_op_kernel ker) const {
+  CudaArray other = CudaArray::from_numpy(np_array);
+  return binop(other, ker);
+}
 CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
   if (shape != other.shape) {
     // try to broadcast, from smaller to larger
@@ -137,7 +141,25 @@ CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
   CHECK_CUDA(cudaGetLastError());
   return out;
 }
-
+CudaArray CudaArray::ternaryop(const py::array_t<float> &second,
+                               const py::array_t<float> &third,
+                               ternary_op_kernel ker) const {
+  CudaArray second_arr = CudaArray::from_numpy(second);
+  CudaArray third_arr = CudaArray::from_numpy(third);
+  return ternaryop(second_arr, third_arr, ker);
+}
+CudaArray CudaArray::ternaryop(const CudaArray &second,
+                               const py::array_t<float> &third,
+                               ternary_op_kernel ker) const {
+  CudaArray third_arr = CudaArray::from_numpy(third);
+  return ternaryop(second, third_arr, ker);
+}
+CudaArray CudaArray::ternaryop(const py::array_t<float> &second,
+                               const CudaArray &third,
+                               ternary_op_kernel ker) const {
+  CudaArray second_arr = CudaArray::from_numpy(second);
+  return ternaryop(second_arr, third, ker);
+}
 CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
                                ternary_op_kernel ker) const {
   if (second.shape != third.shape || shape != second.shape ||
@@ -225,13 +247,17 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(1);
     new_shape = {size1, size2};
   } else if (a.ndim() == 1 && b.ndim() == 1) {
-    if (a.shape != b.shape) throw std::invalid_argument("shapes must be equal in vector dot prod");
-    // vector_dot_product_accum accumulates vector_a * vector_b, but if the size is too large, it will not
-    // accumulate all of that into a single value, but rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1
-    // check its implementation for more details
+    if (a.shape != b.shape)
+      throw std::invalid_argument("shapes must be equal in vector dot prod");
+    // vector_dot_product_accum accumulates vector_a * vector_b, but if the size
+    // is too large, it will not accumulate all of that into a single value, but
+    // rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1 check its
+    // implementation for more details
     int new_size = (a.shape.at(0) / MAX_THREADS_PER_BLOCK) + 1;
     CudaArray out(new_size, {(size_t)new_size});
-    vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK, MAX_THREADS_PER_BLOCK * ELEM_SIZE>>>(a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
+    vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK,
+                               MAX_THREADS_PER_BLOCK * ELEM_SIZE>>>(
+        a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
     if (new_size > 1) {

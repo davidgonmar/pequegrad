@@ -2,23 +2,29 @@
 #include <stdio.h>
 // All kernels here assume contiguous (natural) memory
 
-// Similar to https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf.
-// If size exceeds block size, then we need to do a reduction across blocks, kernel caller does that.
-// Kernel computes accumulates vector_a * vector_b. Max accumulation range depends on the maximum block size of the GPU.
-__global__ void vector_dot_product_accum(const float *a, const float *b, float *out, size_t size) {
+// Similar to
+// https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf. If
+// size exceeds block size, then we need to do a reduction across blocks, kernel
+// caller does that. Kernel computes accumulates vector_a * vector_b. Max
+// accumulation range depends on the maximum block size of the GPU.
+__global__ void vector_dot_product_accum(const float *a, const float *b,
+                                         float *out, size_t size) {
   extern __shared__ float shared[]; // declared in kernel call
   const int idx = threadIdx.x;
-  if (idx >= size) return;
-  shared[idx] = a[blockIdx.x * blockDim.x + idx] * b[blockIdx.x * blockDim.x + idx];
+  if (idx >= size)
+    return;
+  shared[idx] =
+      a[blockIdx.x * blockDim.x + idx] * b[blockIdx.x * blockDim.x + idx];
   __syncthreads();
 
   for (int stride = 1; stride < blockDim.x; stride *= 2) {
-    if (idx % (stride * 2)== 0){
+    if (idx % (stride * 2) == 0) {
       shared[idx] += shared[idx + stride];
     }
-     __syncthreads();
+    __syncthreads();
   }
-  if (idx == 0) out[blockIdx.x] = shared[0];
+  if (idx == 0)
+    out[blockIdx.x] = shared[0];
 }
 
 __global__ void matmul_kernel(const float *a, const float *b,

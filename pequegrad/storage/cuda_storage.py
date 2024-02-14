@@ -74,7 +74,11 @@ class CudaStorage(AbstractStorage):
         return self.data.is_contiguous()
 
     def add(self, other: "CudaStorage") -> "CudaStorage":
-        return CudaStorage(self.data.add(other.data)) if isinstance(other, CudaStorage) else CudaStorage(self.data.add(CudaStorage(other).data))
+        return (
+            CudaStorage(self.data.add(other.data))
+            if isinstance(other, CudaStorage)
+            else CudaStorage(self.data.add(other))
+        )
 
     def __add__(self, other: "CudaStorage") -> "CudaStorage":
         return self.add(other)
@@ -86,7 +90,7 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.sub(other.data))
             if isinstance(other, CudaStorage)
-            else CudaStorage(self.data.sub(CudaStorage(other).data))
+            else CudaStorage(self.data.sub(other))
         )
 
     def __sub__(self, other: "CudaStorage") -> "CudaStorage":
@@ -99,7 +103,7 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.mul(other.data))
             if isinstance(other, CudaStorage)
-            else CudaStorage(self.data.mul(CudaStorage(other).data))
+            else CudaStorage(self.data.mul(other))
         )
 
     def __mul__(self, other: "CudaStorage") -> "CudaStorage":
@@ -140,7 +144,7 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.where(condition.data, other.data))
             if isinstance(other, CudaStorage) and isinstance(condition, CudaStorage)
-            else CudaStorage(self.data.where(condition.data, CudaStorage(other).data))
+            else CudaStorage(self.data.where(condition.data, other))
         )
 
     @staticmethod

@@ -8,7 +8,7 @@ class SGD:
         parameters: List[Tensor],
         lr: float = 0.1,
         weight_decay: float = 0.0,
-        momentum: float = 0.0
+        momentum: float = 0.0,
     ):
         self.params = parameters
         self.lr = lr

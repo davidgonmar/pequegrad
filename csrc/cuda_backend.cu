@@ -34,22 +34,40 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, add_kernel);
            })
+      .def("add",
+           [](const CudaArray &arr, const py::array_t<float> np_array) {
+             return arr.binop(np_array, add_kernel);
+           })
       .def("sub",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, sub_kernel);
+           })
+      .def("sub",
+           [](const CudaArray &arr, const py::array_t<float> np_array) {
+             return arr.binop(np_array, sub_kernel);
            })
       .def("mul",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, mult_kernel);
            })
+      .def("mul",
+           [](const CudaArray &arr, const py::array_t<float> np_array) {
+             return arr.binop(np_array, mult_kernel);
+           })
       .def("div",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, div_kernel);
            })
+      .def("div",
+           [](const CudaArray &arr, const py::array_t<float> np_array) {
+             return arr.binop(np_array, div_kernel);
+           })
+
       .def("el_wise_max",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, element_wise_max_kernel);
            })
+
       .def("pow",
            [](const CudaArray &arr, const CudaArray &other) {
              return arr.binop(other, pow_kernel);
@@ -89,6 +107,16 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("where",
            [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
              return cond.ternaryop(a, b, where_kernel);
+           })
+      .def("where",
+           [](const CudaArray &a, const CudaArray &cond,
+              const py::array_t<float> np_array) {
+             return cond.ternaryop(a, np_array, where_kernel);
+           })
+      .def("where",
+           [](const CudaArray &a, const py::array_t<float> np_array,
+              const CudaArray &b) {
+             return a.ternaryop(np_array, b, where_kernel);
            })
       .def("sum", [](const CudaArray &arr, size_t axis,
                      bool keepdims) { return arr.sum(axis, keepdims); })
