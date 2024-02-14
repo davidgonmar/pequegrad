@@ -310,6 +310,21 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
   return out;
 }
 
+CudaArray CudaArray::outer_product(const CudaArray &other) const {
+  if (ndim() != 1 || other.ndim() != 1) {
+    throw std::invalid_argument("got non vectors in outer product:(");
+  }
+  int total_idxs = size * other.size;
+  dim3 grid_size(ceil(total_idxs / (float)DEFAULT_BLOCK_SIZE));
+  shape_t new_shape = {size, other.size};
+  CudaArray out(total_idxs, new_shape);
+  vector_outer_product_kernel<<<grid_size, DEFAULT_BLOCK_SIZE>>>(
+      ptr.get(), other.ptr.get(), out.ptr.get(), size, other.size);
+  cudaDeviceSynchronize();
+  CHECK_CUDA(cudaGetLastError());
+  return out;
+}
+
 CudaArray CudaArray::sum(bool keepdims) const {
   // check if the array is already reduced
   if (std::all_of(shape.begin(), shape.end(),

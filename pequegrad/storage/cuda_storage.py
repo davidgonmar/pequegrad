@@ -164,7 +164,7 @@ class CudaStorage(AbstractStorage):
         )
 
     def outer_product(self, other: "CudaStorage") -> "CudaStorage":
-        raise NotImplementedError
+        return CudaStorage(self.data.outer_product(other.data))
 
     def swapaxes(self, axis1: int, axis2: int) -> "CudaStorage":
         a = list(range(self.ndim))

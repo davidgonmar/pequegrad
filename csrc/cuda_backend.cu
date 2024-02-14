@@ -104,6 +104,10 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("is_contiguous", &CudaArray::is_contiguous)
       .def("matmul", [](const CudaArray &arr,
                         const CudaArray &other) { return arr.mat_mul(other); })
+      .def("outer_product",
+           [](const CudaArray &arr, const CudaArray &other) {
+             return arr.outer_product(other);
+           })
       .def("where",
            [](const CudaArray &a, const CudaArray &cond, const CudaArray &b) {
              return cond.ternaryop(a, b, where_kernel);

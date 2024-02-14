@@ -62,3 +62,18 @@ __global__ void matmul_kernel(const float *a, const float *b,
   }
   out[size1 * size2 * batch + row * size2 + col] = accum;
 }
+
+__global__ void vector_outer_product_kernel(float *a, float *b, float *out,
+                                            size_t m, size_t n) {
+  // vector a -> size m
+  // vector b -> size n
+  // matrix out -> m x n
+  const int idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+  const int curr_m = idx / n;
+  const int curr_n = idx % n;
+
+  if (curr_m >= m || curr_n >= n)
+    return;
+  out[curr_m * n + curr_n] = a[curr_m] * b[curr_n];
+}

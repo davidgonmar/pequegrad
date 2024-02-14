@@ -430,3 +430,24 @@ class TestStorage:
         nparr = np.random.rand(*from_shape).astype(np.float32)
         x = class_storage(nparr)
         self._compare_with_numpy(x.reshape(*to_shape), np.reshape(nparr, to_shape))
+
+    # outer product(vector x vector)
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(3,), (4,)],
+            [(5,), (3,)],
+            [(4,), (4,)],
+            [(1000,), (1000,)],
+            [(2000,), (3000,)],
+            [(3000,), (2000,)],
+            [(10000,), (10000,)],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_outer_product(self, shape, class_storage):
+        nparr = np.random.rand(*shape[0]).astype(np.float32)
+        nparr2 = np.random.rand(*shape[1]).astype(np.float32)
+        x = class_storage(nparr)
+        y = class_storage(nparr2)
+        self._compare_with_numpy(x.outer_product(y), np.outer(nparr, nparr2))

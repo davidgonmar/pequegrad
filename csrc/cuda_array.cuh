@@ -63,6 +63,7 @@ public:
   float getitem(shape_t index) const;
   int ndim() const;
   CudaArray mat_mul(const CudaArray &other) const;
+  CudaArray outer_product(const CudaArray &other) const;
   CudaArray permute(shape_t axes) const;
   CudaArray as_contiguous() const;
   CudaArray sum(size_t axis, bool keepdims) const;
