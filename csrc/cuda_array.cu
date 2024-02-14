@@ -103,6 +103,7 @@ CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
                         cudaMemcpyDeviceToDevice));
   return out;
 }
+
 CudaArray CudaArray::binop(const py::array_t<float> &np_array,
                            binary_op_kernel ker) const {
   CudaArray other = CudaArray::from_numpy(np_array);
@@ -288,10 +289,31 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(2);
     new_shape = {a.shape.at(0), size1, size2};
   } else {
-    std::string error_message =
+    if (a.ndim() >=
+        b.ndim()) { // we will try to broadcast, but keep last to dims
+      shape_t b_new = shape_t(a.shape);
+      b_new[b_new.size() - 1] = b.shape[b.shape.size() - 1];
+      b_new[b_new.size() - 2] = b.shape[b.shape.size() - 2];
+      b = b.broadcast_to(b_new).as_contiguous();
+    } else { // we will try to broadcast, but keep last to dims
+      shape_t a_new = shape_t(b.shape);
+      a_new[a_new.size() - 1] = a.shape[a.shape.size() - 1];
+      a_new[a_new.size() - 2] = a.shape[a.shape.size() - 2];
+      a = a.broadcast_to(a_new).as_contiguous();
+    }
+
+    size1 = a.shape.at(a.ndim() - 2);
+    midsize = a.shape.at(a.ndim() - 1);
+    size2 = b.shape.at(b.ndim() - 1);
+    new_shape = a.shape;
+    new_shape[new_shape.size() - 1] = size2;
+
+    /*std::string error_message =
         "Invalid shapes for matmul, only 1D/2D combinations, 2Dx2D and 1Dx1D "
-        "tensors supported";
-    throw std::runtime_error(error_message);
+        "tensors supported, got shapes: " +
+        vec_to_string(a.shape) + " and " + vec_to_string(b.shape);
+
+    throw std::runtime_error(error_message);*/
   }
 
   int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
