@@ -122,17 +122,17 @@ PYBIND11_MODULE(pequegrad_cu, m) {
               const CudaArray &b) {
              return a.ternaryop(np_array, b, where_kernel);
            })
-      .def("sum", [](const CudaArray &arr, size_t axis,
+      .def("sum", [](const CudaArray &arr, axis_t axis,
                      bool keepdims) { return arr.sum(axis, keepdims); })
       .def("sum", [](const CudaArray &arr,
                      bool keepdims) { return arr.sum(keepdims); })
-      .def("sum", [](const CudaArray &arr, shape_t axes,
+      .def("sum", [](const CudaArray &arr, axes_t axes,
                      bool keepdims) { return arr.sum(axes, keepdims); })
       .def("max", [](const CudaArray &arr,
                      bool keepdims) { return arr.max(keepdims); })
-      .def("max", [](const CudaArray &arr, size_t axis,
+      .def("max", [](const CudaArray &arr, axis_t axis,
                      bool keepdims) { return arr.max(axis, keepdims); })
-      .def("max", [](const CudaArray &arr, shape_t axes,
+      .def("max", [](const CudaArray &arr, axes_t axes,
                      bool keepdims) { return arr.max(axes, keepdims); })
       .def("squeeze",
            [](const CudaArray &arr, size_t axis) { return arr.squeeze(axis); })

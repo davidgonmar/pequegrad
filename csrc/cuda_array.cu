@@ -342,7 +342,7 @@ CudaArray CudaArray::sum(bool keepdims) const {
   return result.squeeze();
 }
 
-CudaArray CudaArray::sum(shape_t axes, bool keepdims) const {
+CudaArray CudaArray::sum(axes_t axes, bool keepdims) const {
   // simply sum along all axes requested
   CudaArray result = *this;
   for (size_t axis : axes) {
@@ -354,9 +354,17 @@ CudaArray CudaArray::sum(shape_t axes, bool keepdims) const {
   return result.squeeze();
 }
 
-CudaArray CudaArray::sum(size_t axis, bool keepdims) const {
+CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().sum(axis, keepdims);
+  }
+  if (axis < 0) {
+    axis = shape.size() + axis;
+  }
+  if (axis >= shape.size()) {
+    throw std::invalid_argument("Axis out of bounds for sum operation, got " +
+                                std::to_string(axis) + " for shape " +
+                                vec_to_string(shape));
   }
   shape_t new_shape = shape;
   new_shape[axis] = 1;
@@ -397,7 +405,7 @@ CudaArray CudaArray::max(bool keepdims) const {
   return result.squeeze();
 }
 
-CudaArray CudaArray::max(shape_t axes, bool keepdims) const {
+CudaArray CudaArray::max(axes_t axes, bool keepdims) const {
   CudaArray result = *this;
   for (size_t axis : axes) {
     result = result.max(axis, true);
@@ -408,9 +416,17 @@ CudaArray CudaArray::max(shape_t axes, bool keepdims) const {
   return result.squeeze();
 }
 
-CudaArray CudaArray::max(size_t axis, bool keepdims) const {
+CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().max(axis, keepdims);
+  }
+  if (axis < 0) {
+    axis = shape.size() + axis;
+  }
+  if (axis >= shape.size()) {
+    throw std::invalid_argument("Axis out of bounds for max operation, got " +
+                                std::to_string(axis) + " for shape " +
+                                vec_to_string(shape));
   }
   shape_t new_shape = shape;
   new_shape[axis] = 1;

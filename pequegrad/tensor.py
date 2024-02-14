@@ -14,7 +14,7 @@ class Tensor:
 
     storage: AbstractStorage
 
-    def __init__(self, data: _ArrayLike, requires_grad=False, storage="np"):
+    def __init__(self, data: _ArrayLike, requires_grad=False, storage="cuda"):
         # Internally, we store the data as a numpy array\
         if isinstance(data, Tensor):
             data = data.numpy() if storage == "np" else data

@@ -26,6 +26,10 @@ typedef void (*ternary_op_kernel)(const size_t *first_strides,
 
 using shape_t = std::vector<size_t>;
 
+// for example, we might want to pass reduction indices around, and they can be
+// neagitve like array.sum(-1)
+using axis_t = int;
+using axes_t = std::vector<axis_t>;
 class CudaArray {
 public:
   bool is_contiguous() const;
@@ -66,12 +70,12 @@ public:
   CudaArray outer_product(const CudaArray &other) const;
   CudaArray permute(shape_t axes) const;
   CudaArray as_contiguous() const;
-  CudaArray sum(size_t axis, bool keepdims) const;
+  CudaArray sum(axis_t axis, bool keepdims) const;
   CudaArray sum(bool keepdims) const;
-  CudaArray sum(shape_t axis, bool keepdims) const;
-  CudaArray max(size_t axis, bool keepdims) const;
+  CudaArray sum(axes_t axes, bool keepdims) const;
+  CudaArray max(axis_t axis, bool keepdims) const;
   CudaArray max(bool keepdims) const;
-  CudaArray max(shape_t axis, bool keepdims) const;
+  CudaArray max(axes_t axis, bool keepdims) const;
 
   CudaArray squeeze(size_t axis) const;
   CudaArray squeeze() const;
