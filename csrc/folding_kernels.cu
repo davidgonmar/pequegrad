@@ -54,8 +54,8 @@ __global__ void col2im_kernel(float *in, float *out, size_t out_channels,
         for (int kx = 0; kx < k_w; kx++) {
           int in_row = ky * k_w + kx + chann * k_w * k_h;
           out[batch * out_channels * out_h * out_w + chann * out_h * out_w +
-              +out_y_offset * out_w + ky * out_w + out_x_offset + kx] +=
-              in[in_row * in_w + col + batch * in_w * in_h];
+              out_y_offset * out_w + ky * out_w + out_x_offset + kx] +=
+              in[batch * in_w * in_h + in_row * in_w + col];
         }
       }
     }

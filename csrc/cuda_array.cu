@@ -24,6 +24,9 @@ template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
 
 // Read numpy storage docs
 CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
+  if (!is_contiguous()) {
+    return as_contiguous().im2col(kernel_shape, stride);
+  }
   if (ndim() != 4)
     throw std::runtime_error("ndim has to be 4 in im2col");
   if (kernel_shape.size() != 2)
@@ -62,6 +65,9 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
 
 CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
                             int stride) const {
+  if (!is_contiguous()) {
+    return as_contiguous().col2im(kernel_shape, out_shape, stride);
+  }
   if (ndim() != 3)
     throw std::runtime_error("ndim has to be 3 in col2im for input");
   if (kernel_shape.size() != 2)
@@ -69,17 +75,15 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
   if (out_shape.size() != 2)
     throw std::invalid_argument("out shape size must be 2");
 
-  float *host = new float[size];
-  CHECK_CUDA(
-      cudaMemcpy(host, ptr.get(), size * ELEM_SIZE, cudaMemcpyDeviceToHost));
-  delete[] host;
   size_t k_h = kernel_shape[0];
   size_t k_w = kernel_shape[1];
   size_t out_h = out_shape[0];
   size_t out_w = out_shape[1];
   size_t in_h = shape[1];
   size_t in_w = shape[2];
+  // out_shape is just (out_h, out_w)
   size_t out_channels = shape[1] / (k_h * k_w);
+
   size_t out_batch_size = shape[0];
   shape_t _out_shape = {out_batch_size, out_channels, out_h, out_w};
   size_t out_size = std::accumulate(_out_shape.begin(), _out_shape.end(), 1,

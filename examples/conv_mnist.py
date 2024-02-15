@@ -31,8 +31,7 @@ if __name__ == "__main__":
             self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3).to(
                 "cuda" if CUDA else "np"
             )
-            self.fc1 = Linear(16 * 5 * 5, 200).to("cuda" if CUDA else "np")
-            self.fc2 = Linear(200, 10).to("cuda" if CUDA else "np")
+            self.fc1 = Linear(16 * 5 * 5, 10).to("cuda" if CUDA else "np")
 
         def forward(self, input):
             input = input.reshape((-1, 1, 28, 28))  # shape: (28, 28)
@@ -43,16 +42,13 @@ if __name__ == "__main__":
                 self.conv2.forward(input).relu().max_pool2d(kernel_size=(2, 2))
             )  # shape: (13, 13) -> (11, 11) -> (5, 5)
             input = input.reshape((-1, 16 * 5 * 5))
-            input = self.fc1.forward(input).relu()
-            input = self.fc2.forward(input)
-            return input
+            return self.fc1.forward(input)
 
         def parameters(self):
             return (
                 self.fc1.parameters()
                 + self.conv1.parameters()
                 + self.conv2.parameters()
-                + self.fc2.parameters()
             )
 
     def download_mnist(path):
@@ -115,9 +111,9 @@ if __name__ == "__main__":
 
         return X_train, y_train, X_test, y_test
 
-    def train(model, X_train, Y_train, X_test, Y_test, epochs=100, batch_size=128):
+    def train(model, X_train, Y_train, X_test, Y_test, epochs=13, batch_size=512):
         # weights of the network printed
-        optim = Adam(model.parameters(), lr=0.01)
+        optim = Adam(model.parameters(), lr=0.033)
         for epoch in range(epochs):
             indices = np.random.choice(len(X_train), batch_size)
             batch_X = Tensor(X_train[indices], storage="cuda" if CUDA else "np")
