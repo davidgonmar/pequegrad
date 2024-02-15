@@ -1,6 +1,7 @@
 from pequegrad.storage import AbstractStorage, NumpyStorage, CudaStorage
 from pequegrad.cuda import CUDA_AVAILABLE
 import pytest
+import torch
 import numpy as np
 
 
@@ -8,13 +9,15 @@ storages_to_test = [NumpyStorage]
 if CUDA_AVAILABLE:
     storages_to_test.append(CudaStorage)
 
+np.random.seed(42)
+
 
 class TestStorage:
-    def _compare_with_numpy(self, x: AbstractStorage, y: np.ndarray):
+    def _compare_with_numpy(self, x: AbstractStorage, y: np.ndarray, test_strides=True):
         assert x.shape == y.shape
-        assert x.strides == y.strides
-
-        print(x.numpy(), "\n ================\n", y)
+        if test_strides:
+            assert x.strides == y.strides
+        print(x.numpy(), "\n", y)
         assert np.allclose(x.numpy(), y)
 
     @pytest.mark.parametrize(
@@ -473,3 +476,38 @@ class TestStorage:
         x = class_storage(nparr)
         y = class_storage(nparr2)
         self._compare_with_numpy(x.outer_product(y), np.outer(nparr, nparr2))
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, kernel_size, stride
+        [
+            [(2, 2, 3, 3), (2, 2), 1],
+            [(2, 2, 3, 3), (2, 2), 2],
+            [(1, 1, 10, 5), (3, 3), 1],
+            [(1, 1, 10, 5), (2, 2), 2],
+            [(1, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (3, 3), 1],
+            [(5, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (5, 5), 1],
+            [(1, 1, 3, 3), (3, 3), 1],
+            [(1, 1, 5, 5), (3, 3), 1],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_im2col(self, data, class_storage):
+        shape_input, kernel_size, stride = data
+
+        nparr = np.random.rand(*shape_input).astype(np.float32)
+        x = class_storage(nparr)
+        x_transformed = x.im2col(kernel_size, stride)
+        x_torch = torch.tensor(nparr)
+        x_torch_transformed = torch.nn.functional.unfold(
+            x_torch, kernel_size, stride=stride
+        )
+        print("original: ", x.numpy())
+        print("transformed: ", x_transformed.numpy())
+        self._compare_with_numpy(
+            x_transformed,
+            x_torch_transformed.numpy().astype(np.float32),
+            test_strides=False,
+        )

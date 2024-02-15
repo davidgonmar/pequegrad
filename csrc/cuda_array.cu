@@ -1,5 +1,6 @@
 #include "binary_ops_kernels.cuh"
 #include "cuda_array.cuh"
+#include "folding_kernels.cuh"
 #include "matmul_kernels.cuh"
 #include "reduce_ops_kernels.cuh"
 #include "ternary_ops_kernels.cuh"
@@ -19,6 +20,44 @@ template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
   }
   ss << "]";
   return ss.str();
+}
+
+// Read numpy storage docs
+CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
+  if (ndim() != 4)
+    throw std::runtime_error("ndim has to be 4 in im2col");
+  if (kernel_shape.size() != 2)
+    throw std::invalid_argument("kernel shape size must be 2");
+  size_t k_h = kernel_shape[0];
+  size_t k_w = kernel_shape[1];
+
+  size_t batch_size = shape[0];
+  size_t in_channels = shape[1];
+  size_t x_h = shape[2];
+  size_t x_w = shape[3];
+
+  size_t out_h = (x_h - k_h) / stride + 1;
+  size_t out_w = (x_w - k_w) / stride + 1;
+
+  assert(out_h > 0 && out_w > 0);
+
+  shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
+  size_t out_size = std::accumulate(out_shape.begin(), out_shape.end(), 1,
+                                    std::multiplies<size_t>());
+
+  CudaArray out(out_size, out_shape);
+
+  int total_iters =
+      batch_size * out_h * out_w; // check kernel code for more details
+  int block_size = DEFAULT_BLOCK_SIZE;
+  int grid_size = ceil(total_iters / (float)block_size);
+  im2col_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), k_h, k_w,
+                                           x_h, x_w, stride, batch_size,
+                                           in_channels);
+
+  cudaDeviceSynchronize();
+  CHECK_CUDA(cudaGetLastError());
+  return out;
 }
 
 bool CudaArray::is_contiguous() const {

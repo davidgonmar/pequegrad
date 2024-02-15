@@ -285,8 +285,8 @@ class CudaStorage(AbstractStorage):
             else CudaStorage(self.data.el_wise_max(CudaStorage(other).data))
         )
 
-    def im2col(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
-        raise NotImplementedError
+    def im2col(self, kernel_size: Tuple[int, int], stride: int) -> "CudaStorage":
+        return CudaStorage(self.data.im2col(kernel_size, stride))
 
     def col2im(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
         raise NotImplementedError

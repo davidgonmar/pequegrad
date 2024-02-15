@@ -145,7 +145,7 @@ class NumpyStorage(AbstractStorage):
             )
         )
 
-    def im2col(self, kernel_shape: Tuple[int, int], stride: int = 1) -> np.ndarray:
+    def im2col(self, kernel_shape: Tuple[int, int], stride: int = 1) -> "NumpyStorage":
         """
         Unfold a numpy array to a 3D array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
         It is equivalent to im2col transposed.
@@ -182,7 +182,7 @@ class NumpyStorage(AbstractStorage):
                     :, :, start_i:end_i, start_j:end_j
                 ].reshape(batch_size, -1)
 
-        return cols
+        return NumpyStorage(cols)
 
     def col2im(
         self,

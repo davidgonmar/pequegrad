@@ -537,9 +537,7 @@ class Unfold(Function):
         self.stride = stride
 
     def forward(self) -> Tensor:
-        unfolded = self.input.to("np").data.im2col(
-            self.kernel_shape, stride=self.stride
-        )
+        unfolded = self.input.data.im2col(self.kernel_shape, stride=self.stride)
         self.ret = Tensor(
             unfolded,
             requires_grad=self.requires_grad,
@@ -586,7 +584,5 @@ class Fold(Function):
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
-            unfolded = self.ret.grad.to("np").data.im2col(
-                self.kernel_shape, stride=self.stride
-            )
+            unfolded = self.ret.grad.data.im2col(self.kernel_shape, stride=self.stride)
             self.input._grad += Tensor(unfolded, storage=self.storage)
