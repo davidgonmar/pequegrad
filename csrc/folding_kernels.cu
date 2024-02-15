@@ -41,22 +41,25 @@ __global__ void col2im_kernel(float *in, float *out, size_t out_channels,
                               size_t batch_size, size_t out_h, size_t out_w,
                               size_t stride) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
-  int batch = idx;
-  if (batch >= batch_size) {
+
+  int batch = idx / out_channels;
+  int channel = idx % out_channels;
+
+  if (batch >= batch_size || channel >= out_channels) {
     return;
   }
+
   int n_horizontal_slides = (out_w - k_w) / stride + 1;
-  for (int chann = 0; chann < out_channels; chann++) {
-    for (int col = 0; col < in_w; col++) {
-      int out_x_offset = col % n_horizontal_slides * stride;
-      int out_y_offset = col / n_horizontal_slides * stride;
-      for (int ky = 0; ky < k_h; ky++) {
-        for (int kx = 0; kx < k_w; kx++) {
-          int in_row = ky * k_w + kx + chann * k_w * k_h;
-          out[batch * out_channels * out_h * out_w + chann * out_h * out_w +
-              out_y_offset * out_w + ky * out_w + out_x_offset + kx] +=
-              in[batch * in_w * in_h + in_row * in_w + col];
-        }
+
+  for (int col = 0; col < in_w; col++) {
+    int out_x_offset = col % n_horizontal_slides * stride;
+    int out_y_offset = col / n_horizontal_slides * stride;
+    for (int ky = 0; ky < k_h; ky++) {
+      for (int kx = 0; kx < k_w; kx++) {
+        int in_row = ky * k_w + kx + channel * k_w * k_h;
+        out[batch * out_channels * out_h * out_w + channel * out_h * out_w +
+            out_y_offset * out_w + ky * out_w + out_x_offset + kx] +=
+            in[batch * in_w * in_h + in_row * in_w + col];
       }
     }
   }
