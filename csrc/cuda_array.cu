@@ -93,7 +93,8 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
 
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   // batch size and out_channels are parallelized
-  dim3 grid_size(ceil(out_batch_size * out_channels / (float)DEFAULT_BLOCK_SIZE));
+  dim3 grid_size(
+      ceil(out_batch_size * out_channels / (float)DEFAULT_BLOCK_SIZE));
   col2im_kernel<<<grid_size, block_size>>>(
       ptr.get(), out.ptr.get(), out_channels, k_h, k_w, in_h, in_w,
       out_batch_size, out_h, out_w, stride);

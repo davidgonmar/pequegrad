@@ -7,6 +7,7 @@ from pequegrad.optim import Adam
 from pequegrad.modules import Linear, Conv2d
 from pequegrad.context import no_grad
 import argparse
+import time
 
 mnist_url = "http://yann.lecun.com/exdb/mnist/"
 
@@ -112,6 +113,7 @@ if __name__ == "__main__":
         return X_train, y_train, X_test, y_test
 
     def train(model, X_train, Y_train, X_test, Y_test, epochs=13, batch_size=512):
+        start = time.time()
         # weights of the network printed
         optim = Adam(model.parameters(), lr=0.033)
         for epoch in range(epochs):
@@ -148,6 +150,7 @@ if __name__ == "__main__":
 
         print(f"Test accuracy: {correct / len(X_test)}")
         print("Got {} / {} correct!".format(correct, len(X_test)))
+        print(f"Time taken: {time.time() - start:.2f}s")
 
     X_train, y_train, X_test, y_test = get_dataset()
 
