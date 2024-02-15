@@ -60,6 +60,41 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   return out;
 }
 
+CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
+                            int stride) const {
+  if (ndim() != 3)
+    throw std::runtime_error("ndim has to be 3 in col2im for input");
+  if (kernel_shape.size() != 2)
+    throw std::invalid_argument("kernel shape size must be 2");
+  if (out_shape.size() != 2)
+    throw std::invalid_argument("out shape size must be 2");
+
+  float *host = new float[size];
+  CHECK_CUDA(
+      cudaMemcpy(host, ptr.get(), size * ELEM_SIZE, cudaMemcpyDeviceToHost));
+  delete[] host;
+  size_t k_h = kernel_shape[0];
+  size_t k_w = kernel_shape[1];
+  size_t out_h = out_shape[0];
+  size_t out_w = out_shape[1];
+  size_t in_h = shape[1];
+  size_t in_w = shape[2];
+  size_t out_channels = shape[1] / (k_h * k_w);
+  size_t out_batch_size = shape[0];
+  shape_t _out_shape = {out_batch_size, out_channels, out_h, out_w};
+  size_t out_size = std::accumulate(_out_shape.begin(), _out_shape.end(), 1,
+                                    std::multiplies<size_t>());
+  CudaArray out(out_size, _out_shape);
+  CHECK_CUDA(cudaMemset(out.ptr.get(), 0, out_size * ELEM_SIZE));
+  col2im_kernel<<<100, DEFAULT_BLOCK_SIZE>>>(
+      ptr.get(), out.ptr.get(), out_channels, k_h, k_w, in_h, in_w,
+      out_batch_size, out_h, out_w, stride);
+
+  cudaDeviceSynchronize();
+  CHECK_CUDA(cudaGetLastError());
+  return out;
+}
+
 bool CudaArray::is_contiguous() const {
   if (strides.size() != shape.size()) {
     return false;

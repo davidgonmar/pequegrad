@@ -288,5 +288,10 @@ class CudaStorage(AbstractStorage):
     def im2col(self, kernel_size: Tuple[int, int], stride: int) -> "CudaStorage":
         return CudaStorage(self.data.im2col(kernel_size, stride))
 
-    def col2im(self, kernel_size: Tuple[int, int]) -> "CudaStorage":
-        raise NotImplementedError
+    def col2im(
+        self,
+        kernel_shape: Tuple[int, int],
+        output_shape: Tuple[int, int],
+        stride: int = 1,
+    ) -> "CudaStorage":
+        return CudaStorage(self.data.col2im(kernel_shape, output_shape, stride))

@@ -17,7 +17,7 @@ class TestStorage:
         assert x.shape == y.shape
         if test_strides:
             assert x.strides == y.strides
-        print(x.numpy(), "\n", y)
+        print(x.numpy(), "\n<========================>\n", y)
         assert np.allclose(x.numpy(), y)
 
     @pytest.mark.parametrize(
@@ -511,3 +511,38 @@ class TestStorage:
             x_torch_transformed.numpy().astype(np.float32),
             test_strides=False,
         )
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, kernel_size
+        [
+            [(2, 2, 3, 3), (2, 2), 1],
+            [(2, 2, 3, 3), (2, 2), 2],
+            [(1, 1, 10, 5), (3, 3), 1],
+            [(1, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (3, 3), 1],
+            [(5, 1, 10, 5), (3, 3), 2],
+            [(5, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (5, 5), 1],
+            [(1, 1, 3, 3), (3, 3), 1],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_col2im(self, data, class_storage):
+        shape_input, kernel_size, stride = data
+
+        nparr = np.random.rand(*shape_input).astype(np.float32)
+        torch_unfolded = torch.nn.functional.unfold(
+            torch.tensor(nparr), kernel_size, stride=stride
+        )
+        torch_folded = (
+            torch.nn.functional.fold(
+                torch_unfolded, shape_input[2:], kernel_size, stride=stride
+            )
+            .detach()
+            .numpy()
+        )
+
+        unfolded = class_storage(torch_unfolded.detach().numpy())
+        folded = unfolded.col2im(kernel_size, shape_input[2:], stride)
+        self._compare_with_numpy(folded, torch_folded, test_strides=False)

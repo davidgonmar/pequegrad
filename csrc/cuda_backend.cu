@@ -151,6 +151,11 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](const CudaArray &arr, shape_t kernel_shape, size_t stride) {
              return arr.im2col(kernel_shape, stride);
            })
+      .def("col2im",
+           [](const CudaArray &arr, shape_t kernel_shape, shape_t output_shape,
+              size_t stride) {
+             return arr.col2im(kernel_shape, output_shape, stride);
+           })
       .def("__getitem__", [](const CudaArray &arr, shape_t index) {
         return arr.getitem(index);
       });

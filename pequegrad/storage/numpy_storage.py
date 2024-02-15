@@ -229,7 +229,7 @@ class NumpyStorage(AbstractStorage):
                     out_batch, out_channels, k_h, k_w
                 )
 
-        return out
+        return NumpyStorage(out)
 
     def outer_product(self, other: "NumpyStorage") -> "NumpyStorage":
         return NumpyStorage(np.outer(self.data, other.data))
