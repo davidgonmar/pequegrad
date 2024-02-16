@@ -22,7 +22,7 @@ There are some examples in the examples directory. You can run them with the fol
 - CNN
 ```python -m examples.conv_mnist --cuda```
 
-The CNN example trains a simple CNN on the MNIST dataset. It reaches 90%+ accuracy in under 4 seconds on a RTX 2070 mobile, with GPU acceleration.
+The CNN example trains a simple CNN on the MNIST dataset. It reaches 90%+ accuracy in about 1.3 seconds on a RTX 4090 GPU, and about 3.6 seconds on a RTX 2070 Mobile laptop GPU, as per my tests.
 
 ### Getting started
 The tensor functionality is very similar to PyTorch's. You can create tensors, perform operations on them, and use the .backward() method to compute the gradients. The gradients are stored in the .grad attribute of the tensor.
