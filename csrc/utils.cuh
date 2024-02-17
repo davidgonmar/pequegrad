@@ -36,3 +36,21 @@ cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
   return cuda_unique_ptr<T>(device_ptr,
                             [](T *ptr) { CHECK_CUDA(cudaFree(ptr)); });
 }
+
+template <typename T, typename... Args>
+void PG_CHECK_ARG(T cond, Args... args) {
+  if (!cond) {
+    std::ostringstream stream;
+    (stream << ... << args);
+    throw std::invalid_argument(stream.str());
+  }
+}
+
+template <typename T, typename... Args>
+void PG_CHECK_RUNTIME(T cond, Args... args) {
+  if (!cond) {
+    std::ostringstream stream;
+    (stream << ... << args);
+    throw std::runtime_error(stream.str());
+  }
+}

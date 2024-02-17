@@ -9,6 +9,7 @@
 #include <cmath>
 
 #define MAX_THREADS_PER_BLOCK 512
+
 template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
   std::stringstream ss;
   ss << "[";
@@ -27,10 +28,10 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   if (!is_contiguous()) {
     return as_contiguous().im2col(kernel_shape, stride);
   }
-  if (ndim() != 4)
-    throw std::runtime_error("ndim has to be 4 in im2col");
-  if (kernel_shape.size() != 2)
-    throw std::invalid_argument("kernel shape size must be 2");
+  PG_CHECK_ARG(ndim() == 4, "ndim has to be 4 in im2col, got shape ",
+               vec_to_string(shape));
+  PG_CHECK_ARG(kernel_shape.size() == 2, "kernel shape size must be 2, got ",
+               vec_to_string(kernel_shape));
   size_t k_h = kernel_shape[0];
   size_t k_w = kernel_shape[1];
 
@@ -42,7 +43,9 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   size_t out_h = (x_h - k_h) / stride + 1;
   size_t out_w = (x_w - k_w) / stride + 1;
 
-  assert(out_h > 0 && out_w > 0);
+  PG_CHECK_RUNTIME(out_h > 0 && out_w > 0,
+                   "output height and width should be > 0, got out_h=", out_h,
+                   " and out_w=", out_w);
 
   shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
   size_t out_size = std::accumulate(out_shape.begin(), out_shape.end(), 1,
@@ -68,12 +71,13 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
   if (!is_contiguous()) {
     return as_contiguous().col2im(kernel_shape, out_shape, stride);
   }
-  if (ndim() != 3)
-    throw std::runtime_error("ndim has to be 3 in col2im for input");
-  if (kernel_shape.size() != 2)
-    throw std::invalid_argument("kernel shape size must be 2");
-  if (out_shape.size() != 2)
-    throw std::invalid_argument("out shape size must be 2");
+
+  PG_CHECK_ARG(ndim() == 3, "ndim has to be 3 in col2im, got shape ",
+               vec_to_string(shape));
+  PG_CHECK_ARG(kernel_shape.size() == 2, "kernel shape size must be 2, got ",
+               vec_to_string(kernel_shape));
+  PG_CHECK_ARG(out_shape.size() == 2, "out shape size must be 2, got ",
+               vec_to_string(out_shape));
 
   size_t k_h = kernel_shape[0];
   size_t k_w = kernel_shape[1];
@@ -81,6 +85,7 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
   size_t out_w = out_shape[1];
   size_t in_h = shape[1];
   size_t in_w = shape[2];
+
   // out_shape is just (out_h, out_w)
   size_t out_channels = shape[1] / (k_h * k_w);
 
@@ -155,11 +160,9 @@ CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
   const int to_ndim = (const int)shape_to.size();
   // cannot broadcast if the number of dimensions of the from array is greater
   // than the number of dimensions of the to array
-  if (from_ndim > to_ndim) {
-    throw std::runtime_error("got incompatible shapes, to_ndim < from_ndim: " +
-                             std::to_string(to_ndim) + " < " +
-                             std::to_string(from_ndim));
-  }
+  PG_CHECK_ARG(from_ndim <= to_ndim,
+               "from_ndim must be <= to_ndim, trying to broadcast from ",
+               vec_to_string(shape_from), " to ", vec_to_string(shape_to));
 
   int new_size = 1;
   shape_t new_strides(to_ndim, 0);
@@ -169,13 +172,13 @@ CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
     py::ssize_t dim_from =
         (j >= 0) ? shape_from[j]
                  : -1; // -1 means we 'ran' out of dimensions for j
-    if (dim_to != dim_from && dim_from != 1 && dim_from != -1) {
-      // we can only 'broadcast' a dimension if dim_from == 1 or we ran out of
-      // dimensions.
-      throw std::runtime_error("got incompatible shapes, dim_to != dim_from: " +
-                               std::to_string(dim_to) +
-                               " != " + std::to_string(dim_from));
-    }
+
+    PG_CHECK_ARG(dim_to == dim_from || dim_from == 1 || dim_from == -1,
+                 "got incompatible shapes: ", vec_to_string(shape_from),
+                 " cannot be broadcasted to ", vec_to_string(shape_to),
+                 ". In dimension ", i, " got dim_to=", dim_to,
+                 " and dim_from=", dim_from);
+
     if (dim_from != 1 && dim_from != -1) {
       new_strides[i] = strides[j];
     }
@@ -221,18 +224,17 @@ CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
   // Default stride calculation
   CudaArray out(size, shape);
   size_t n_dims = shape.size();
-  size_t *d_strides, *d_other_strides, *d_shape;
-  CHECK_CUDA(cudaMalloc(&d_strides, n_dims * sizeof(size_t)));
-  CHECK_CUDA(cudaMalloc(&d_other_strides, n_dims * sizeof(size_t)));
-  CHECK_CUDA(cudaMalloc(&d_shape, n_dims * sizeof(size_t)));
-  CHECK_CUDA(cudaMemcpy(d_strides, strides.data(), n_dims * sizeof(size_t),
-                        cudaMemcpyHostToDevice));
-  CHECK_CUDA(cudaMemcpy(d_other_strides, other.strides.data(),
-                        n_dims * sizeof(size_t), cudaMemcpyHostToDevice));
-  CHECK_CUDA(cudaMemcpy(d_shape, shape.data(), n_dims * sizeof(size_t),
-                        cudaMemcpyHostToDevice));
-  ker<<<grid_size, block_size>>>(d_strides, d_other_strides, d_shape, n_dims,
-                                 ptr.get(), other.ptr.get(), out.ptr.get());
+
+  cuda_unique_ptr<size_t> d_strides =
+      cuda_unique_ptr_from_host(n_dims, strides.data());
+  cuda_unique_ptr<size_t> d_other_strides =
+      cuda_unique_ptr_from_host(n_dims, other.strides.data());
+  cuda_unique_ptr<size_t> d_shape =
+      cuda_unique_ptr_from_host(n_dims, shape.data());
+
+  ker<<<grid_size, block_size>>>(d_strides.get(), d_other_strides.get(),
+                                 d_shape.get(), n_dims, ptr.get(),
+                                 other.ptr.get(), out.ptr.get());
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
   return out;
@@ -304,15 +306,15 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
 }
 
 float CudaArray::getitem(shape_t index) const {
-  if (index.size() != shape.size()) {
-    throw std::runtime_error("Index dimension mismatch");
-  }
+  PG_CHECK_ARG(index.size() == shape.size(),
+               "index size must be equal to shape size, got ", index.size(),
+               " and ", shape.size());
   // Calculate the offset for the multi-dimensional index
   size_t offset = 0;
   for (size_t i = 0; i < index.size(); i++) {
-    if (index[i] < 0 || index[i] >= shape[i]) {
-      throw std::runtime_error("Index out of bounds");
-    }
+    PG_CHECK_ARG(index[i] < shape[i] && index[i] >= 0,
+                 "index out of bounds, got ", index[i], " for shape ",
+                 vec_to_string(shape));
     offset += index[i] * strides[i] / ELEM_SIZE; // since strides are in bytes,
     // we need to divide by ELEM_SIZE to get the correct offset
   }
@@ -337,8 +339,9 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(1);
     new_shape = {size1, size2};
   } else if (a.ndim() == 1 && b.ndim() == 1) {
-    if (a.shape != b.shape)
-      throw std::invalid_argument("shapes must be equal in vector dot prod");
+    PG_CHECK_ARG(a.shape == b.shape,
+                 "shapes must be equal in vector dot prod, got ",
+                 vec_to_string(a.shape), " and ", vec_to_string(b.shape));
     // vector_dot_product_accum accumulates vector_a * vector_b, but if the size
     // is too large, it will not accumulate all of that into a single value, but
     // rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1 check its
@@ -390,13 +393,6 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(b.ndim() - 1);
     new_shape = a.shape;
     new_shape[new_shape.size() - 1] = size2;
-
-    /*std::string error_message =
-        "Invalid shapes for matmul, only 1D/2D combinations, 2Dx2D and 1Dx1D "
-        "tensors supported, got shapes: " +
-        vec_to_string(a.shape) + " and " + vec_to_string(b.shape);
-
-    throw std::runtime_error(error_message);*/
   }
 
   int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
@@ -416,9 +412,9 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
 }
 
 CudaArray CudaArray::outer_product(const CudaArray &other) const {
-  if (ndim() != 1 || other.ndim() != 1) {
-    throw std::invalid_argument("got non vectors in outer product:(");
-  }
+  PG_CHECK_ARG(ndim() == 1 && other.ndim() == 1,
+               "got non vectors in outer product, shapes: ",
+               vec_to_string(shape), " and ", vec_to_string(other.shape));
   int total_idxs = size * other.size;
   dim3 grid_size(ceil(total_idxs / (float)DEFAULT_BLOCK_SIZE));
   shape_t new_shape = {size, other.size};
@@ -463,14 +459,12 @@ CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().sum(axis, keepdims);
   }
+  // if axis is negative, we need to convert it to a positive axis
   if (axis < 0) {
     axis = shape.size() + axis;
   }
-  if (axis >= shape.size()) {
-    throw std::invalid_argument("Axis out of bounds for sum operation, got " +
-                                std::to_string(axis) + " for shape " +
-                                vec_to_string(shape));
-  }
+  PG_CHECK_ARG(axis < shape.size(), "axis out of bounds, got ", axis,
+               " for shape ", vec_to_string(shape));
   shape_t new_shape = shape;
   new_shape[axis] = 1;
   size_t new_size = size / shape[axis];
@@ -525,14 +519,13 @@ CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().max(axis, keepdims);
   }
+  // if axis is negative, we need to convert it to a positive axis
   if (axis < 0) {
     axis = shape.size() + axis;
   }
-  if (axis >= shape.size()) {
-    throw std::invalid_argument("Axis out of bounds for max operation, got " +
-                                std::to_string(axis) + " for shape " +
-                                vec_to_string(shape));
-  }
+
+  PG_CHECK_ARG(axis < shape.size(), "axis out of bounds, got ", axis,
+               " for shape ", vec_to_string(shape));
   shape_t new_shape = shape;
   new_shape[axis] = 1;
   size_t new_size = size / shape[axis];
@@ -558,15 +551,13 @@ CudaArray CudaArray::squeeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis;
   }
-  if (shape.size() <= axis)
-    throw std::invalid_argument("requested axis is out of bounds");
-  if (shape[axis] != 1)
-    throw std::invalid_argument(
-        "cannot squeeze on a dimension that is not 1, got " +
-        std::to_string(shape[axis]));
+  PG_CHECK_ARG(axis < shape.size(), "axis out of bounds, got ", axis,
+               " for shape ", vec_to_string(shape));
+  PG_CHECK_ARG(shape[axis] == 1,
+               "cannot squeeze on a dimension that is not 1, got ", shape[axis],
+               " in axis number ", axis, " for shape ", vec_to_string(shape));
 
   CudaArray out(*this);
-
   out.shape.erase(out.shape.begin() + axis);
   out.strides.erase(out.strides.begin() + axis);
 
@@ -631,9 +622,8 @@ CudaArray CudaArray::unsqueeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis + 1;
   }
-  if (axis > shape.size()) {
-    throw std::invalid_argument("Axis out of bounds for unsqueeze operation");
-  }
+  PG_CHECK_ARG(axis <= shape.size(), "axis out of bounds, got ", axis,
+               " for shape ", vec_to_string(shape));
   CudaArray out(*this);
   out.shape.insert(out.shape.begin() + axis, 1);
   size_t new_stride =
@@ -649,9 +639,10 @@ CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
   int neg_pos = -1;
   for (size_t i = 0; i < _new_shape.size(); i++) {
     if (_new_shape[i] < 0) {
-      if (neg_pos != -1) {
-        throw std::runtime_error("Can only specify one unknown dimension");
-      }
+      PG_CHECK_ARG(
+          neg_pos == -1,
+          "Can only specify one unknown dimension (-1) for reshape, got ",
+          neg_pos, " and ", i, " for shape ", vec_to_string(_new_shape));
       neg_pos = i;
     }
     new_shape[i] = _new_shape[i];
@@ -662,11 +653,10 @@ CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
   if (neg_pos != -1) {
     new_shape[neg_pos] = total_old / total_new;
-    if (total_old % total_new != 0) {
-      throw std::runtime_error("New shape is not compatible with old shape: " +
-                               vec_to_string(shape) + " not compatible with " +
-                               vec_to_string(_new_shape));
-    }
+    PG_CHECK_ARG(
+        total_old % total_new == 0,
+        "New shape is not compatible with old shape: ", vec_to_string(shape),
+        " not compatible with ", vec_to_string(_new_shape));
   }
 
   total_new = total_old;
@@ -772,10 +762,9 @@ CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
 CudaArray CudaArray::as_contiguous() const { return elwiseop(copy_kernel); }
 
 CudaArray CudaArray::permute(shape_t axes) const {
-  // TODO - check that axes is from 0 to shape.size - 1, in any order
-  if (axes.size() != shape.size()) {
-    throw std::runtime_error("axes must have same size as shape");
-  }
+  PG_CHECK_ARG(axes.size() == shape.size(),
+               "axes must have same size as shape, got ", axes.size(), " and ",
+               shape.size());
   shape_t new_shape(shape.size());
   shape_t new_strides(strides.size());
 
