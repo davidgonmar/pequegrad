@@ -69,3 +69,34 @@ class TestModules:
 
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
+
+    def test_to(self):
+        m = Linear(2, 1)
+        # simulate copy until implemented
+        m2 = Linear(2, 1)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "model.pkl")
+            m.save(path)
+            m2.load(path)
+            m2.to("cuda")
+            for p1, p2 in zip(m.parameters(), m2.parameters()):
+                assert p1.storage_type == "np"
+                assert p2.storage_type == "cuda"
+                np.testing.assert_allclose(p1.numpy(), p2.numpy())
+        m2.to("cuda")
+        for p1, p2 in zip(m.parameters(), m2.parameters()):
+            assert p1.storage_type == "np"
+            assert p2.storage_type == "cuda"
+            np.testing.assert_allclose(p1.numpy(), p2.numpy())
+
+        m2.to("np")
+        for p1, p3 in zip(m.parameters(), m2.parameters()):
+            assert p1.storage_type == "np"
+            assert p3.storage_type == "np"
+            np.testing.assert_allclose(p1.numpy(), p3.numpy())
+
+        m2.to("cuda")
+        for p1, p4 in zip(m.parameters(), m2.parameters()):
+            assert p1.storage_type == "np"
+            assert p4.storage_type == "cuda"
+            np.testing.assert_allclose(p1.numpy(), p4.numpy())

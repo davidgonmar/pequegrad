@@ -1,15 +1,8 @@
-import os
-from urllib.request import urlretrieve
-import gzip
 import numpy as np
 from pequegrad.modules import Linear, Conv2d, Module
-
-CUDA = True
+from pequegrad.extra.mnist import get_mnist_dataset
 from pequegrad.tensor import Tensor
 
-mnist_url = "http://yann.lecun.com/exdb/mnist/"
-
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 modelpath = "conv_mnist_model.pkl"
 
@@ -17,13 +10,9 @@ modelpath = "conv_mnist_model.pkl"
 class ConvNet(Module):
     def __init__(self):
         # input size = 28x28
-        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3).to(
-            "cuda" if CUDA else "np"
-        )
-        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3).to(
-            "cuda" if CUDA else "np"
-        )
-        self.fc1 = Linear(16 * 5 * 5, 10).to("cuda" if CUDA else "np")
+        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3)
+        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3)
+        self.fc1 = Linear(16 * 5 * 5, 10)
 
     def forward(self, input):
         input = input.reshape((-1, 1, 28, 28))  # shape: (28, 28)
@@ -41,68 +30,11 @@ model = ConvNet()
 
 model.load(modelpath)
 
+CUDA = model.parameters()[0].storage_type == "cuda"
 
-def download_mnist(path):
-    """Download MNIST dataset to path"""
-    mnist_path = os.path.join(path, "MNIST")
-    if not os.path.exists(mnist_path):
-        os.makedirs(mnist_path)
-    for name in [
-        "train-images-idx3-ubyte.gz",
-        "train-labels-idx1-ubyte.gz",
-        "t10k-images-idx3-ubyte.gz",
-        "t10k-labels-idx1-ubyte.gz",
-    ]:
-        urlretrieve(mnist_url + name, os.path.join(mnist_path, name))
+print(f"Using {'CUDA' if CUDA else 'CPU'} for computations")
 
-
-def get_dataset():
-    """Get MNIST dataset from path"""
-
-    # first, check if the dataset exists in path
-    if not os.path.exists(os.path.join(DATA_PATH, "MNIST")):
-        # if not, download the dataset
-        download_mnist(DATA_PATH)
-
-    files = [
-        "train-images-idx3-ubyte.gz",
-        "train-labels-idx1-ubyte.gz",
-        "t10k-images-idx3-ubyte.gz",
-        "t10k-labels-idx1-ubyte.gz",
-    ]
-
-    # check if all the files are present
-    for name in files:
-        if not os.path.exists(os.path.join(DATA_PATH, "MNIST", name)):
-            download_mnist(DATA_PATH)
-            break
-
-    # load the dataset
-    with gzip.open(
-        os.path.join(DATA_PATH, "MNIST", "train-images-idx3-ubyte.gz"), "rb"
-    ) as f:
-        X_train = (
-            np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28) / 255.0
-        )
-    with gzip.open(
-        os.path.join(DATA_PATH, "MNIST", "train-labels-idx1-ubyte.gz"), "rb"
-    ) as f:
-        y_train = np.frombuffer(f.read(), np.uint8, offset=8)
-    with gzip.open(
-        os.path.join(DATA_PATH, "MNIST", "t10k-images-idx3-ubyte.gz"), "rb"
-    ) as f:
-        X_test = (
-            np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28) / 255.0
-        )
-    with gzip.open(
-        os.path.join(DATA_PATH, "MNIST", "t10k-labels-idx1-ubyte.gz"), "rb"
-    ) as f:
-        y_test = np.frombuffer(f.read(), np.uint8, offset=8)
-
-    return X_train, y_train, X_test, y_test
-
-
-X_train, Y_train, X_test, Y_test = get_dataset()
+X_train, Y_train, X_test, Y_test = get_mnist_dataset()
 
 batch_size = 512
 

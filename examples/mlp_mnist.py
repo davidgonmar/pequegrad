@@ -1,6 +1,4 @@
-import os
-from urllib.request import urlretrieve
-import gzip
+from pequegrad.extra.mnist import get_mnist_dataset
 import numpy as np
 from pequegrad.tensor import Tensor
 from pequegrad.optim import SGD
@@ -9,10 +7,6 @@ from pequegrad.context import no_grad
 import argparse
 import cProfile
 import pstats
-
-mnist_url = "http://yann.lecun.com/exdb/mnist/"
-
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a simple MLP on MNIST")
@@ -37,60 +31,6 @@ if __name__ == "__main__":
         def zero_grad(self):
             self.fc1.zero_grad()
             self.fc2.zero_grad()
-
-    def download_mnist(path):
-        """Download MNIST dataset to path"""
-        mnist_path = os.path.join(path, "MNIST")
-        if not os.path.exists(mnist_path):
-            os.makedirs(mnist_path)
-        for name in [
-            "train-images-idx3-ubyte.gz",
-            "train-labels-idx1-ubyte.gz",
-            "t10k-images-idx3-ubyte.gz",
-            "t10k-labels-idx1-ubyte.gz",
-        ]:
-            urlretrieve(mnist_url + name, os.path.join(mnist_path, name))
-
-    def get_dataset():
-        """Get MNIST dataset from path"""
-
-        # first, check if the dataset exists in path
-        if not os.path.exists(os.path.join(DATA_PATH, "MNIST")):
-            # if not, download the dataset
-            download_mnist(DATA_PATH)
-
-        files = [
-            "train-images-idx3-ubyte.gz",
-            "train-labels-idx1-ubyte.gz",
-            "t10k-images-idx3-ubyte.gz",
-            "t10k-labels-idx1-ubyte.gz",
-        ]
-
-        # check if all the files are present
-        for name in files:
-            if not os.path.exists(os.path.join(DATA_PATH, "MNIST", name)):
-                download_mnist(DATA_PATH)
-                break
-
-        # load the dataset
-        with gzip.open(
-            os.path.join(DATA_PATH, "MNIST", "train-images-idx3-ubyte.gz"), "rb"
-        ) as f:
-            X_train = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28)
-        with gzip.open(
-            os.path.join(DATA_PATH, "MNIST", "train-labels-idx1-ubyte.gz"), "rb"
-        ) as f:
-            y_train = np.frombuffer(f.read(), np.uint8, offset=8)
-        with gzip.open(
-            os.path.join(DATA_PATH, "MNIST", "t10k-images-idx3-ubyte.gz"), "rb"
-        ) as f:
-            X_test = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28)
-        with gzip.open(
-            os.path.join(DATA_PATH, "MNIST", "t10k-labels-idx1-ubyte.gz"), "rb"
-        ) as f:
-            y_test = np.frombuffer(f.read(), np.uint8, offset=8)
-
-        return X_train, y_train, X_test, y_test
 
     def train(model, X_train, Y_train, X_test, Y_test, epochs=8, batch_size=2048):
         # weights of the network printed
@@ -138,7 +78,7 @@ if __name__ == "__main__":
         print(f"Test accuracy: {correct / len(X_test)}")
         print("Got {} / {} correct!".format(correct, len(X_test)))
 
-    X_train, y_train, X_test, y_test = get_dataset()
+    X_train, y_train, X_test, y_test = get_mnist_dataset()
 
     profiler = cProfile.Profile()
 
