@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 
+#include "reduce_ops_kernels.cuh"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -93,4 +94,7 @@ public:
   std::string to_string() const;
 
 private:
+  CudaArray reduce(reduction_kernel ker, axes_t axes, bool keepdims) const;
+  CudaArray reduce(reduction_kernel ker, axis_t axis, bool keepdims) const;
+  CudaArray reduce(reduction_kernel ker, bool keepdims) const;
 };

@@ -1,10 +1,8 @@
 #include "reduce_ops_kernels.cuh"
-#include "utils.cuh"
-#include <stdio.h>
 
 struct SumOp {
   __device__ float apply(float a, float b) { return a + b; }
-  __device__ float initial_value() { return 0; }
+  __device__ float initial_value() { return 0.0f; }
 };
 
 struct MaxOp {

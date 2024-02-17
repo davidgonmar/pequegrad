@@ -426,38 +426,10 @@ CudaArray CudaArray::outer_product(const CudaArray &other) const {
   return out;
 }
 
-CudaArray CudaArray::sum(bool keepdims) const {
-  // check if the array is already reduced
-  if (std::all_of(shape.begin(), shape.end(),
-                  [](size_t i) { return i == 1; })) {
-    return *this;
-  }
-  // simply sum along all axes
-  CudaArray result = *this;
-  for (size_t axis = 0; axis < shape.size(); ++axis) {
-    result = result.sum(axis, true);
-  }
-  if (keepdims) {
-    return result;
-  }
-  return result.squeeze();
-}
-
-CudaArray CudaArray::sum(axes_t axes, bool keepdims) const {
-  // simply sum along all axes requested
-  CudaArray result = *this;
-  for (size_t axis : axes) {
-    result = result.sum(axis, true);
-  }
-  if (keepdims) {
-    return result;
-  }
-  return result.squeeze(axes);
-}
-
-CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
+CudaArray CudaArray::reduce(reduction_kernel ker, axis_t axis,
+                            bool keepdims) const {
   if (!is_contiguous()) {
-    return as_contiguous().sum(axis, keepdims);
+    return as_contiguous().reduce(ker, axis, keepdims);
   }
   // if axis is negative, we need to convert it to a positive axis
   if (axis < 0) {
@@ -470,81 +442,67 @@ CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
   size_t new_size = size / shape[axis];
   size_t n_dims = shape.size();
   CudaArray out(new_size, new_shape);
-
   cuda_unique_ptr<size_t> d_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());
   cuda_unique_ptr<size_t> d_shape =
       cuda_unique_ptr_from_host(n_dims, shape.data());
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
-  sum_kernel<<<grid_size, block_size>>>(
-      ptr.get(), out.ptr.get(), d_strides.get(), d_shape.get(), n_dims, axis);
+  ker<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides.get(),
+                                 d_shape.get(), n_dims, axis);
   cudaDeviceSynchronize();
   CHECK_CUDA(cudaGetLastError());
-
   if (keepdims) {
     return out;
   }
   return out.squeeze(axis);
+}
+
+CudaArray CudaArray::reduce(reduction_kernel ker, axes_t axes,
+                            bool keepdims) const {
+  CudaArray out = *this;
+  for (size_t axis : axes) {
+    out = out.reduce(ker, axis, true);
+  }
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze(axes);
+}
+
+CudaArray CudaArray::reduce(reduction_kernel ker, bool keepdims) const {
+  CudaArray out = *this;
+  for (size_t axis = 0; axis < shape.size(); ++axis) {
+    out = out.reduce(ker, axis, true);
+  }
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze();
 }
 
 CudaArray CudaArray::max(bool keepdims) const {
-  // check if the array is already reduced
-  if (std::all_of(shape.begin(), shape.end(),
-                  [](size_t i) { return i == 1; })) {
-    return *this;
-  }
-  CudaArray result = *this;
-  for (size_t axis = 0; axis < shape.size(); ++axis) {
-    result = result.max(axis, true);
-  }
-  if (keepdims) {
-    return result;
-  }
-  return result.squeeze();
+  return reduce(max_kernel, keepdims);
 }
 
 CudaArray CudaArray::max(axes_t axes, bool keepdims) const {
-  CudaArray result = *this;
-  for (size_t axis : axes) {
-    result = result.max(axis, true);
-  }
-  if (keepdims) {
-    return result;
-  }
-  return result.squeeze(axes);
+  return reduce(max_kernel, axes, keepdims);
 }
 
 CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
-  if (!is_contiguous()) {
-    return as_contiguous().max(axis, keepdims);
-  }
-  // if axis is negative, we need to convert it to a positive axis
-  if (axis < 0) {
-    axis = shape.size() + axis;
-  }
+  return reduce(max_kernel, axis, keepdims);
+}
 
-  PG_CHECK_ARG(axis < shape.size(), "axis out of bounds, got ", axis,
-               " for shape ", vec_to_string(shape));
-  shape_t new_shape = shape;
-  new_shape[axis] = 1;
-  size_t new_size = size / shape[axis];
-  size_t n_dims = shape.size();
-  CudaArray out(new_size, new_shape);
-  cuda_unique_ptr<size_t> d_strides =
-      cuda_unique_ptr_from_host(n_dims, strides.data());
-  cuda_unique_ptr<size_t> d_shape =
-      cuda_unique_ptr_from_host(n_dims, shape.data());
-  dim3 block_size(DEFAULT_BLOCK_SIZE);
-  dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
-  max_kernel<<<grid_size, block_size>>>(
-      ptr.get(), out.ptr.get(), d_strides.get(), d_shape.get(), n_dims, axis);
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
-  if (keepdims) {
-    return out;
-  }
-  return out.squeeze(axis);
+CudaArray CudaArray::sum(bool keepdims) const {
+  return reduce(sum_kernel, keepdims);
+}
+
+CudaArray CudaArray::sum(axes_t axes, bool keepdims) const {
+  return reduce(sum_kernel, axes, keepdims);
+}
+
+CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
+  return reduce(sum_kernel, axis, keepdims);
 }
 
 CudaArray CudaArray::squeeze(axis_t axis) const {
