@@ -7,6 +7,7 @@
 #include "unary_ops_kernels.cuh"
 #include "utils.cuh"
 #include <cmath>
+#include <iostream>
 
 #define MAX_THREADS_PER_BLOCK 512
 
@@ -347,13 +348,18 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     // rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1 check its
     // implementation for more details
     int new_size = (a.shape.at(0) / MAX_THREADS_PER_BLOCK) + 1;
+    // check if size > 1
+    std::cout << "new_size: " << new_size << std::endl;
     CudaArray out(new_size, {(size_t)new_size});
     vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK,
                                MAX_THREADS_PER_BLOCK * ELEM_SIZE>>>(
         a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
+
     if (new_size > 1) {
+      // print the vector
+      // if size > 1, we need to reduce the vector to a single value
       return out.sum(false);
     }
     return out.squeeze();
@@ -562,7 +568,6 @@ CudaArray CudaArray::squeeze() const {
       j++;
     }
   }
-
   out.shape = new_shape;
   out.strides = new_strides;
   return out;

@@ -248,9 +248,9 @@ class TestStorage:
             [(3,), (3,)],  # vector x vector dot
             [(200,), (200,)],
             [
-                (1000,),
-                (1000,),
-            ],  # this one is flaky???? there seems to be some sort of precision issue
+                (513,),
+                (513,),
+            ],
             [(500000,), (500000,)],
         ],
     )  # (from, to)

@@ -11,10 +11,16 @@ __global__ void vector_dot_product_accum(const float *a, const float *b,
                                          float *out, size_t size) {
   extern __shared__ float shared[]; // declared in kernel call
   const int idx = threadIdx.x;
-  if (idx >= size)
-    return;
-  shared[idx] =
-      a[blockIdx.x * blockDim.x + idx] * b[blockIdx.x * blockDim.x + idx];
+
+  // only compute product if we are within size
+  // else just set to 0, since uninitialized memory is undefined
+  if (blockIdx.x * blockDim.x + idx < size) {
+    shared[idx] =
+        a[blockIdx.x * blockDim.x + idx] * b[blockIdx.x * blockDim.x + idx];
+  } else {
+    shared[idx] = 0;
+  }
+
   __syncthreads();
 
   for (int stride = 1; stride < blockDim.x; stride *= 2) {
