@@ -1,6 +1,7 @@
 from pequegrad.tensor import Tensor
 import numpy as np
 from typing import List
+import pickle
 
 
 def kaiming_init(shape):
@@ -9,8 +10,29 @@ def kaiming_init(shape):
     return Tensor.uniform(shape, -bound, bound, requires_grad=True)
 
 
+def save_model(model, path):
+    with open(path, "wb") as f:
+        pickle.dump(model._topickle(), f)
+
+
+def load_model(path):
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+    return Module._frompickle(data)
+
+
 class Module:
     _parameters: List[Tensor] = []
+
+    def _topickle(self):
+        st = self.parameters()[0].storage_type
+        mod = self.to("np")
+        return {"module": mod, "actual_storage": st}
+
+    @staticmethod
+    def _frompickle(data):
+        cl = data["module"]
+        return cl.to(data["actual_storage"])
 
     def to(self, storage_type):
         for p in self._parameters:
