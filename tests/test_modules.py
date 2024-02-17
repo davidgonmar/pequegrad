@@ -38,6 +38,8 @@ class TestModules:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
+            assert m.parameters()[0].storage_type == "np"
+            assert m2.parameters()[0].storage_type == "np"
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
@@ -49,6 +51,8 @@ class TestModules:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
+            assert m.parameters()[0].storage_type == "cuda"
+            assert m2.parameters()[0].storage_type == "cuda"
 
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
