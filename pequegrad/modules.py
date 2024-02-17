@@ -18,6 +18,10 @@ def kaiming_init(shape):
 class Module:
     _parameters: List[Tensor] = None
 
+    @property
+    def storage_type(self):
+        return self.parameters()[0].storage_type
+
     def save(self, path):
         params = [p.numpy() for p in self.parameters()]
         d = {"params": params}
