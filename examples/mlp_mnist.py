@@ -4,7 +4,7 @@ import gzip
 import numpy as np
 from pequegrad.tensor import Tensor
 from pequegrad.optim import SGD
-from pequegrad.modules import Linear
+from pequegrad.modules import Linear, Module
 from pequegrad.context import no_grad
 import argparse
 import cProfile
@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     print("Using CUDA" if USE_CUDA else "Using CPU")
 
-    class MLP:
+    class MLP(Module):
         def __init__(self):
             self.fc1 = Linear(784, 200).to("cuda" if USE_CUDA else "np")
             self.fc2 = Linear(200, 10).to("cuda" if USE_CUDA else "np")

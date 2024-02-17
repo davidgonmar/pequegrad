@@ -1,9 +1,21 @@
 from pequegrad.tensor import Tensor, CUDA_AVAILABLE
-from pequegrad.modules import Linear, Conv2d, save_model, load_model
+from pequegrad.modules import Linear, Conv2d, Module
 import os
 import tempfile
 import pytest
 import numpy as np
+
+
+class CustomModule(Module):
+    def __init__(self):
+        self.a = Linear(2, 1)
+        self.b = Linear(2, 1)
+
+
+class CustomConvModule(Module):
+    def __init__(self):
+        self.a = Conv2d(1, 3, 2)
+        self.b = Conv2d(1, 3, 2)
 
 
 class TestModules:
@@ -21,21 +33,39 @@ class TestModules:
 
     def test_save_load_np(self):
         m = Linear(2, 1)
+        m2 = Linear(2, 1)
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "model.pkl")
-            save_model(m, path)
-            m2 = load_model(path)
-
+            m.save(path)
+            m2.load(path)
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
     @pytest.mark.skipif(not CUDA_AVAILABLE, reason="CUDA is not available")
     def test_save_load_cuda(self):
         m = Linear(2, 1).to("cuda")
+        m2 = Linear(2, 1).to("cuda")
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "model.pkl")
-            save_model(m, path)
-            m2 = load_model(path)
+            m.save(path)
+            m2.load(path)
+
+            for p1, p2 in zip(m.parameters(), m2.parameters()):
+                np.testing.assert_allclose(p1.numpy(), p2.numpy())
+
+    @pytest.mark.parametrize("module", [CustomModule, CustomConvModule])
+    def test_find_params_on_custom_module(self, module):
+        m = module()
+        assert len(m.parameters())  # 2 weights and 2 biases
+
+    @pytest.mark.parametrize("module", [CustomModule, CustomConvModule])
+    def test_save_load_custom_module(self, module):
+        m = module()
+        m2 = module()
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "model.pkl")
+            m.save(path)
+            m2.load(path)
 
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())

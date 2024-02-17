@@ -188,41 +188,41 @@ class Tensor:
 
     ##### INITIALIZATION METHODS #####
 
-    @staticmethod
-    def normal(shape: _Shape, mean=0.0, std=1.0, requires_grad=False) -> "Tensor":
+    @classmethod
+    def normal(cls, shape: _Shape, mean=0.0, std=1.0, requires_grad=False) -> "Tensor":
         """Returns a tensor of random numbers with the given shape"""
-        return Tensor(np.random.normal(mean, std, shape), requires_grad=requires_grad)
+        return cls(np.random.normal(mean, std, shape), requires_grad=requires_grad)
 
-    def uniform(shape: _Shape, low=0.0, high=1.0, requires_grad=False) -> "Tensor":
+    @classmethod
+    def uniform(cls, shape: _Shape, low=0.0, high=1.0, requires_grad=False) -> "Tensor":
         """Returns a tensor of random numbers with the given shape"""
-        return Tensor(np.random.uniform(low, high, shape), requires_grad=requires_grad)
+        return cls(np.random.uniform(low, high, shape), requires_grad=requires_grad)
 
-    @staticmethod
-    def randn(shape: _Shape, requires_grad=False) -> "Tensor":
+    @classmethod
+    def randn(cls, shape: _Shape, requires_grad=False) -> "Tensor":
         """Returns a tensor of random numbers with the given shape"""
         return Tensor(np.random.randn(*shape), requires_grad=requires_grad)
 
-    @staticmethod
-    def zeros(shape: _Shape, requires_grad=False, storage=None) -> "Tensor":
+    @classmethod
+    def zeros(cls, shape: _Shape, requires_grad=False, storage=None) -> "Tensor":
         """Returns a tensor of zeros with the given shape"""
-        return Tensor.fill(shape, 0.0, requires_grad=requires_grad, storage=storage)
+        return cls.fill(shape, 0.0, requires_grad=requires_grad, storage=storage)
 
-    @staticmethod
-    def ones(shape: _Shape, requires_grad=False) -> "Tensor":
+    @classmethod
+    def ones(cls, shape: _Shape, requires_grad=False) -> "Tensor":
         """Returns a tensor of ones with the given shape"""
-        return Tensor.fill(shape, 1.0, requires_grad=requires_grad)
+        return cls.fill(shape, 1.0, requires_grad=requires_grad)
 
-    @staticmethod
+    @classmethod
     def fill(
-        shape: _Shape, value: float, requires_grad=False, storage=None
+        cls, shape: _Shape, value: float, requires_grad=False, storage=None
     ) -> "Tensor":
         """Returns a tensor of ones with the given shape"""
-        return Tensor(
-            np.full(shape, value), requires_grad=requires_grad, storage=storage
-        )
+        return cls(np.full(shape, value), requires_grad=requires_grad, storage=storage)
 
-    @staticmethod
+    @classmethod
     def one_hot(
+        cls,
         num_classes: int,
         indices: "Tensor",
         requires_grad=False,
@@ -238,7 +238,7 @@ class Tensor:
 
         np_one_hot[np.arange(indices.data.size), indices.numpy().astype(int)] = 1.0
 
-        return Tensor(np_one_hot, requires_grad=requires_grad, storage=storage_type)
+        return cls(np_one_hot, requires_grad=requires_grad, storage=storage_type)
 
     def numpy(self) -> np.ndarray:
         return self.data.numpy()

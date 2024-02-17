@@ -123,3 +123,6 @@ ignored
 out
 
 CMakeSettings.json
+
+
+*.pkl

@@ -4,7 +4,7 @@ import gzip
 import numpy as np
 from pequegrad.tensor import Tensor
 from pequegrad.optim import Adam
-from pequegrad.modules import Linear, Conv2d
+from pequegrad.modules import Linear, Conv2d, Module
 from pequegrad.context import no_grad
 import argparse
 import time
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     CUDA = args.cuda
     print(f"Using {'CUDA' if CUDA else 'CPU'} for computations")
 
-    class ConvNet:
+    class ConvNet(Module):
         def __init__(self):
             # input size = 28x28
             self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3).to(
@@ -44,13 +44,6 @@ if __name__ == "__main__":
             )  # shape: (13, 13) -> (11, 11) -> (5, 5)
             input = input.reshape((-1, 16 * 5 * 5))
             return self.fc1.forward(input)
-
-        def parameters(self):
-            return (
-                self.fc1.parameters()
-                + self.conv1.parameters()
-                + self.conv2.parameters()
-            )
 
     def download_mnist(path):
         """Download MNIST dataset to path"""
@@ -135,6 +128,9 @@ if __name__ == "__main__":
             optim.step()
             print(f"Epoch {epoch} | Loss {loss.numpy()}", end="\r")
 
+            if epoch % 10 == 0:
+                model.save("conv_mnist_model.pkl")
+                print("Model saved")
         with no_grad():
             # Evaluate the model
             correct = 0
@@ -151,6 +147,8 @@ if __name__ == "__main__":
         print(f"Test accuracy: {correct / len(X_test)}")
         print("Got {} / {} correct!".format(correct, len(X_test)))
         print(f"Time taken: {time.time() - start:.2f}s")
+
+        model.save("conv_mnist_model.pkl")
 
     X_train, y_train, X_test, y_test = get_dataset()
 

@@ -1,45 +1,63 @@
 from pequegrad.tensor import Tensor
+from pequegrad.storage import CudaStorage, NumpyStorage
 import numpy as np
 from typing import List
 import pickle
 
 
+class ModuleParam(Tensor):
+    pass
+
+
 def kaiming_init(shape):
     fan_in = shape[0]
     bound = 1 / np.sqrt(fan_in)
-    return Tensor.uniform(shape, -bound, bound, requires_grad=True)
-
-
-def save_model(model, path):
-    with open(path, "wb") as f:
-        pickle.dump(model._topickle(), f)
-
-
-def load_model(path):
-    with open(path, "rb") as f:
-        data = pickle.load(f)
-    return Module._frompickle(data)
+    return ModuleParam.uniform(shape, -bound, bound, requires_grad=True)
 
 
 class Module:
-    _parameters: List[Tensor] = []
+    _parameters: List[Tensor] = None
 
-    def _topickle(self):
+    def save(self, path):
         st = self.parameters()[0].storage_type
-        mod = self.to("np")
-        return {"module": mod, "actual_storage": st}
+        params = [p.numpy() for p in self.parameters()]
+        d = {"params": params, "storage_type": st}
+        with open(path, "wb") as f:
+            pickle.dump(d, f)
 
-    @staticmethod
-    def _frompickle(data):
-        cl = data["module"]
-        return cl.to(data["actual_storage"])
+    def load(self, path):
+        with open(path, "rb") as f:
+            d = pickle.load(f)
+            loaded_params = []
+            for p, p_loaded in zip(self.parameters(), d["params"]):
+                if d["storage_type"] == "cuda":
+                    p.data = CudaStorage(p_loaded)
+                elif d["storage_type"] == "np":
+                    p.data = NumpyStorage(p_loaded)
+                else:
+                    raise ValueError(
+                        "Unknown storage type: {}".format(d["storage_type"])
+                    )
+            self._parameters = loaded_params  # force re-creation of the parameters list
 
     def to(self, storage_type):
-        for p in self._parameters:
+        for p in self.parameters():
             p.to_(storage_type)
         return self
 
+    def _search_parameters(self):
+        params = []
+        for p in self.__dict__.values():
+            if isinstance(p, ModuleParam):
+                params.append(p)
+            elif isinstance(p, Module):
+                params.extend(p._search_parameters())
+        return params
+
     def parameters(self):
+        # first call to parameters, we need to retrieve them, then they are cached
+        if not self._parameters:
+            self._parameters = self._search_parameters()
         return self._parameters
 
     def zero_grad(self):
@@ -51,8 +69,7 @@ class Linear(Module):
     def __init__(self, in_features, out_features):
         super().__init__()
         self.weights = kaiming_init((in_features, out_features))
-        self.bias = Tensor.zeros(out_features, requires_grad=True)
-        self._parameters = [self.weights, self.bias]
+        self.bias = ModuleParam.zeros(out_features, requires_grad=True)
 
     def forward(self, input):
         return (input @ self.weights) + self.bias
@@ -68,8 +85,7 @@ class Conv2d(Module):
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )
-        self.bias = Tensor.zeros(out_channels, requires_grad=True)
-        self._parameters = [self.kernel, self.bias]
+        self.bias = ModuleParam.zeros(out_channels, requires_grad=True)
         assert stride == 1, "only stride=1 is supported"
         assert padding == 0, "only padding=0 is supported"
 
