@@ -444,6 +444,7 @@ class MatMul(Function):
         # In that case, we need to sum over the batch dimensions to get the gradient of the non-batched matrix
         # so the gradient has the same shape as the non-batched matrix
         # TODO -- check cases with vectors, and higher dimensional tensors (rn it works when shape of the batched matrix is (batch, m, n) and the other is (n, k))
+
         if self.x.requires_grad:
             if self.x.dim == 1 and self.y.dim == 1:
                 # Just multiply the gradients if both are vectors, since grad is a scalar

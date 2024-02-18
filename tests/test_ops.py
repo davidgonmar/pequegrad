@@ -1,5 +1,5 @@
 import pytest
-from pequegrad.tensor import Tensor
+from pequegrad.tensor import Tensor, CUDA_AVAILABLE
 from torch import Tensor as TorchTensor, tensor as torch_tensor
 import numpy as np
 import torch
@@ -583,5 +583,7 @@ class TestOpsNP(_TestOps):
     storage = "np"
 
 
-class TestOpsCuda(_TestOps):
-    storage = "cuda"
+if CUDA_AVAILABLE:
+
+    class TestOpsCuda(_TestOps):
+        storage = "cuda"

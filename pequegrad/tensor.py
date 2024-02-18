@@ -138,9 +138,6 @@ class Tensor:
                     node._grad.shape == node.shape
                 ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}"
 
-                if not retain_ctx:
-                    node._ctx = None
-
     @property
     def grad(self):
         return self._grad

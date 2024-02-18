@@ -11,3 +11,8 @@ __global__ void vector_dot_product_accum(const float *a, const float *b,
 
 __global__ void vector_outer_product_kernel(float *a, float *b, float *out,
                                             size_t m, size_t n);
+
+__global__ void batched_matmul_kernel(const float *a, const float *b,
+                                      float *out, const size_t *a_shape,
+                                      const size_t *b_shape,
+                                      const size_t n_dims);

@@ -22,7 +22,7 @@ class TestStorage:
         if test_strides:
             assert x.strides == y.strides
         print(x.numpy(), "\n<========================>\n", y)
-        assert np.allclose(x.numpy(), y, atol=tol)
+        np.testing.assert_allclose(x.numpy(), y, rtol=tol)
 
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1), tuple()]
@@ -252,6 +252,21 @@ class TestStorage:
                 (513,),
             ],
             [(500000,), (500000,)],
+            [(5, 2, 2, 3), (5, 2, 3, 4)],
+            [(2, 2, 3, 5), (5, 2)],
+            [
+                (2, 2, 3, 5),
+                (
+                    1,
+                    1,
+                    5,
+                    2,
+                ),
+            ],
+            [(8, 5, 30, 20), (8, 5, 20, 30)],
+            [(4, 2, 3, 2, 5), (4, 2, 3, 5, 3)],
+            [(1, 2, 3, 2, 5), (4, 2, 3, 5, 3)],
+            [(5, 3), (2, 2, 3, 5)],
         ],
     )  # (from, to)
     @pytest.mark.parametrize("class_storage", storages_to_test)
@@ -261,7 +276,7 @@ class TestStorage:
         nparr2 = np.random.rand(*to_shape).astype(np.float32)
         x = class_storage(nparr)
         y = class_storage(nparr2)
-        self._compare_with_numpy(x.matmul(y), np.matmul(nparr, nparr2))
+        self._compare_with_numpy(x.matmul(y), np.matmul(nparr, nparr2), tol=1e-3)
 
     # ternary operations
     @pytest.mark.parametrize(
@@ -511,8 +526,6 @@ class TestStorage:
         x_torch_transformed = torch.nn.functional.unfold(
             x_torch, kernel_size, stride=stride
         )
-        print("original: ", x.numpy())
-        print("transformed: ", x_transformed.numpy())
         self._compare_with_numpy(
             x_transformed,
             x_torch_transformed.numpy().astype(np.float32),

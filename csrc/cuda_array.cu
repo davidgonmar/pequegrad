@@ -348,8 +348,6 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     // rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1 check its
     // implementation for more details
     int new_size = (a.shape.at(0) / MAX_THREADS_PER_BLOCK) + 1;
-    // check if size > 1
-    std::cout << "new_size: " << new_size << std::endl;
     CudaArray out(new_size, {(size_t)new_size});
     vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK,
                                MAX_THREADS_PER_BLOCK * ELEM_SIZE>>>(
@@ -358,7 +356,6 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     CHECK_CUDA(cudaGetLastError());
 
     if (new_size > 1) {
-      // print the vector
       // if size > 1, we need to reduce the vector to a single value
       return out.sum(false);
     }
@@ -381,13 +378,28 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(2);
     new_shape = {a.shape.at(0), size1, size2};
   } else {
-    if (a.ndim() >=
-        b.ndim()) { // we will try to broadcast, but keep last to dims
+    int a_prod = std::accumulate(a.shape.begin(), a.shape.end() - 2, 1,
+                                 std::multiplies<int>());
+    int b_prod = std::accumulate(b.shape.begin(), b.shape.end() - 2, 1,
+                                 std::multiplies<int>());
+    if (a.ndim() > b.ndim()) { // we will try to broadcast, but keep
+                               // last to dims
       shape_t b_new = shape_t(a.shape);
       b_new[b_new.size() - 1] = b.shape[b.shape.size() - 1];
       b_new[b_new.size() - 2] = b.shape[b.shape.size() - 2];
       b = b.broadcast_to(b_new).as_contiguous();
-    } else { // we will try to broadcast, but keep last to dims
+    } else if (a.ndim() < b.ndim()) {
+      shape_t a_new = shape_t(b.shape);
+      a_new[a_new.size() - 1] = a.shape[a.shape.size() - 1];
+      a_new[a_new.size() - 2] = a.shape[a.shape.size() - 2];
+      a = a.broadcast_to(a_new).as_contiguous();
+      // if ndim are equal, we will broadcast the one with the smallest product
+    } else if (a_prod >= b_prod) {
+      shape_t b_new = shape_t(a.shape);
+      b_new[b_new.size() - 1] = b.shape[b.shape.size() - 1];
+      b_new[b_new.size() - 2] = b.shape[b.shape.size() - 2];
+      b = b.broadcast_to(b_new).as_contiguous();
+    } else if (a_prod < b_prod) {
       shape_t a_new = shape_t(b.shape);
       a_new[a_new.size() - 1] = a.shape[a.shape.size() - 1];
       a_new[a_new.size() - 2] = a.shape[a.shape.size() - 2];
@@ -399,6 +411,22 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     size2 = b.shape.at(b.ndim() - 1);
     new_shape = a.shape;
     new_shape[new_shape.size() - 1] = size2;
+
+    int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                   std::multiplies<int>());
+
+    dim3 gridSize(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
+    CudaArray out(new_size, new_shape);
+    cuda_unique_ptr<size_t> lhs_shape =
+        cuda_unique_ptr_from_host(a.ndim(), a.shape.data());
+    cuda_unique_ptr<size_t> rhs_shape =
+        cuda_unique_ptr_from_host(b.ndim(), b.shape.data());
+    batched_matmul_kernel<<<gridSize, block_size>>>(
+        a.ptr.get(), b.ptr.get(), out.ptr.get(), lhs_shape.get(),
+        rhs_shape.get(), a.ndim());
+    cudaDeviceSynchronize();
+    CHECK_CUDA(cudaGetLastError());
+    return out;
   }
 
   int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,

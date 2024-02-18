@@ -73,6 +73,7 @@ class TestModules:
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
+    @pytest.mark.skipif(not CUDA_AVAILABLE, reason="CUDA is not available")
     def test_to(self):
         m = Linear(2, 1)
         # simulate copy until implemented
