@@ -21,12 +21,6 @@ class MLP(Module):
         input = self.fc1.forward(input).relu()
         return self.fc2.forward(input)
 
-    def parameters(self):
-        return self.fc1.parameters() + self.fc2.parameters()
-
-    def zero_grad(self):
-        self.fc1.zero_grad()
-        self.fc2.zero_grad()
 
 
 def train(model, X_train, Y_train, epochs=14, batch_size=4096):
@@ -74,8 +68,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     USE_CUDA = args.cuda
     MODE = args.mode
+    mlp = MLP()
     if USE_CUDA:
-        mlp = MLP().to("cuda")
+        mlp.to("cuda")
+        print("Using CUDA")
+    else:
+        mlp.to("np")
+        print("Using CPU")
     X_train, y_train, X_test, y_test = get_mnist_dataset()
     if MODE == "train":
         print("Training the model")

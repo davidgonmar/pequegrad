@@ -13,13 +13,9 @@ np.random.seed(0)
 class ConvNet(Module):
     def __init__(self):
         # input size = 28x28
-        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3).to(
-            "cuda" if CUDA else "np"
-        )
-        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3).to(
-            "cuda" if CUDA else "np"
-        )
-        self.fc1 = Linear(16 * 5 * 5, 10).to("cuda" if CUDA else "np")
+        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3)
+        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3)
+        self.fc1 = Linear(16 * 5 * 5, 10)
 
     def forward(self, input):
         input = input.reshape((-1, 1, 28, 28))  # shape: (28, 28)
@@ -81,24 +77,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
     CUDA = args.cuda
     MODE = args.mode
-    if MODE == "eval":
-        model = ConvNet()
-        model.load("conv_mnist_model.pkl")
-        if CUDA:
-            model.to("cuda")
+    model = ConvNet()
+    if CUDA:
+        model.to("cuda")
+        print("Using CUDA for computations")
+    else:
+        model.to("np")
+        print("Using CPU for computations")
 
+    if MODE == "eval":
+        model.load("conv_mnist_model.pkl")
         print("Model loaded from conv_mnist_model.pkl")
-        print(f"Using {'CUDA' if CUDA else 'CPU'} for computations")
         X_train, y_train, X_test, y_test = get_mnist_dataset()
         correct, total = test_model(model, X_test, y_test)
         print(f"Test accuracy: {correct / total}")
 
     else:
-        print(f"Using {'CUDA' if CUDA else 'CPU'} for computations")
-
-        model = ConvNet()
-        if CUDA:
-            model.to("cuda")
 
         X_train, y_train, X_test, y_test = get_mnist_dataset()
         start = time.time()
