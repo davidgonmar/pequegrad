@@ -93,7 +93,6 @@ if __name__ == "__main__":
         print(f"Test accuracy: {correct / total}")
 
     else:
-
         X_train, y_train, X_test, y_test = get_mnist_dataset()
         start = time.time()
         train(model, X_train, y_train, epochs=13, batch_size=512)

@@ -329,17 +329,25 @@ float CudaArray::getitem(shape_t index) const {
 int CudaArray::ndim() const { return shape.size(); }
 
 CudaArray CudaArray::mat_mul(const CudaArray &other) const {
-  CudaArray a = this->is_contiguous() ? *this : this->as_contiguous();
-  CudaArray b = other.is_contiguous() ? other : other.as_contiguous();
+  // if a is a vector and the other is a matrix, add a dimension to a
+  bool added_a_dim = false;
+  bool added_b_dim = false;
+  CudaArray a = (this->ndim() == 1 && other.ndim() != 1)
+                    ? this->unsqueeze(0)
+                    : this->as_contiguous();
+  if (this->ndim() == 1 && other.ndim() != 1) {
+    added_a_dim = true;
+  }
+  CudaArray b = (other.ndim() == 1 && this->ndim() != 1)
+                    ? other.unsqueeze(1)
+                    : other.as_contiguous();
+  if (other.ndim() == 1 && this->ndim() != 1) {
+    added_b_dim = true;
+  }
   dim3 block_size = dim3(DEFAULT_BLOCK_SIZE);
   shape_t new_shape;
   size_t size1, midsize, size2;
-  if (a.ndim() == 2 && b.ndim() == 2) {
-    size1 = a.shape.at(0);
-    midsize = a.shape.at(1);
-    size2 = b.shape.at(1);
-    new_shape = {size1, size2};
-  } else if (a.ndim() == 1 && b.ndim() == 1) {
+  if (a.ndim() == 1 && b.ndim() == 1) {
     PG_CHECK_ARG(a.shape == b.shape,
                  "shapes must be equal in vector dot prod, got ",
                  vec_to_string(a.shape), " and ", vec_to_string(b.shape));
@@ -354,29 +362,11 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
         a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
     cudaDeviceSynchronize();
     CHECK_CUDA(cudaGetLastError());
-
     if (new_size > 1) {
       // if size > 1, we need to reduce the vector to a single value
       return out.sum(false);
     }
     return out.squeeze();
-
-  } else if (a.ndim() == 2 && b.ndim() == 1) {
-    size1 = a.shape.at(0);
-    midsize = a.shape.at(1);
-    size2 = 1;
-    new_shape = {size1};
-  } else if (a.ndim() == 1 && b.ndim() == 2) {
-    size1 = 1;
-    midsize = b.shape.at(0);
-    size2 = b.shape.at(1);
-    new_shape = {size2};
-  } else if (a.ndim() == 3 && b.ndim() == 3) {
-    // assert that a batchsize = b batchsize
-    size1 = a.shape.at(1);
-    midsize = a.shape.at(2);
-    size2 = b.shape.at(2);
-    new_shape = {a.shape.at(0), size1, size2};
   } else {
     int a_prod = std::accumulate(a.shape.begin(), a.shape.end() - 2, 1,
                                  std::multiplies<int>());
@@ -405,13 +395,17 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
       a_new[a_new.size() - 2] = a.shape[a.shape.size() - 2];
       a = a.broadcast_to(a_new).as_contiguous();
     }
-
     size1 = a.shape.at(a.ndim() - 2);
     midsize = a.shape.at(a.ndim() - 1);
     size2 = b.shape.at(b.ndim() - 1);
     new_shape = a.shape;
     new_shape[new_shape.size() - 1] = size2;
-
+    if (added_a_dim) {
+      new_shape.erase(new_shape.begin());
+    }
+    if (added_b_dim) {
+      new_shape.erase(new_shape.end() - 1);
+    }
     int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                    std::multiplies<int>());
 
@@ -428,21 +422,6 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     CHECK_CUDA(cudaGetLastError());
     return out;
   }
-
-  int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                 std::multiplies<int>());
-  dim3 gridSize(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
-  CudaArray out(new_size, new_shape);
-  cuda_unique_ptr<size_t> lhs_shape =
-      cuda_unique_ptr_from_host(a.ndim(), a.shape.data());
-  cuda_unique_ptr<size_t> rhs_shape =
-      cuda_unique_ptr_from_host(b.ndim(), b.shape.data());
-  matmul_kernel<<<gridSize, block_size>>>(a.ptr.get(), b.ptr.get(),
-                                          out.ptr.get(), lhs_shape.get(),
-                                          rhs_shape.get(), a.ndim(), b.ndim());
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
-  return out;
 }
 
 CudaArray CudaArray::outer_product(const CudaArray &other) const {

@@ -19,7 +19,6 @@ PYBIND11_MODULE(pequegrad_cu, m) {
 
   m.attr("__device_name__") = "cuda";
   py::class_<CudaArray>(m, "Array")
-      .def_readonly("size", &CudaArray::size)
       .def_readonly("shape", &CudaArray::shape)
       .def_readonly("strides", &CudaArray::strides)
       .def("clone", &CudaArray::clone)
