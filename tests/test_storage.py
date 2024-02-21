@@ -568,3 +568,13 @@ class TestStorage:
         unfolded = class_storage(torch_unfolded.detach().numpy())
         folded = unfolded.col2im(kernel_size, shape_input[2:], stride)
         self._compare_with_numpy(folded, torch_folded, test_strides=False)
+
+    # test fill
+    @pytest.mark.parametrize(
+        "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    @pytest.mark.parametrize("value", [0.0, 1.0, 2.0, 3.0, 4.0])
+    def test_fill(self, shape, class_storage, value):
+        x = class_storage.fill(shape, value)
+        self._compare_with_numpy(x, np.full(shape, value, dtype=np.float32))

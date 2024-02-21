@@ -80,6 +80,10 @@ class CudaStorage(AbstractStorage):
             else CudaStorage(self.data.add(other))
         )
 
+    @staticmethod
+    def fill(shape: Tuple[int, ...], value: float) -> "CudaStorage":
+        return CudaStorage(CudaArray.fill(shape, value))
+
     def __add__(self, other: "CudaStorage") -> "CudaStorage":
         return self.add(other)
 

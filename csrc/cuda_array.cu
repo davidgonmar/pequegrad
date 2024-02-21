@@ -1,6 +1,7 @@
 #include "binary_ops_kernels.cuh"
 #include "cuda_array.cuh"
 #include "folding_kernels.cuh"
+#include "init_kernels.cuh"
 #include "matmul_kernels.cuh"
 #include "reduce_ops_kernels.cuh"
 #include "ternary_ops_kernels.cuh"
@@ -676,6 +677,16 @@ std::string CudaArray::to_string() const {
   return ss.str();
 }
 
+CudaArray CudaArray::fill(shape_t shape, float value) {
+  CudaArray out(
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>()),
+      shape);
+  fill_kernel<<<ceil(out.size / (float)DEFAULT_BLOCK_SIZE),
+                DEFAULT_BLOCK_SIZE>>>(out.ptr.get(), out.size, value);
+  cudaDeviceSynchronize();
+  CHECK_CUDA(cudaGetLastError());
+  return out;
+};
 CudaArray::~CudaArray() {}
 
 CudaArray::CudaArray(const CudaArray &other)

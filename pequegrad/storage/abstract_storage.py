@@ -35,6 +35,11 @@ class AbstractStorage(ABC):
     def astype(self, dtype: Union[str, np.dtype]) -> "AbstractStorage":
         pass
 
+    @staticmethod
+    @abstractmethod
+    def fill(shape: tuple, value: float) -> "AbstractStorage":
+        pass
+
     @property
     @abstractmethod
     def strides(self) -> tuple:

@@ -215,7 +215,8 @@ class Tensor:
         cls, shape: _Shape, value: float, requires_grad=False, storage=None
     ) -> "Tensor":
         """Returns a tensor of ones with the given shape"""
-        return cls(np.full(shape, value), requires_grad=requires_grad, storage=storage)
+        st = CudaStorage if storage == "cuda" else NumpyStorage
+        return cls(st.fill(shape, value), requires_grad=requires_grad, storage=storage)
 
     @classmethod
     def one_hot(

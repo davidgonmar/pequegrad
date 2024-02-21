@@ -93,6 +93,8 @@ public:
 
   std::string to_string() const;
 
+  static CudaArray fill(shape_t shape, float value);
+
 private:
   CudaArray reduce(reduction_kernel ker, axes_t axes, bool keepdims) const;
   CudaArray reduce(reduction_kernel ker, axis_t axis, bool keepdims) const;

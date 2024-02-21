@@ -128,6 +128,10 @@ class NumpyStorage(AbstractStorage):
         )
 
     @staticmethod
+    def fill(shape: tuple, value: float) -> "NumpyStorage":
+        return NumpyStorage(np.full(shape, value, dtype=np.float32))
+
+    @staticmethod
     def where_static(
         condition: "NumpyStorage", x: "NumpyStorage", y: "NumpyStorage"
     ) -> "NumpyStorage":
