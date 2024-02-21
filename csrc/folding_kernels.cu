@@ -13,9 +13,13 @@ __global__ void im2col_kernel(float *in, float *out, size_t k_h, size_t k_w,
   // each col in out means a 'sliding window' in the in
   // number of total cols = out_h * out_w
   int col = idx % (out_h * out_w);
-  int batch = idx / (out_h * out_w);
+  int channel = idx / (out_h * out_w) % in_channels;
+  int h = idx / (out_h * out_w) / in_channels % k_h;
+  int w = idx / (out_h * out_w) / in_channels / k_h % k_w;
+  int batch = idx / (out_h * out_w) / in_channels / k_h / k_w;
 
-  if (col >= out_h * out_w || batch >= batch_size) {
+  if (col >= out_h * out_w || batch >= batch_size || channel >= in_channels ||
+      h >= k_h || w >= k_w) {
     return;
   }
 
@@ -23,17 +27,10 @@ __global__ void im2col_kernel(float *in, float *out, size_t k_h, size_t k_w,
   int in_y_offset = col / out_w * stride;
 
   // for each output in the current col, of size in_channels * k_h * k_w
-  for (int channel = 0; channel < in_channels; channel++) {
-    for (int h = 0; h < k_h; h++) {
-      for (int w = 0; w < k_w; w++) {
-        int row = (channel * k_h * k_w) + h * k_w + w;
-        out[batch * in_channels * k_h * k_w * out_h * out_w +
-            out_w * out_h * row + col] =
-            in[batch * in_channels * x_h * x_w + channel * x_h * x_w +
-               (h + in_y_offset) * x_w + (w + in_x_offset)];
-      }
-    }
-  }
+  int row = (channel * k_h * k_w) + h * k_w + w;
+  out[batch * in_channels * k_h * k_w * out_h * out_w + out_w * out_h * row +
+      col] = in[batch * in_channels * x_h * x_w + channel * x_h * x_w +
+                (h + in_y_offset) * x_w + (w + in_x_offset)];
 }
 
 __global__ void col2im_kernel(float *in, float *out, size_t out_channels,

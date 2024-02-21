@@ -55,8 +55,8 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
 
   CudaArray out(out_size, out_shape);
 
-  int total_iters =
-      batch_size * out_h * out_w; // check kernel code for more details
+  int total_iters = batch_size * out_h * out_w * in_channels * k_h *
+                    k_w; // check kernel code for more details
   int block_size = DEFAULT_BLOCK_SIZE;
   int grid_size = ceil(total_iters / (float)block_size);
   im2col_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), k_h, k_w,
