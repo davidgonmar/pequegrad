@@ -8,6 +8,9 @@ It has strong GPU acceleration through CUDA.
 - General
 numpy==1.26.2
 
+- Graph visualization
+networkx==3.1
+
 - Testing
 pytest==7.4.0
 torch==2.1.1 (it is used to check the correctness of the results)

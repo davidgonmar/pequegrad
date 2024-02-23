@@ -17,5 +17,4 @@ class TestContext:
             y = Tensor(2.0, requires_grad=True)
             z = x + y
 
-        assert z._ctx is None
         assert z.grad is None

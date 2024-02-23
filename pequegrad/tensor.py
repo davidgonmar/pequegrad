@@ -79,7 +79,7 @@ class Tensor:
         return iter(self.data)
 
     def __repr__(self):
-        return f"Tensor(data={self.data}, fn={self._ctx.__class__.__name__ if self._ctx else None}, requires_grad={self.requires_grad}, storage={self.storage_type})"
+        return f"Tensor(data={self.data.numpy()}, fn={self._ctx.__class__.__name__ if self._ctx else None}, requires_grad={self.requires_grad}, storage={self.storage_type})"
 
     def __getitem__(self, key):
         if self.data.ndim == 0:
@@ -132,7 +132,7 @@ class Tensor:
         _dfs(self)
 
         for node in reversed(nodes):
-            if node._ctx is not None:
+            if node._ctx is not None and node.requires_grad:
                 node._ctx.backward()
                 assert (
                     node._grad.shape == node.shape
@@ -141,6 +141,18 @@ class Tensor:
     @property
     def grad(self):
         return self._grad
+
+    
+    def show_graph(self):
+        from .graph import build_graph
+        import matplotlib.pyplot as plt
+        import networkx as nx
+        G = build_graph(self)
+        pos = nx.spring_layout(G)
+        nx.draw(G, pos, with_labels=True, node_size=2500)
+        edge_labels = nx.get_edge_attributes(G, "label")
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=6)
+        plt.show()
 
     def tolist(self):
         """

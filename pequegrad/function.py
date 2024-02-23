@@ -1,6 +1,5 @@
 from typing import Optional, Set, Tuple, Union
 from .tensor import Tensor
-from .context import pequegrad_context
 import numpy as np
 
 _Shape = Union[int, Tuple[int, ...]]
@@ -18,7 +17,7 @@ class Function:
             list(filter(lambda t: not isinstance(t, Tensor), tensors))
         )
         self.requires_grad = any(t.requires_grad for t in tensors)
-        self.children = set(t for t in tensors if t.requires_grad)
+        self.children = set(t for t in tensors)
 
     def forward(self):
         raise NotImplementedError
@@ -53,9 +52,7 @@ class Function:
 
         f = cls(*tensors, **kwargs)
         f.forward()
-        should_store_grad = f.requires_grad and pequegrad_context.grad_enabled
-        if should_store_grad:
-            f.ret._ctx = f
+        f.ret._ctx = f
 
         assert (
             f.ret.device == device
