@@ -745,7 +745,9 @@ CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
   return out;
 }
 
-CudaArray CudaArray::as_contiguous() const { return elwiseop(copy_kernel); }
+CudaArray CudaArray::as_contiguous() const {
+  return is_contiguous() ? *this : elwiseop(copy_kernel);
+}
 
 CudaArray CudaArray::permute(shape_t axes) const {
   PG_CHECK_ARG(axes.size() == shape.size(),
