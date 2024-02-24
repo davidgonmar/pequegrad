@@ -489,9 +489,8 @@ class Tensor:
     @property
     def shape(self):
         """Returns the shape of the tensor"""
-
         return self.data.shape
-
+    
     @property
     def dim(self):
         """Returns the number of dimensions of the tensor"""
@@ -518,7 +517,7 @@ class Tensor:
         return self.pow(exponent)
 
     def __truediv__(self, other: "Tensor") -> "Tensor":
-        return self.__mul__(other**-1.0)
+        return Div.apply(self, other)
 
     def relu(self) -> "Tensor":
         """ReLU activation function"""
@@ -550,4 +549,5 @@ from .function import (  # noqa: E402 avoid circular imports
     Fold,
     Function,
     Permute,
+    Div,
 )

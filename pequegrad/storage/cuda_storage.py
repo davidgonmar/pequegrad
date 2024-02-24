@@ -222,6 +222,9 @@ class CudaStorage(AbstractStorage):
     def __ne__(self, other: "CudaStorage") -> "CudaStorage":
         return self.not_equal(other)
 
+    def __neg__(self) -> "CudaStorage":
+        return CudaStorage(self.data.mul(-1))
+
     def reshape(self, *shape: Union[int, Tuple[int, ...]]) -> "CudaStorage":
         if len(shape) == 1 and isinstance(shape[0], tuple):
             shape = shape[0]
