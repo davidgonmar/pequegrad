@@ -604,6 +604,11 @@ CudaArray CudaArray::unsqueeze(axis_t axis) const {
 }
 
 CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
+  // TODO -- eventually I'll make a copy kernel that will take into account the
+  // strides of both input and output
+  if (!is_contiguous()) {
+    return as_contiguous().reshape(_new_shape);
+  }
   shape_t new_shape(_new_shape.size());
   size_t total_new = 1;
 

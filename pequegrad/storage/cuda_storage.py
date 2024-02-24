@@ -242,7 +242,6 @@ class CudaStorage(AbstractStorage):
 
     def __repr__(self):
         return f"CudaStorage({self.data.numpy()})"
-    
 
     def max(self, axis: int, keepdims: bool = False) -> "CudaStorage":
         if axis is None:

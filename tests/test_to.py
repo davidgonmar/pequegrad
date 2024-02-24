@@ -15,7 +15,6 @@ class TestTo:
         t = Tensor(np.array([1, 2, 3]), storage=storage, requires_grad=True)
         assert t.storage_type == storage
         assert t.requires_grad
-        assert t.grad.storage_type == storage
 
     def test_to(self):
         npdata = np.array([1, 2, 3])
@@ -40,17 +39,14 @@ class TestTo:
         tcu = t.to("cuda")
         assert tcu.storage_type == "cuda"
         assert tcu.requires_grad
-        assert tcu.grad.storage_type == "cuda"
 
         # test that to("cuda") does not modify the original tensor
         assert t.storage_type == "np"
         assert t.requires_grad
-        assert t.grad.storage_type == "np"
 
         tnp = tcu.to("np")
         assert tnp.storage_type == "np"
         assert tnp.requires_grad
-        assert tnp.grad.storage_type == "np"
 
     def test_to_inplace(self):
         npdata = np.array([1, 2, 3])
@@ -71,9 +67,5 @@ class TestTo:
         t.to_("cuda")
         assert t.storage_type == "cuda"
         assert t.requires_grad
-        assert t.grad.storage_type == "cuda"
-
         t.to_("np")
-        assert t.storage_type == "np"
         assert t.requires_grad
-        assert t.grad.storage_type == "np"

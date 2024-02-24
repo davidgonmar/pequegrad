@@ -3,6 +3,7 @@ from pequegrad.tensor import Tensor
 
 _Shape = Union[int, Tuple[int, ...]]
 
+
 class Function:
     ret: Tensor
     children: Set[Tensor]
@@ -57,5 +58,3 @@ class Function:
         ), f"function output device {f.ret.device} does not match input device {device}"
 
         return f.ret
-
-

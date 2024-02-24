@@ -2,6 +2,7 @@ from typing import Union
 from pequegrad.tensor import Tensor
 from pequegrad.function import Function
 
+
 class Pow(Function):
     def __init__(self, base: Tensor, exponent: Union[float, int, Tensor]):
         self.base = base

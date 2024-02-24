@@ -36,12 +36,7 @@ class Tensor:
         # If the tensor was created under a no_grad context, it doesn't require gradients
         self.requires_grad: bool = requires_grad and pequegrad_context.grad_enabled
 
-        # Gradient is initialized as 0.0 if requires_grad is True, None otherwise
-        self._grad: Type[Tensor] = (
-            Tensor.zeros(self.shape, requires_grad=False, storage=storage)
-            if self.requires_grad
-            else None
-        )
+        self._grad: Type[Tensor] = GradPlaceholder() if self.requires_grad else None
 
         # The context is the function that created this tensor, along with its inputs. The function
         # is responsible for assigning itself to the _ctx attribute of the tensor
@@ -58,13 +53,14 @@ class Tensor:
         """
         Moves the tensor to the given device in place
         """
+        # if the grad is not initialized, we don't need to move it
         if storage_type == "np":
             self.data = NumpyStorage(self.data.numpy())
-            if self._grad:
+            if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
                 self._grad.to_(storage_type)
         elif storage_type == "cuda":
             self.data = CudaStorage(self.data.numpy())
-            if self._grad:
+            if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
                 self._grad.to_(storage_type)
 
     @property
@@ -142,11 +138,11 @@ class Tensor:
     def grad(self):
         return self._grad
 
-    
     def show_graph(self):
         from .graph import build_graph
         import matplotlib.pyplot as plt
         import networkx as nx
+
         G = build_graph(self)
         pos = nx.spring_layout(G)
         nx.draw(G, pos, with_labels=True, node_size=2500)
@@ -490,7 +486,7 @@ class Tensor:
     def shape(self):
         """Returns the shape of the tensor"""
         return self.data.shape
-    
+
     @property
     def dim(self):
         """Returns the number of dimensions of the tensor"""
@@ -551,3 +547,28 @@ from .function import (  # noqa: E402 avoid circular imports
     Permute,
     Div,
 )
+
+
+class GradPlaceholder(Tensor):
+    """
+    This works the following way. Tensor grads are usually initialized as a tensor of zeros. Why? So that in backpropagation,
+    we can accumulate incoming gradients like x._grad += Tensor(<calculated gradient of operation>)). However, that requires extra
+    memory and allocation (just to initialize it to zeros).
+    By doing this:
+    - We avoid unnecesary memory allocation for those 0 tensors (which means less memory consumption and no need to waste time allocating
+        it, resulting in a SIGNIFICANT speedup)
+    - We avoid the first add. Since (x.grad = Tensor.zeros(shape_like_this)) += Tensor(incoming_grad) is equivalent to doing just
+        x.grad = Tensor(incoming_grad), we also avoid the first 'Add' operation.
+    This is the same as initializing it to None, but then we have to check a lot of stuff, and this is more elegant.
+
+    TLDR: by not allocating a tensor with 0s and doing this, we avoid an initial 0s allocation and the first 'Add' operation.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __repr__(self):
+        return "GradPlaceholder()"
+
+    def __add__(self, other):
+        return other

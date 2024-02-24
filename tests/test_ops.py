@@ -402,7 +402,6 @@ class _TestOps:
         ],
     )
     def test_conv2d(self, data):
-        # TODO - Implement backward for conv2d
         shape_input, shape_kernel, use_bias = data
 
         def torch_fn(x, y, b=None):

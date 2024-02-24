@@ -9,7 +9,7 @@ class ReduceFunction(Function):
         self.a = a
         self.dim = dim
         self.keepdim = keepdim
-    
+
     def _unreduce(self, x):
         # When keepdim is False, we need to insert a dimension of size 1 at the dimension we reduced over
         # so that broadcasting works correctly during the backward pass.
@@ -17,7 +17,8 @@ class ReduceFunction(Function):
             x = x.expand_dims(axis=self.dim)
         # Now we can broadcast the gradient to the shape of the input tensor
         return x.broadcast_to(self.a.shape)
-    
+
+
 class Mean(ReduceFunction):
     def forward(self):
         self.ret = Tensor(
@@ -84,5 +85,3 @@ class Max(ReduceFunction):
                 grad_broadcasted.where(self.a.data == ret_broadcasted, 0),
                 storage=self.storage,
             )
-
-

@@ -16,7 +16,7 @@ def kaiming_init(shape):
 
 
 class Module:
-    _parameters: List[Tensor] = None
+    _parameters: List[ModuleParam] = None
 
     @property
     def storage_type(self):

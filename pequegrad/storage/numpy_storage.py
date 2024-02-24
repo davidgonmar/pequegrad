@@ -309,7 +309,7 @@ class NumpyStorage(AbstractStorage):
 
     def __neg__(self) -> "NumpyStorage":
         return NumpyStorage(-self.data)
-    
+
     def __ne__(self, other: "NumpyStorage") -> bool:
         return self.not_equal(other)
 

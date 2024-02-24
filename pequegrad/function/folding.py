@@ -2,6 +2,7 @@ from pequegrad.tensor import Tensor
 from typing import Tuple
 from pequegrad.function import Function
 
+
 class Unfold(Function):
     def __init__(self, input: Tensor, kernel_shape: Tuple[int, ...], stride: int = 1):
         super().__init__(input)

@@ -1,6 +1,7 @@
 from pequegrad.tensor import Tensor
 from pequegrad.function import Function
 
+
 class MatMul(Function):
     def __init__(self, x: Tensor, y: Tensor):
         super().__init__(x, y)

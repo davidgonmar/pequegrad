@@ -46,7 +46,6 @@ class Squeeze(Function):
             )
 
 
-
 class Permute(Function):
     def __init__(self, a: Tensor, dims: Tuple[int, ...]):
         super().__init__(a)
@@ -72,7 +71,6 @@ class Permute(Function):
             )
 
 
-
 class Reshape(Function):
     def __init__(self, input: Tensor, shape: Tuple[int, ...]):
         super().__init__(input)
@@ -93,5 +91,3 @@ class Reshape(Function):
             self.input._grad += Tensor(
                 self.ret.grad.data, storage=self.storage
             ).reshape(self.input_shape)
-
-
