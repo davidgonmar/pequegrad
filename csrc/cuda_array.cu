@@ -62,9 +62,7 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   im2col_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), k_h, k_w,
                                            x_h, x_w, stride, batch_size,
                                            in_channels);
-
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 
@@ -105,9 +103,7 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
   col2im_kernel<<<grid_size, block_size>>>(
       ptr.get(), out.ptr.get(), out_channels, k_h, k_w, in_h, in_w,
       out_batch_size, out_h, out_w, stride);
-
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 
@@ -237,8 +233,7 @@ CudaArray CudaArray::binop(const CudaArray &other, binary_op_kernel ker) const {
   ker<<<grid_size, block_size>>>(d_strides.get(), d_other_strides.get(),
                                  d_shape.get(), n_dims, ptr.get(),
                                  other.ptr.get(), out.ptr.get());
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 CudaArray CudaArray::ternaryop(const py::array_t<float> &second,
@@ -302,8 +297,7 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
                                  d_third_strides.get(), d_shape.get(),
                                  shape.size(), ptr.get(), second.ptr.get(),
                                  third.ptr.get(), out.ptr.get());
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 
@@ -361,8 +355,7 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK,
                                MAX_THREADS_PER_BLOCK * ELEM_SIZE>>>(
         a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
-    cudaDeviceSynchronize();
-    CHECK_CUDA(cudaGetLastError());
+    PG_CUDA_KERNEL_END;
     if (new_size > 1) {
       // if size > 1, we need to reduce the vector to a single value
       return out.sum(false);
@@ -419,8 +412,7 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     batched_matmul_kernel<<<gridSize, block_size>>>(
         a.ptr.get(), b.ptr.get(), out.ptr.get(), lhs_shape.get(),
         rhs_shape.get(), a.ndim());
-    cudaDeviceSynchronize();
-    CHECK_CUDA(cudaGetLastError());
+    PG_CUDA_KERNEL_END;
     return out;
   }
 }
@@ -435,8 +427,7 @@ CudaArray CudaArray::outer_product(const CudaArray &other) const {
   CudaArray out(total_idxs, new_shape);
   vector_outer_product_kernel<<<grid_size, DEFAULT_BLOCK_SIZE>>>(
       ptr.get(), other.ptr.get(), out.ptr.get(), size, other.size);
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 
@@ -464,8 +455,7 @@ CudaArray CudaArray::reduce(reduction_kernel ker, axis_t axis,
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
   ker<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides.get(),
                                  d_shape.get(), n_dims, axis);
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   if (keepdims) {
     return out;
   }
@@ -688,8 +678,7 @@ CudaArray CudaArray::fill(shape_t shape, float value) {
       shape);
   fill_kernel<<<ceil(out.size / (float)DEFAULT_BLOCK_SIZE),
                 DEFAULT_BLOCK_SIZE>>>(out.ptr.get(), out.size, value);
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 };
 CudaArray::~CudaArray() {}
@@ -740,8 +729,7 @@ CudaArray CudaArray::elwiseop(element_wise_op_kernel ker) const {
   CudaArray out(size, shape);
   ker<<<grid_size, block_size>>>(d_strides.get(), d_shape.get(), n_dims,
                                  this->ptr.get(), out.ptr.get());
-  cudaDeviceSynchronize();
-  CHECK_CUDA(cudaGetLastError());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 

@@ -54,3 +54,9 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
     throw std::runtime_error(stream.str());
   }
 }
+
+#define PG_CUDA_KERNEL_END \
+  do {                     \
+    CHECK_CUDA(cudaGetLastError()); \
+    CHECK_CUDA(cudaDeviceSynchronize()); \
+  } while (0)
