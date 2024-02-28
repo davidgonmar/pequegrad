@@ -16,11 +16,11 @@ class SGD:
         self.vt_last = [0] * len(parameters)
         self.momentum = momentum
 
-    def zero(self):
+    def reset_grad(self):
         for p in self.params:
-            p.zero_grad()
+            p.reset_grad()
 
-    def step(self, zero: bool = True):
+    def step(self,reset_grad: bool = True):
         for i, p in enumerate(self.params):
             gt = p.grad.data
             if self.weight_decay != 0:
@@ -29,8 +29,8 @@ class SGD:
             self.vt_last[i] = vt
             p.data -= self.lr * vt
 
-        if zero:
-            self.zero()
+        if reset_grad:
+            self.reset_grad()
 
 
 class Adam:
@@ -46,11 +46,11 @@ class Adam:
         self.t = 1
         self.eps = eps
 
-    def zero(self):
+    def reset_grad(self):
         for p in self.params:
-            p.zero_grad()
+            p.reset_grad()
 
-    def step(self, zero: bool = True):
+    def step(self, reset_grad: bool = True):
         for i, p in enumerate(self.params):
             gt = p.grad.data
             mt = self.b1 * self.mt_last[i] + (1 - self.b1) * gt
@@ -61,5 +61,5 @@ class Adam:
             self.mt_last[i] = mt
             p.data -= self.lr * mt_hat / (vt_hat**0.5 + self.eps)
             self.t += 1
-        if zero:
-            self.zero()
+        if reset_grad:
+            self.reset_grad()

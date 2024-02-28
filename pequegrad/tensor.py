@@ -178,18 +178,15 @@ class Tensor:
         )
         return t
 
-    def zero_grad(self):
+    def reset_grad(self):
         """
-        Zeroes the gradient of the tensor
+        Resets the gradient of the tensor to 'None'
         """
         if not self.requires_grad:
             raise RuntimeError(
-                "cannot call zero_grad on a tensor that doesn't require grad"
+                "cannot call reset_grad on a tensor that doesn't require grad"
             )
-
-        self._grad = Tensor.zeros(
-            self.shape, requires_grad=False, storage=self.storage_type
-        )
+        self._grad = GradPlaceholder()
 
     ##### INITIALIZATION METHODS #####
 

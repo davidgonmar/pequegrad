@@ -59,9 +59,9 @@ class Module:
             self._parameters = self._search_parameters()
         return self._parameters
 
-    def zero_grad(self):
+    def reset_grad(self):
         for p in self.parameters():
-            p.zero_grad()
+            p.reset_grad()
 
 
 class Linear(Module):
