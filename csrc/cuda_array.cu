@@ -594,11 +594,6 @@ CudaArray CudaArray::unsqueeze(axis_t axis) const {
 }
 
 CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
-  // TODO -- eventually I'll make a copy kernel that will take into account the
-  // strides of both input and output
-  if (!is_contiguous()) {
-    return as_contiguous().reshape(_new_shape);
-  }
   shape_t new_shape(_new_shape.size());
   size_t total_new = 1;
 
@@ -628,10 +623,18 @@ CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
   total_new = total_old;
 
   CudaArray out(total_new, new_shape);
-
-  CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), total_new * ELEM_SIZE,
-                        cudaMemcpyDeviceToDevice));
-
+  dim3 block_size(DEFAULT_BLOCK_SIZE);
+  dim3 grid_size(ceil(total_new / (float)DEFAULT_BLOCK_SIZE));
+  auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
+  auto &in_shape = cuda_unique_ptr_from_host(shape.size(), shape.data());
+  auto &out_shape =
+      cuda_unique_ptr_from_host(new_shape.size(), new_shape.data());
+  auto &out_strides =
+      cuda_unique_ptr_from_host(new_shape.size(), out.strides.data());
+  copy_with_out_strides_kernel<<<grid_size, block_size>>>(
+      in_strides.get(), in_shape.get(), out_strides.get(), out_shape.get(),
+      ndim(), out.ndim(), ptr.get(), out.ptr.get());
+  PG_CUDA_KERNEL_END;
   return out;
 }
 

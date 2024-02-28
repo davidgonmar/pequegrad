@@ -55,8 +55,8 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
   }
 }
 
-#define PG_CUDA_KERNEL_END \
-  do {                     \
-    CHECK_CUDA(cudaGetLastError()); \
-    CHECK_CUDA(cudaDeviceSynchronize()); \
+#define PG_CUDA_KERNEL_END                                                     \
+  do {                                                                         \
+    CHECK_CUDA(cudaGetLastError());                                            \
+    CHECK_CUDA(cudaDeviceSynchronize());                                       \
   } while (0)
