@@ -9,6 +9,10 @@ class NumpyStorage(AbstractStorage):
     data: np.ndarray
 
     @property
+    def dtype(self) -> np.dtype:
+        return self.data.dtype
+
+    @property
     def shape(self) -> tuple:
         return self.data.shape
 
@@ -128,8 +132,10 @@ class NumpyStorage(AbstractStorage):
         )
 
     @staticmethod
-    def fill(shape: tuple, value: float) -> "NumpyStorage":
-        return NumpyStorage(np.full(shape, value, dtype=np.float32))
+    def fill(
+        shape: tuple, value: Union[int, float], dtype: np.dtype = np.float32
+    ) -> "NumpyStorage":
+        return NumpyStorage(np.full(shape, value, dtype=dtype))
 
     @staticmethod
     def where_static(
@@ -339,7 +345,10 @@ class NumpyStorage(AbstractStorage):
         return NumpyStorage(np.max(self.data, axis, keepdims=keepdims))
 
     def mean(self, axis: int, keepdims: bool = False) -> "NumpyStorage":
-        return NumpyStorage(np.mean(self.data, axis, keepdims=keepdims))
+        # todo -- why do we need to specify the dtype here?
+        return NumpyStorage(
+            np.mean(self.data, axis, keepdims=keepdims, dtype=self.data.dtype)
+        )
 
     def pow(self, exponent: "NumpyStorage") -> "NumpyStorage":
         return (

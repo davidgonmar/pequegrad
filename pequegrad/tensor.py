@@ -246,15 +246,20 @@ class Tensor:
         requires_grad=False,
         storage_type: str = "np",
     ) -> "Tensor":
-        assert indices.dim == 1, "indices must be a vector"
-        assert np.all(indices.numpy() >= 0), "indices must be positive integers (>= 0)"
+        indices = indices.numpy().astype(int)
+        assert indices.ndim == 1, "indices must be a vector"
         assert np.all(
-            indices.numpy() < num_classes
-        ), "indices must be smaller than num_classes"
+            indices >= 0
+        ), "indices must be positive integers (>= 0), got {}".format(indices)
+        assert np.all(
+            indices < num_classes
+        ), "indices must be smaller than num_classes, got {}".format(
+            list(filter(lambda x: x >= num_classes, indices))
+        )
 
-        np_one_hot = np.zeros((indices.data.size, num_classes))
+        np_one_hot = np.zeros((indices.shape[0], num_classes))
 
-        np_one_hot[np.arange(indices.data.size), indices.numpy().astype(int)] = 1.0
+        np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
         return cls(np_one_hot, requires_grad=requires_grad, storage=storage_type)
 

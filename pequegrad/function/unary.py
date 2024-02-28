@@ -7,10 +7,13 @@ class Pow(Function):
     def __init__(self, base: Tensor, exponent: Union[float, int, Tensor]):
         self.base = base
         if not isinstance(exponent, Tensor):
-            exponent = Tensor(exponent, requires_grad=False, storage=self.base.device)
+            self.exponent = {"data": exponent}
         self.exponent = exponent
 
-        super().__init__(base, exponent)
+        if isinstance(exponent, Tensor):
+            super().__init__(base, exponent)
+        else:
+            super().__init__(base)
 
     def forward(self):
         self.ret = Tensor(

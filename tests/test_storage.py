@@ -14,7 +14,9 @@ if CUDA_AVAILABLE:
 np.random.seed(42)
 
 
-class TestStorage:
+class _TestStorage:
+    dtype: any
+
     def _compare_with_numpy(
         self, x: AbstractStorage, y: np.ndarray, test_strides=True, tol=1e-5
     ):
@@ -22,6 +24,7 @@ class TestStorage:
         if test_strides:
             assert x.strides == y.strides
         print(x.numpy(), "\n<========================>\n", y)
+        # assert x.dtype == y.dtype
         np.testing.assert_allclose(x.numpy(), y, rtol=tol)
 
     @pytest.mark.parametrize(
@@ -50,10 +53,10 @@ class TestStorage:
         lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
 
         # random.randn returns a Python float, we need to wrap it in np.array
-        np1 = np.random.rand(*shape)
-        np1 = np.array(np1, dtype=np.float32)
-        np2 = np.random.rand(*shape)
-        np2 = np.array(np2, dtype=np.float32)
+        np1 = np.random.rand(*shape) * 2 + 1  # to avoid division by zero
+        np1 = np.array(np1, dtype=self.dtype)
+        np2 = np.random.rand(*shape) * 2 + 1  # to avoid division by zero
+        np2 = np.array(np2, dtype=self.dtype)
 
         x = class_storage(np1)
         y = class_storage(np2)
@@ -64,8 +67,8 @@ class TestStorage:
             assert (
                 type(res) == NumpyStorage
             ), "Result should be of type NPStorage, op: " + str(lambdaop)
-            res.data = res.data.astype(np.float32)
-        self._compare_with_numpy(res, lambdaopnp(np1, np2).astype(np.float32))
+            res.data = res.data.astype(self.dtype)
+        self._compare_with_numpy(res, lambdaopnp(np1, np2).astype(self.dtype))
 
     # test for broadcasting shapes -> from, to
     @pytest.mark.parametrize(
@@ -82,7 +85,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_broadcast_to(self, shape, class_storage):
         from_shape, to_shape = shape
-        nparr = np.random.rand(*from_shape).astype(np.float32)
+        nparr = np.random.rand(*from_shape).astype(self.dtype)
         x = class_storage(nparr)
         self._compare_with_numpy(
             x.broadcast_to(to_shape), np.broadcast_to(nparr, to_shape)
@@ -123,8 +126,12 @@ class TestStorage:
         lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
 
         from_shape, to_shape = shape
-        nparr = np.random.rand(*from_shape).astype(np.float32)
-        nparrbroadcasted = np.random.rand(*to_shape).astype(np.float32)
+        nparr = (
+            np.random.rand(*from_shape).astype(self.dtype) * 2 + 1
+        )  # to avoid division by zero
+        nparrbroadcasted = (
+            np.random.rand(*to_shape).astype(self.dtype) * 2 + 1
+        )  # to avoid division by zero
         x = class_storage(nparr)
         y = class_storage(nparrbroadcasted)
         res = lambdaoptensor(
@@ -134,9 +141,9 @@ class TestStorage:
             assert (
                 type(res) == NumpyStorage
             ), "Result should be of type NumpyStorage, got: " + str(type(res))
-            res.data = res.data.astype(np.float32)
+            res.data = res.data.astype(self.dtype)
         self._compare_with_numpy(
-            res, lambdaopnp(nparr, nparrbroadcasted).astype(np.float32)
+            res, lambdaopnp(nparr, nparrbroadcasted).astype(self.dtype)
         )
 
     @pytest.mark.parametrize(
@@ -147,7 +154,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_transpose_and_contiguous(self, data, class_storage):
         shape, new_order = data
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         x_permuted = x.permute(*new_order)
         np_transposed = np.transpose(nparr, new_order)
@@ -180,9 +187,11 @@ class TestStorage:
         ],
     )
     def test_unary_op(self, shape, class_storage, lambdaop):
+        if self.dtype == np.int32:
+            raise pytest.skip("Unary ops not tested properly for int32")
         tensor_op, np_op = lambdaop
 
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         res = tensor_op(x)
         self._compare_with_numpy(res, np_op(nparr))
@@ -192,7 +201,7 @@ class TestStorage:
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_T(self, shape, class_storage):
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         self._compare_with_numpy(x.T, np.transpose(nparr, axes=range(len(shape))[::-1]))
 
@@ -201,7 +210,7 @@ class TestStorage:
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_ndim(self, shape, class_storage):
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         assert x.ndim == len(shape)
 
@@ -210,7 +219,7 @@ class TestStorage:
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_size(self, shape, class_storage):
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         assert x.size == np.prod(shape)
 
@@ -227,7 +236,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_swapaxes(self, shape_and_axistoswap, class_storage):
         shape, axis_to_swap = shape_and_axistoswap
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         self._compare_with_numpy(
             x.swapaxes(axis1=axis_to_swap[0], axis2=axis_to_swap[1]),
@@ -274,8 +283,8 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_matmul(self, shapes, class_storage):
         from_shape, to_shape = shapes
-        nparr = np.random.rand(*from_shape).astype(np.float32)
-        nparr2 = np.random.rand(*to_shape).astype(np.float32)
+        nparr = np.random.rand(*from_shape).astype(self.dtype)
+        nparr2 = np.random.rand(*to_shape).astype(self.dtype)
         x = class_storage(nparr)
         y = class_storage(nparr2)
         self._compare_with_numpy(x.matmul(y), np.matmul(nparr, nparr2), tol=1e-3)
@@ -304,9 +313,9 @@ class TestStorage:
     def test_ternary_op(self, shape, class_storage, lambdaop):
         lambdaopnp = lambdaop[1] if isinstance(lambdaop, list) else lambdaop
         lambdaoptensor = lambdaop[0] if isinstance(lambdaop, list) else lambdaop
-        np1 = np.random.rand(*shape).astype(np.float32)
-        np2 = np.random.rand(*shape).astype(np.float32)
-        np3 = np.random.rand(*shape).astype(np.float32)
+        np1 = np.random.rand(*shape).astype(self.dtype)
+        np2 = np.random.rand(*shape).astype(self.dtype)
+        np3 = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(np1)
         y = class_storage(np2)
         z = class_storage(np3)
@@ -385,23 +394,23 @@ class TestStorage:
     def test_reduce(self, params, class_storage, op):
         shape, axis, keepdims = params
 
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
 
         if op == "sum":
             self._compare_with_numpy(
                 x.sum(axis=axis, keepdims=keepdims),
-                np.sum(nparr, axis=axis, keepdims=keepdims),
+                np.sum(nparr, axis=axis, keepdims=keepdims, dtype=self.dtype),
             )
         elif op == "max":
             self._compare_with_numpy(
                 x.max(axis=axis, keepdims=keepdims),
-                np.max(nparr, axis=axis, keepdims=keepdims),
+                np.max(nparr, axis=axis, keepdims=keepdims).astype(self.dtype),
             )
         elif op == "mean":
             self._compare_with_numpy(
                 x.mean(axis=axis, keepdims=keepdims),
-                np.mean(nparr, axis=axis, keepdims=keepdims),
+                np.mean(nparr, axis=axis, keepdims=keepdims).astype(self.dtype),
             )
 
     # test squeeze
@@ -411,7 +420,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_squeeze(self, shape, class_storage):
         shape, axis = shape
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         self._compare_with_numpy(x.squeeze(axis), np.squeeze(nparr, axis))
 
@@ -430,7 +439,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_squeeze_invalid(self, shape, class_storage):
         shape, axis = shape
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         with pytest.raises(BaseException):
             x.squeeze(axis)
@@ -451,7 +460,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_expand_dims(self, shape, class_storage):
         shape, axis = shape
-        nparr = np.random.rand(*shape).astype(np.float32)
+        nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_storage(nparr)
         self._compare_with_numpy(x.expand_dims(axis), np.expand_dims(nparr, axis))
 
@@ -477,7 +486,7 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_reshape(self, shape, class_storage):
         from_shape, to_shape = shape
-        nparr = np.random.rand(*from_shape).astype(np.float32)
+        nparr = np.random.rand(*from_shape).astype(self.dtype)
         x = class_storage(nparr)
         self._compare_with_numpy(x.reshape(*to_shape), np.reshape(nparr, to_shape))
 
@@ -495,8 +504,8 @@ class TestStorage:
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_outer_product(self, shape, class_storage):
-        nparr = np.random.rand(*shape[0]).astype(np.float32)
-        nparr2 = np.random.rand(*shape[1]).astype(np.float32)
+        nparr = np.random.rand(*shape[0]).astype(self.dtype)
+        nparr2 = np.random.rand(*shape[1]).astype(self.dtype)
         x = class_storage(nparr)
         y = class_storage(nparr2)
         self._compare_with_numpy(x.outer_product(y), np.outer(nparr, nparr2))
@@ -519,9 +528,11 @@ class TestStorage:
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_im2col(self, data, class_storage):
+        if self.dtype != np.float32:
+            raise pytest.skip("im2col only supported for float32")
         shape_input, kernel_size, stride = data
 
-        nparr = np.random.rand(*shape_input).astype(np.float32)
+        nparr = np.random.rand(*shape_input).astype(self.dtype)
         x = class_storage(nparr)
         x_transformed = x.im2col(kernel_size, stride)
         x_torch = torch.tensor(nparr)
@@ -530,7 +541,7 @@ class TestStorage:
         )
         self._compare_with_numpy(
             x_transformed,
-            x_torch_transformed.numpy().astype(np.float32),
+            x_torch_transformed.numpy().astype(self.dtype),
             test_strides=False,
         )
 
@@ -551,9 +562,11 @@ class TestStorage:
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_col2im(self, data, class_storage):
+        if self.dtype != np.float32:
+            raise pytest.skip("col2im only supported for float32")
         shape_input, kernel_size, stride = data
 
-        nparr = np.random.rand(*shape_input).astype(np.float32)
+        nparr = np.random.rand(*shape_input).astype(self.dtype)
         torch_unfolded = torch.nn.functional.unfold(
             torch.tensor(nparr), kernel_size, stride=stride
         )
@@ -576,5 +589,17 @@ class TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     @pytest.mark.parametrize("value", [0.0, 1.0, 2.0, 3.0, 4.0])
     def test_fill(self, shape, class_storage, value):
-        x = class_storage.fill(shape, value)
-        self._compare_with_numpy(x, np.full(shape, value, dtype=np.float32))
+        x = class_storage.fill(shape, value, dtype=self.dtype)
+        self._compare_with_numpy(x, np.full(shape, value, dtype=self.dtype))
+
+
+class TestStorageFloat32(_TestStorage):
+    dtype = np.float32
+
+
+class TestStorageInt32(_TestStorage):
+    dtype = np.int32
+
+
+class TestStorageFloat64(_TestStorage):
+    dtype = np.float64

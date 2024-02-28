@@ -1,16 +1,45 @@
 import numpy as np
+from numpy import dtype
 from typing import Union, Tuple
-from pequegrad.cuda import CudaArray, CUDA_AVAILABLE
+from pequegrad.cuda import (
+    CUDA_AVAILABLE,
+    CudaArrayInt32,
+    CudaArrayFloat32,
+    CudaArrayFloat64,
+)
+import warnings
 from .abstract_storage import AbstractStorage
 
 if not CUDA_AVAILABLE:
     raise ImportError("CUDA is not available, still tried to import CudaStorage")
 
 
+np_dtype_to_cuda_array = {
+    np.float32: CudaArrayFloat32,
+    np.float64: CudaArrayFloat64,
+    np.int32: CudaArrayInt32,
+    float: CudaArrayFloat32,
+    int: CudaArrayInt32,
+    dtype("float32"): CudaArrayFloat32,
+    dtype("float64"): CudaArrayFloat64,
+    dtype("int32"): CudaArrayInt32,
+}
+
+cuda_array_to_np_dtype = {
+    CudaArrayFloat32: np.float32,
+    CudaArrayFloat64: np.float64,
+    CudaArrayInt32: np.int32,
+}
+
+
 class CudaStorage(AbstractStorage):
     backend = "cuda"
 
-    data: CudaArray
+    data: Union["CudaArrayInt32", "CudaArrayFloat32", "CudaArrayFloat64"]
+
+    @property
+    def dtype(self) -> np.dtype:
+        return cuda_array_to_np_dtype[type(self.data)]
 
     def to_numpy(self) -> np.ndarray:
         return self.data.to_numpy()
@@ -36,7 +65,7 @@ class CudaStorage(AbstractStorage):
         return np.prod(self.shape)
 
     def astype(self, dtype: Union[str, np.dtype]) -> "CudaStorage":
-        raise NotImplementedError("Only float32 is supported")
+        return CudaStorage(self.data.astype(dtype))
 
     @property
     def strides(self) -> tuple:
@@ -46,29 +75,50 @@ class CudaStorage(AbstractStorage):
         self,
         data: Union[
             np.ndarray,
-            CudaArray,
+            CudaArrayInt32,
+            CudaArrayFloat32,
+            CudaArrayFloat64,
             int,
             float,
             np.float32,
             np.float64,
             np.int32,
-            np.int64,
         ],
+        dtype: Union[str, np.dtype] = None,
     ):
-        if isinstance(data, np.ndarray):
-            self.data = CudaArray.from_numpy(
-                data if data.dtype == np.float32 else data.astype(np.float32)
-            )
-        elif isinstance(data, CudaArray):
-            self.data = data
-        elif isinstance(data, (int, float, np.float32, np.float64, np.int32, np.int64)):
-            self.data = CudaArray.from_numpy(np.array(data, dtype=np.float32))
-        elif isinstance(data, CudaStorage):
-            self.data = data.data
+        if dtype is None:
+            if isinstance(data, np.ndarray):
+                if data.dtype not in [np.float32, np.float64, np.int32]:
+                    warnings.warn(
+                        f"Data type {data.dtype} is not supported, casting to float32"
+                    )
+                    data = data.astype(np.float32)
+                self.data = np_dtype_to_cuda_array[data.dtype].from_numpy(data)
+            elif isinstance(data, (CudaArrayInt32, CudaArrayFloat32, CudaArrayFloat64)):
+                self.data = data
+            elif isinstance(data, (int, float, np.float32, np.float64, np.int32)):
+                self.data = np_dtype_to_cuda_array[type(data)].from_numpy(
+                    np.array(data)
+                )
+            elif isinstance(data, CudaStorage):
+                self.data = data.data
+            else:
+                raise ValueError(
+                    f"Data must be a numpy array or CudaArray, got {type(data)}"
+                )
         else:
-            raise ValueError(
-                f"Data must be a numpy array or CudaArray, got {type(data)}"
+            # todo -- this is inefficient, we should be able to pass the dtype directly to the CudaArray
+            nparray = np.array(
+                data,
+                dtype=dtype
+                if dtype in [np.float32, np.float64, np.int32]
+                else np.float32,
             )
+
+            if dtype not in [np.float32, np.float64, np.int32]:
+                warnings.warn(f"Data type {dtype} is not supported, casting to float32")
+
+            self.data = np_dtype_to_cuda_array[nparray.dtype].from_numpy(nparray)
 
     def is_contiguous(self) -> bool:
         return self.data.is_contiguous()
@@ -81,8 +131,13 @@ class CudaStorage(AbstractStorage):
         )
 
     @staticmethod
-    def fill(shape: Tuple[int, ...], value: float) -> "CudaStorage":
-        return CudaStorage(CudaArray.fill(shape, value))
+    def fill(
+        shape: Tuple[int, ...], value: Union[int, float], dtype=np.float64
+    ) -> "CudaStorage":
+        cls = np_dtype_to_cuda_array[dtype]
+        # transform value to dtype
+        value = dtype(value)
+        return CudaStorage(cls.fill(shape, value))
 
     def __add__(self, other: "CudaStorage") -> "CudaStorage":
         return self.add(other)
@@ -104,11 +159,13 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(other.data.sub(self.data))
 
     def mul(self, other: "CudaStorage") -> "CudaStorage":
-        return (
+        out = (
             CudaStorage(self.data.mul(other.data))
             if isinstance(other, CudaStorage)
             else CudaStorage(self.data.mul(other))
         )
+
+        return out
 
     def __mul__(self, other: "CudaStorage") -> "CudaStorage":
         return self.mul(other)
@@ -126,7 +183,7 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.div(other.data))
             if isinstance(other, CudaStorage)
-            else CudaStorage(self.data.div(other))
+            else CudaStorage(self.data.div(CudaStorage(other, dtype=self.dtype).data))
         )
 
     def __truediv__(self, other: "CudaStorage") -> "CudaStorage":
@@ -149,27 +206,25 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(self.data.contiguous())
 
     def where(self, condition: "CudaStorage", other: "CudaStorage") -> "CudaStorage":
-        return (
-            CudaStorage(self.data.where(condition.data, other.data))
-            if isinstance(other, CudaStorage) and isinstance(condition, CudaStorage)
-            else CudaStorage(self.data.where(condition.data, other))
-        )
+        if not isinstance(condition, CudaStorage):
+            condition = CudaStorage(condition, dtype=self.dtype)
+        if not isinstance(other, CudaStorage):
+            other = CudaStorage(other, dtype=self.dtype)
+
+        return CudaStorage(self.data.where(condition.data, other.data))
 
     @staticmethod
     def where_static(
         condition: "CudaStorage", x: "CudaStorage", y: "CudaStorage"
     ) -> "CudaStorage":
-        return (
-            CudaStorage(x.data.where(condition.data, y.data))
-            if isinstance(x, CudaStorage)
-            and isinstance(y, CudaStorage)
-            and isinstance(condition, CudaStorage)
-            else CudaStorage(
-                CudaStorage(x).data.where(
-                    CudaStorage(condition).data, CudaStorage(y).data
-                )
-            )
-        )
+        if not isinstance(condition, CudaStorage):
+            condition = CudaStorage(condition, dtype=x.dtype)
+        if not isinstance(x, CudaStorage):
+            x = CudaStorage(x, dtype=condition.dtype)
+        if not isinstance(y, CudaStorage):
+            y = CudaStorage(y, dtype=condition.dtype)
+
+        return CudaStorage(condition.data.where(x.data, y.data))
 
     def outer_product(self, other: "CudaStorage") -> "CudaStorage":
         return CudaStorage(self.data.outer_product(other.data))
@@ -189,7 +244,7 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.gt(other.data))
             if isinstance(other, CudaStorage)
-            else CudaStorage(self.data.gt(CudaStorage(other).data))
+            else CudaStorage(self.data.gt(CudaStorage(other, dtype=self.dtype).data))
         )
 
     def greater_equal(self, other: "CudaStorage") -> "CudaStorage":
@@ -241,7 +296,7 @@ class CudaStorage(AbstractStorage):
         raise NotImplementedError
 
     def __repr__(self):
-        return f"CudaStorage({self.data.numpy()})"
+        return f"CudaStorage({self.data.to_numpy()})"
 
     def max(self, axis: int, keepdims: bool = False) -> "CudaStorage":
         if axis is None:
@@ -261,13 +316,15 @@ class CudaStorage(AbstractStorage):
             else:
                 N = np.prod([self.shape[i] for i in axis])
 
-        return CudaStorage(sum.div(CudaStorage(N).data))
+        return CudaStorage(sum.div(CudaStorage(N, dtype=self.dtype).data))
 
     def pow(self, exponent: "CudaStorage") -> "CudaStorage":
         return (
             CudaStorage(self.data.pow(exponent.data))
             if isinstance(exponent, CudaStorage)
-            else CudaStorage(self.data.pow(CudaStorage(exponent).data))
+            else CudaStorage(
+                self.data.pow(CudaStorage(exponent, dtype=self.dtype).data)
+            )
         )
 
     def __pow__(self, exponent: "CudaStorage") -> "CudaStorage":
@@ -289,7 +346,9 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.el_wise_max(other.data))
             if isinstance(other, CudaStorage)
-            else CudaStorage(self.data.el_wise_max(CudaStorage(other).data))
+            else CudaStorage(
+                self.data.el_wise_max(CudaStorage(other, dtype=self.dtype).data)
+            )
         )
 
     def im2col(self, kernel_size: Tuple[int, int], stride: int) -> "CudaStorage":

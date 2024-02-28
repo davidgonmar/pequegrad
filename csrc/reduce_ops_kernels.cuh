@@ -1,22 +1,15 @@
 #pragma once
-typedef void (*reduction_kernel)(const float *in, float *out,
-                                 const size_t *in_strides,
-                                 const size_t *in_shape, const size_t n_dims,
-                                 const size_t reduce_axis);
 
-__global__ void sum_kernel(const float *in, float *out,
-                           const size_t *in_strides, const size_t *in_shape,
-                           const size_t n_dims, const size_t reduce_axis);
-
-__global__ void max_kernel(const float *in, float *out,
-                           const size_t *in_strides, const size_t *in_shape,
-                           const size_t n_dims, const size_t reduce_axis);
+template <typename T>
+using reduction_kernel = void (*)(const T *in, T *out, const size_t *in_strides,
+                                  const size_t *in_shape, const size_t n_dims,
+                                  const size_t reduce_axis);
 
 // operation and initial accumulator value
-template <typename Op>
-__device__ void reduce_base_fn(const float *in, float *out,
-                               const size_t *in_strides, const size_t *in_shape,
-                               const size_t n_dims, const size_t red_axis) {
+template <typename Op, typename T>
+__device__ void reduce_base_fn(const T *in, T *out, const size_t *in_strides,
+                               const size_t *in_shape, const size_t n_dims,
+                               const size_t red_axis) {
   // the general explanation is:
   // each idx represents one output value, so each thread will reduce to said
   // output value therefore, we'll loop accross the reduced dimension, and
@@ -53,7 +46,7 @@ __device__ void reduce_base_fn(const float *in, float *out,
 
   int red_elements = in_shape[red_axis];
 
-  float accum = op.initial_value();
+  T accum = op.initial_value();
 
   for (int i = 0; i < red_elements; i++) {
     int reduced_idx = idx;
@@ -61,16 +54,51 @@ __device__ void reduce_base_fn(const float *in, float *out,
     for (int j = n_dims - 1; j >= 0; j--) {
       if (j == red_axis) {
         in_idx +=
-            i * in_strides[j] / sizeof(float); // simply advance by 'i * stride'
+            i * in_strides[j] / sizeof(T); // simply advance by 'i * stride'
       } else { // do the general algorithm to go from idx -> actual displacement
         int current_dim_idx = reduced_idx % in_shape[j];
-        in_idx += current_dim_idx * in_strides[j] / sizeof(float);
+        in_idx += current_dim_idx * in_strides[j] / sizeof(T);
         reduced_idx /= in_shape[j];
       }
     }
-    float el = in[in_idx];
+    T el = in[in_idx];
     accum = op.apply(accum, el);
   }
 
   out[idx] = accum;
+}
+
+template <typename T> struct SumOp {
+  __device__ T apply(T a, T b) { return a + b; }
+  __device__ T initial_value() { return (T)0; }
+};
+
+template <typename T> struct MaxOp {
+  __device__ T apply(T a, T b) { return max(a, b); }
+  // depending on the type, we might want to use the smallest possible value
+  __device__ T initial_value() {
+    if (std::is_same<T, float>::value) {
+      return -INFINITY;
+    } else if (std::is_same<T, double>::value) {
+      return -INFINITY;
+    } else if (std::is_same<T, int>::value) {
+      return INT_MIN;
+    } else {
+      return 0;
+    }
+  }
+};
+
+template <typename T>
+__global__ void sum_kernel(const T *in, T *out, const size_t *in_strides,
+                           const size_t *in_shape, const size_t n_dims,
+                           const size_t red_axis) {
+  reduce_base_fn<SumOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
+}
+
+template <typename T>
+__global__ void max_kernel(const T *in, T *out, const size_t *in_strides,
+                           const size_t *in_shape, const size_t n_dims,
+                           const size_t red_axis) {
+  reduce_base_fn<MaxOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
 }
