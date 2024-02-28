@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils.cuh"
 #include "dtype.cuh"
+#include "utils.cuh"
 
 #define KERNEL_PARAMS_UN(T)                                                    \
   const size_t *in_strides, const size_t *shape, const size_t num_dims,        \
@@ -16,8 +16,6 @@ __global__ void exp_kernel(KERNEL_PARAMS_UN(int));
 __global__ void log_kernel(KERNEL_PARAMS_UN(float));
 __global__ void log_kernel(KERNEL_PARAMS_UN(double));
 __global__ void log_kernel(KERNEL_PARAMS_UN(int));
-
-
 
 template <typename T>
 __global__ void
@@ -55,8 +53,8 @@ enum class UnaryKernelType {
 
 template <typename T>
 void __launch_unary_kernel(UnaryKernelType type, dim3 blocks, dim3 threads,
-              const size_t *in_strides, const size_t *shape, const size_t num_dims,
-              const T *in, T *out) {
+                           const size_t *in_strides, const size_t *shape,
+                           const size_t num_dims, const T *in, T *out) {
   switch (type) {
   case UnaryKernelType::COPY:
     copy_kernel<<<blocks, threads>>>(in_strides, shape, num_dims, in, out);
@@ -72,44 +70,36 @@ void __launch_unary_kernel(UnaryKernelType type, dim3 blocks, dim3 threads,
   }
 }
 
-
-void launch_unary_kernel(UnaryKernelType type, DType dtype, dim3 blocks, dim3 threads,
-              const size_t *in_strides, const size_t *shape, const size_t num_dims,
-              const void *_in, void *_out);
-
-
+void launch_unary_kernel(UnaryKernelType type, DType dtype, dim3 blocks,
+                         dim3 threads, const size_t *in_strides,
+                         const size_t *shape, const size_t num_dims,
+                         const void *_in, void *_out);
 
 template <typename T>
-void __launch_copy_with_out_strides_kernel(dim3 blocks, dim3 threads,
-                                         const size_t *in_strides,
-                                         const size_t *in_shape,
-                                         const size_t *out_strides,
-                                         const size_t *out_shape,
-                                         const size_t in_num_dims,
-                                         const size_t out_num_dims, const T *in,
-                                         T *out) {
-  copy_with_out_strides_kernel<T><<<blocks, threads>>>(in_strides, in_shape, out_strides, out_shape,
+void __launch_copy_with_out_strides_kernel(
+    dim3 blocks, dim3 threads, const size_t *in_strides, const size_t *in_shape,
+    const size_t *out_strides, const size_t *out_shape,
+    const size_t in_num_dims, const size_t out_num_dims, const T *in, T *out) {
+  copy_with_out_strides_kernel<T>
+      <<<blocks, threads>>>(in_strides, in_shape, out_strides, out_shape,
                             in_num_dims, out_num_dims, in, out);
 }
 
-
-void launch_copy_with_out_strides_kernel(DType dtype, dim3 blocks, dim3 threads,
-                                         const size_t *in_strides,
-                                         const size_t *in_shape,
-                                         const size_t *out_strides,
-                                         const size_t *out_shape,
-                                         const size_t in_num_dims,
-                                         const size_t out_num_dims, const void *in,
-                                         void *out);
+void launch_copy_with_out_strides_kernel(
+    DType dtype, dim3 blocks, dim3 threads, const size_t *in_strides,
+    const size_t *in_shape, const size_t *out_strides, const size_t *out_shape,
+    const size_t in_num_dims, const size_t out_num_dims, const void *in,
+    void *out);
 
 template <typename InT, typename OutT>
 void __launch_astype_kernel(dim3 blocks, dim3 threads, const size_t *in_strides,
-                          const size_t *in_shape, const size_t num_dims,
-                          const InT *in, OutT *out) {
+                            const size_t *in_shape, const size_t num_dims,
+                            const InT *in, OutT *out) {
   astype_kernel<InT, OutT>
       <<<blocks, threads>>>(in_strides, in_shape, num_dims, in, out);
 }
 
-void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks, dim3 threads,
-                          const size_t *in_strides, const size_t *in_shape,
-                          const size_t num_dims, const void *in, void *out);
+void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks,
+                          dim3 threads, const size_t *in_strides,
+                          const size_t *in_shape, const size_t num_dims,
+                          const void *in, void *out);

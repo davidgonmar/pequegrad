@@ -1,8 +1,8 @@
 #pragma once
 
+#include <stdexcept>
 #include <string>
 #include <type_traits>
-#include <stdexcept>
 
 enum class DType {
   Int32,
@@ -10,16 +10,13 @@ enum class DType {
   Float64,
 };
 
-
 std::string dtype_to_string(DType dtype);
-
 
 constexpr DType max_dtype(DType a, DType b);
 
 size_t dtype_to_size(DType dtype);
 
-template<typename T>
-DType dtype_from_pytype() {
+template <typename T> DType dtype_from_pytype() {
   if (std::is_same<T, int>::value) {
     return DType::Int32;
   } else if (std::is_same<T, float>::value) {
@@ -31,8 +28,7 @@ DType dtype_from_pytype() {
   }
 }
 
-template<typename T>
-DType dtype_from_cpptype() {
+template <typename T> DType dtype_from_cpptype() {
   if (std::is_same<T, int>::value) {
     return DType::Int32;
   } else if (std::is_same<T, float>::value) {

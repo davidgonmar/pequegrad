@@ -2,7 +2,6 @@
 #include <stdexcept>
 #include <string>
 
-
 std::string dtype_to_string(DType dtype) {
   switch (dtype) {
   case DType::Int32:
@@ -15,7 +14,6 @@ std::string dtype_to_string(DType dtype) {
     throw std::runtime_error("Unknown dtype");
   }
 }
-
 
 constexpr DType max_dtype(DType a, DType b) {
   return (static_cast<int>(a) > static_cast<int>(b)) ? a : b;

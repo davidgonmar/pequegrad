@@ -9,7 +9,7 @@
 // accumulation range depends on the maximum block size of the GPU.
 template <typename T>
 __global__ void vector_dot_product_accum_kernel(const T *a, const T *b, T *out,
-                                         size_t size) {
+                                                size_t size) {
   // https://stackoverflow.com/a/27570775
   extern __shared__ __align__(sizeof(T)) unsigned char my_smem[];
   T *shared = reinterpret_cast<T *>(my_smem);
@@ -36,10 +36,10 @@ __global__ void vector_dot_product_accum_kernel(const T *a, const T *b, T *out,
     out[blockIdx.x] = shared[0];
 }
 
-
-void launch_vector_dot_product_accum_kernel(dim3 grid_size, dim3 block_size, size_t smem_size,
-                                            DType dtype, const void *a, const void *b, void *out,
-                                            size_t size);
+void launch_vector_dot_product_accum_kernel(dim3 grid_size, dim3 block_size,
+                                            size_t smem_size, DType dtype,
+                                            const void *a, const void *b,
+                                            void *out, size_t size);
 template <typename T>
 __global__ void vector_outer_product_kernel(T *a, T *b, T *out, size_t m,
                                             size_t n) {
@@ -56,10 +56,9 @@ __global__ void vector_outer_product_kernel(T *a, T *b, T *out, size_t m,
   out[curr_m * n + curr_n] = a[curr_m] * b[curr_n];
 }
 
-
 void launch_vector_outer_product_kernel(dim3 grid_size, dim3 block_size,
-                                        DType dtype, void *a, void *b, void *out,
-                                        size_t m, size_t n);
+                                        DType dtype, void *a, void *b,
+                                        void *out, size_t m, size_t n);
 template <typename T>
 __global__ void batched_matmul_kernel(
     const T *a, const T *b, T *out, const size_t *a_shape,

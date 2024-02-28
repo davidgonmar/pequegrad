@@ -45,6 +45,8 @@ def test_model(model, X_test, Y_test):
 
 
 def train(model, X_train, Y_train, epochs=13, batch_size=512):
+    # pro = cProfile.Profile()
+    # pro.enable()
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.033)
     for epoch in range(epochs):
@@ -62,6 +64,9 @@ def train(model, X_train, Y_train, epochs=13, batch_size=512):
             f"Epoch {epoch} | Loss {loss.numpy()}",
             end="\r" if epoch < epochs - 1 else "\n",
         )
+
+    # pro.disable()
+    # pro.print_stats(sort="time")
 
 
 if __name__ == "__main__":

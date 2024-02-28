@@ -71,6 +71,7 @@ __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
 }
 
 void launch_col2im_kernel(DType dtype, dim3 blocks, dim3 threads, void *in,
-                          void *out, size_t out_channels, size_t k_h, size_t k_w,
-                          size_t in_h, size_t in_w, size_t batch_size,
-                          size_t out_h, size_t out_w, size_t stride);
+                          void *out, size_t out_channels, size_t k_h,
+                          size_t k_w, size_t in_h, size_t in_w,
+                          size_t batch_size, size_t out_h, size_t out_w,
+                          size_t stride);

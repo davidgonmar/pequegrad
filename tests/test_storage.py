@@ -589,7 +589,7 @@ class _TestStorage:
     @pytest.mark.parametrize("class_storage", storages_to_test)
     @pytest.mark.parametrize("value", [0.0, 1.0, 2.0, 3.0, 4.0])
     def test_fill(self, shape, class_storage, value):
-        value = self.dtype(value) # todo -- handle casts?
+        value = self.dtype(value)  # todo -- handle casts?
         x = class_storage.fill(shape, value, dtype=self.dtype)
         self._compare_with_numpy(x, np.full(shape, value, dtype=self.dtype))
 

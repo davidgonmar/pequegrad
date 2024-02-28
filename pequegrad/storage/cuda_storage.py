@@ -11,7 +11,6 @@ if not CUDA_AVAILABLE:
     raise ImportError("CUDA is not available, still tried to import CudaStorage")
 
 
-
 class CudaStorage(AbstractStorage):
     backend = "cuda"
 
@@ -83,18 +82,26 @@ class CudaStorage(AbstractStorage):
                     f"Data must be a numpy array or CudaArray, got {type(data)}"
                 )
         else:
-            # todo -- this is inefficient, we should be able to pass the dtype directly to the CudaArray
-            nparray = np.array(
-                data,
-                dtype=dtype
-                if dtype in [np.float32, np.float64, np.int32]
-                else np.float32,
-            )
+            if isinstance(data, CudaArray) and data.dtype() == dtype:
+                self.data = data
 
-            if dtype not in [np.float32, np.float64, np.int32]:
-                warnings.warn(f"Data type {dtype} is not supported, casting to float32")
+            elif isinstance(data, (int, float, np.float32, np.float64, np.int32)):
+                self.data = CudaArray.from_numpy(np.array(data, dtype=dtype))
 
-            self.data = CudaArray.from_numpy(nparray)
+            elif isinstance(data, np.ndarray):
+                if data.dtype != dtype:
+                    data = data.astype(
+                        dtype
+                        if dtype in [np.float32, np.float64, np.int32]
+                        else np.float32
+                    )
+
+                if data.dtype not in [np.float32, np.float64, np.int32]:
+                    warnings.warn(
+                        f"Data type {data.dtype} is not supported, casting to float32"
+                    )
+
+                self.data = CudaArray.from_numpy(data)
 
     def is_contiguous(self) -> bool:
         return self.data.is_contiguous()
@@ -111,7 +118,13 @@ class CudaStorage(AbstractStorage):
         shape: Tuple[int, ...], value: Union[int, float], dtype=np.float64
     ) -> "CudaStorage":
         # transform value to dtype
-        dtypestr = "float64" if dtype == np.float64 else "float32" if dtype == np.float32 else "int32"
+        dtypestr = (
+            "float64"
+            if dtype == np.float64
+            else "float32"
+            if dtype == np.float32
+            else "int32"
+        )
         return CudaStorage(CudaArray.fill(shape, value, dtypestr))
 
     def __add__(self, other: "CudaStorage") -> "CudaStorage":
@@ -158,7 +171,7 @@ class CudaStorage(AbstractStorage):
         return (
             CudaStorage(self.data.div(other.data))
             if isinstance(other, CudaStorage)
-            else CudaStorage(self.data.div(CudaStorage(other, dtype=self.dtype).data))
+            else CudaStorage(self.data.div(other))
         )
 
     def __truediv__(self, other: "CudaStorage") -> "CudaStorage":
