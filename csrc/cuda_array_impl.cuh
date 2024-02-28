@@ -9,6 +9,7 @@
 #include "ternary_ops_kernels.cuh"
 #include "unary_ops_kernels.cuh"
 #include "utils.cuh"
+#include "dtype.cuh"
 #include <cmath>
 #include <iostream>
 
@@ -27,8 +28,7 @@ template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
   return ss.str();
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::im2col(shape_t kernel_shape, int stride) const {
+CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   if (!is_contiguous()) {
     return as_contiguous().im2col(kernel_shape, stride);
   }
@@ -55,21 +55,21 @@ CudaArray<T> CudaArray<T>::im2col(shape_t kernel_shape, int stride) const {
   size_t out_size = std::accumulate(out_shape.begin(), out_shape.end(), 1,
                                     std::multiplies<size_t>());
 
-  CudaArray out(out_size, out_shape);
+  CudaArray out(out_size, out_shape, dtype);
 
   int total_iters = batch_size * out_h * out_w * in_channels * k_h *
                     k_w; // check kernel code for more details
   int block_size = DEFAULT_BLOCK_SIZE;
   int grid_size = ceil(total_iters / (float)block_size);
-  im2col_kernel<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), k_h, k_w,
-                                           x_h, x_w, stride, batch_size,
-                                           in_channels);
+
+  launch_im2col_kernel(dtype, grid_size, block_size, ptr.get(), out.ptr.get(),
+                       k_h, k_w, x_h, x_w, stride, batch_size, in_channels);
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::col2im(shape_t kernel_shape, shape_t out_shape,
+
+CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
                                   int stride) const {
   if (!is_contiguous()) {
     return as_contiguous().col2im(kernel_shape, out_shape, stride);
@@ -96,21 +96,21 @@ CudaArray<T> CudaArray<T>::col2im(shape_t kernel_shape, shape_t out_shape,
   shape_t _out_shape = {out_batch_size, out_channels, out_h, out_w};
   size_t out_size = std::accumulate(_out_shape.begin(), _out_shape.end(), 1,
                                     std::multiplies<size_t>());
-  CudaArray out(out_size, _out_shape);
-  CHECK_CUDA(cudaMemset(out.ptr.get(), 0, out_size * sizeof(T)));
+  CudaArray out(out_size, _out_shape, dtype);
+  CHECK_CUDA(cudaMemset(out.ptr.get(), 0, out_size * dtype_to_size(dtype)));
 
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   // batch size and out_channels are parallelized
   dim3 grid_size(
       ceil(out_batch_size * out_channels / (float)DEFAULT_BLOCK_SIZE));
-  col2im_kernel<<<grid_size, block_size>>>(
-      ptr.get(), out.ptr.get(), out_channels, k_h, k_w, in_h, in_w,
-      out_batch_size, out_h, out_w, stride);
+  launch_col2im_kernel(dtype, grid_size, block_size, ptr.get(), out.ptr.get(),
+                       out_channels, k_h, k_w, in_h, in_w, out_batch_size, out_h,
+                       out_w, stride);
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-template <typename T> bool CudaArray<T>::is_contiguous() const {
+bool CudaArray::is_contiguous() const {
   if (strides.size() != shape.size()) {
     return false;
   }
@@ -118,7 +118,7 @@ template <typename T> bool CudaArray<T>::is_contiguous() const {
     return true;
   }
   shape_t expected_strides(shape.size());
-  expected_strides[shape.size() - 1] = sizeof(T);
+  expected_strides[shape.size() - 1] = dtype_to_size(dtype);
   for (int i = shape.size() - 2; i >= 0; --i) {
     expected_strides[i] = expected_strides[i + 1] * shape[i + 1];
   }
@@ -127,36 +127,35 @@ template <typename T> bool CudaArray<T>::is_contiguous() const {
   }
   return true;
 }
-template <typename T>
-CudaArray<T>::CudaArray(size_t size, const shape_t &shape,
-                        const shape_t &strides, const std::shared_ptr<T> &ptr)
-    : size(size), shape(shape), strides(strides), ptr(ptr) {}
 
-template <typename T>
-CudaArray<T>::CudaArray(size_t size, shape_t shape, shape_t strides)
-    : size(size), shape(shape), strides(strides) {
-  T *raw_ptr;
-  CHECK_CUDA(cudaMalloc(&raw_ptr, size * sizeof(T)));
-  ptr = std::shared_ptr<T>(raw_ptr, [](T *p) { cudaFree(p); });
+
+CudaArray::CudaArray(size_t size, const shape_t &shape,
+                        const shape_t &strides, const std::shared_ptr<void> &ptr, DType dtype)
+    : size(size), shape(shape), strides(strides), ptr(ptr), dtype(dtype) {}
+
+
+CudaArray::CudaArray(size_t size, shape_t shape, shape_t strides, DType dtype)
+    : size(size), shape(shape), strides(strides), dtype(dtype) {
+  void *raw_ptr;
+  CHECK_CUDA(cudaMalloc(&raw_ptr, size * dtype_to_size(dtype)));
+  ptr = std::shared_ptr<void>(raw_ptr, [](void *p) { CHECK_CUDA(cudaFree(p)); });
 }
 
-template <typename T>
-CudaArray<T>::CudaArray(size_t size, shape_t shape) : size(size), shape(shape) {
+CudaArray::CudaArray(size_t size, shape_t shape, DType dtype) : size(size), shape(shape), dtype(dtype) {
   strides.resize(shape.size());
   // Only calculate strides if we don't have a scalar
   if (shape.size() > 0) {
-    strides[shape.size() - 1] = sizeof(T);
+    strides[shape.size() - 1] = dtype_to_size(dtype);
     for (int i = shape.size() - 2; i >= 0; --i) {
       strides[i] = strides[i + 1] * shape[i + 1];
     }
   }
-  T *raw_ptr;
-  CHECK_CUDA(cudaMalloc(&raw_ptr, size * sizeof(T)));
-  ptr = std::shared_ptr<T>(raw_ptr, [](T *p) { cudaFree(p); });
+  void *raw_ptr;
+  CHECK_CUDA(cudaMalloc(&raw_ptr, size * dtype_to_size(dtype)));
+  ptr = std::shared_ptr<void>(raw_ptr, [](void *p) { CHECK_CUDA(cudaFree(p)); });
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::broadcast_to(const shape_t _shape) const {
+CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
   const shape_t shape_from = this->shape;
   const shape_t shape_to = _shape;
   // determine if we can broadcast
@@ -188,55 +187,48 @@ CudaArray<T> CudaArray<T>::broadcast_to(const shape_t _shape) const {
     }
     new_size *= dim_to;
   }
-  CudaArray out(new_size, shape_to, new_strides);
-  CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), size * sizeof(T),
+  CudaArray out(new_size, shape_to, new_strides, dtype);
+  CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), size * dtype_to_size(dtype),
                         cudaMemcpyDeviceToDevice));
   return out;
 }
 
-template <typename ThisT>
-template <typename OtherT>
-CudaArray<ThisT> CudaArray<ThisT>::binop(const py::array_t<OtherT> &np_array,
-                                         binary_op_kernel<ThisT> ker) const {
-  CudaArray<OtherT> other = CudaArray<OtherT>::from_numpy(np_array);
-  return binop(other, ker);
-}
-
-template <typename ThisT>
-template <typename OtherT>
-CudaArray<ThisT> CudaArray<ThisT>::binop(const OtherT scalar,
-                                         binary_op_kernel<ThisT> ker) const {
-  CudaArray<OtherT> other = CudaArray<OtherT>::fill({}, scalar);
-  return binop(other, ker);
+template <typename T>
+CudaArray CudaArray::binop(const py::array_t<T> &np_array,
+                                         BinaryKernelType kt) const {
+  CudaArray other = CudaArray::from_numpy(np_array);
+  return binop(other, kt);
 }
 
 template <typename T>
-template <typename ToT>
-CudaArray<ToT> CudaArray<T>::astype() const {
-  if (std::is_same<T, ToT>::value) {
-    return reinterpret_cast<const CudaArray<ToT> &>(*this);
+CudaArray CudaArray::binop(const T scalar, BinaryKernelType kt) const {
+  CudaArray other = CudaArray::fill({}, scalar);
+  return binop(other, kt);
+}
+
+CudaArray CudaArray::astype(DType new_type) const {
+  if (dtype == new_type) {
+    return *this;
   }
-  CudaArray<ToT> out(size, shape);
+  CudaArray out(size, shape, new_type);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
   auto &in_shape = cuda_unique_ptr_from_host(shape.size(), this->shape.data());
-  astype_kernel<T, ToT><<<grid_size, block_size>>>(
-      in_strides.get(), in_shape.get(), ndim(), ptr.get(), out.ptr.get());
+  launch_astype_kernel(dtype, new_type, grid_size, block_size, in_strides.get(), in_shape.get(), ndim(), ptr.get(), out.ptr.get());
   PG_CUDA_KERNEL_END;
 
   return out;
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::binop_same_dtype(const CudaArray<T> &other,
-                                            binary_op_kernel<T> ker) const {
+CudaArray CudaArray::binop_same_dtype(const CudaArray &other,
+                                            BinaryKernelType kt) const {
   if (shape != other.shape) {
     // try to broadcast, from smaller to larger
     if (shape.size() < other.shape.size()) {
-      return broadcast_to(other.shape).binop_same_dtype(other, ker);
+      return broadcast_to(other.shape).binop_same_dtype(other, kt);
     } else if (shape.size() > other.shape.size()) {
-      return binop_same_dtype(other.broadcast_to(shape), ker);
+      return binop_same_dtype(other.broadcast_to(shape), kt);
     } else {
       // we need to check the one with less product of shape, and try to
       // broadcast
@@ -247,9 +239,9 @@ CudaArray<T> CudaArray<T>::binop_same_dtype(const CudaArray<T> &other,
         prod_other_shape *= other.shape[i];
       }
       if (prod_shape < prod_other_shape) {
-        return broadcast_to(other.shape).binop_same_dtype(other, ker);
+        return broadcast_to(other.shape).binop_same_dtype(other, kt);
       } else {
-        return binop_same_dtype(other.broadcast_to(shape), ker);
+        return binop_same_dtype(other.broadcast_to(shape), kt);
       }
     }
   }
@@ -257,7 +249,7 @@ CudaArray<T> CudaArray<T>::binop_same_dtype(const CudaArray<T> &other,
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   // Default stride calculation
-  CudaArray out(size, shape);
+  CudaArray out(size, shape, dtype);
   size_t n_dims = shape.size();
 
   cuda_unique_ptr<size_t> d_strides =
@@ -267,50 +259,48 @@ CudaArray<T> CudaArray<T>::binop_same_dtype(const CudaArray<T> &other,
   cuda_unique_ptr<size_t> d_shape =
       cuda_unique_ptr_from_host(n_dims, shape.data());
 
-  ker<<<grid_size, block_size>>>(d_strides.get(), d_other_strides.get(),
-                                 d_shape.get(), n_dims, ptr.get(),
-                                 other.ptr.get(), out.ptr.get());
+  launch_binary_kernel(kt, dtype, grid_size, block_size, d_strides.get(),
+                       d_other_strides.get(), d_shape.get(), n_dims, ptr.get(),
+                       other.ptr.get(), out.ptr.get());
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-template <typename T>
-template <typename OtherT>
-CudaArray<T> CudaArray<T>::binop(const CudaArray<OtherT> &other,
-                                 binary_op_kernel<T> ker) const {
+CudaArray CudaArray::binop(const CudaArray &other,
+                                 BinaryKernelType kt) const {
   // we need to decide on the casting, always biggest type
-  return binop_same_dtype(other.astype<T>(), ker);
+  return binop_same_dtype(other.astype(this->dtype), kt);
 }
 
 template <typename T>
-CudaArray<T> CudaArray<T>::ternaryop(const py::array_t<T> &second,
+CudaArray CudaArray::ternaryop(const py::array_t<T> &second,
                                      const py::array_t<T> &third,
-                                     ternary_op_kernel<T> ker) const {
+                                     TernaryKernelType ker) const {
   CudaArray second_arr = CudaArray::from_numpy(second);
   CudaArray third_arr = CudaArray::from_numpy(third);
   return ternaryop(second_arr, third_arr, ker);
 }
 
 template <typename T>
-CudaArray<T> CudaArray<T>::ternaryop(const CudaArray &second,
+CudaArray CudaArray::ternaryop(const CudaArray &second,
                                      const py::array_t<T> &third,
-                                     ternary_op_kernel<T> ker) const {
+                                     TernaryKernelType ker) const {
   CudaArray third_arr = CudaArray::from_numpy(third);
   return ternaryop(second, third_arr, ker);
 }
 
 template <typename T>
-CudaArray<T> CudaArray<T>::ternaryop(const py::array_t<T> &second,
+CudaArray CudaArray::ternaryop(const py::array_t<T> &second,
                                      const CudaArray &third,
-                                     ternary_op_kernel<T> ker) const {
+                                     TernaryKernelType ker) const {
   CudaArray second_arr = CudaArray::from_numpy(second);
   return ternaryop(second_arr, third, ker);
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::ternaryop(const CudaArray &second,
+
+CudaArray CudaArray::ternaryop(const CudaArray &second,
                                      const CudaArray &third,
-                                     ternary_op_kernel<T> ker) const {
+                                     TernaryKernelType ker) const {
   if (second.shape != third.shape || shape != second.shape ||
       shape != third.shape) {
     size_t biggest_size =
@@ -336,7 +326,7 @@ CudaArray<T> CudaArray<T>::ternaryop(const CudaArray &second,
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
 
   // Default stride calculation
-  CudaArray out(size, shape);
+  CudaArray out(size, shape, dtype);
   size_t n_dims = shape.size();
   cuda_unique_ptr<size_t> d_first_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());
@@ -346,39 +336,38 @@ CudaArray<T> CudaArray<T>::ternaryop(const CudaArray &second,
       cuda_unique_ptr_from_host(n_dims, third.strides.data());
   cuda_unique_ptr<size_t> d_shape =
       cuda_unique_ptr_from_host(n_dims, shape.data());
-
-  ker<<<grid_size, block_size>>>(d_first_strides.get(), d_second_strides.get(),
-                                 d_third_strides.get(), d_shape.get(),
-                                 shape.size(), ptr.get(), second.ptr.get(),
-                                 third.ptr.get(), out.ptr.get());
+  launch_ternary_kernel(ker, dtype, grid_size, block_size, d_first_strides.get(),
+                        d_second_strides.get(), d_third_strides.get(),
+                        d_shape.get(), n_dims, ptr.get(), second.ptr.get(),
+                        third.ptr.get(), out.ptr.get());
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-template <typename T> T CudaArray<T>::getitem(shape_t index) const {
+template <typename T>
+T CudaArray::getitem(shape_t index) const {
   PG_CHECK_ARG(index.size() == shape.size(),
                "index size must be equal to shape size, got ", index.size(),
                " and ", shape.size());
   // Calculate the offset for the multi-dimensional index
+  size_t elemsize = dtype_to_size(dtype);
   size_t offset = 0;
   for (size_t i = 0; i < index.size(); i++) {
     PG_CHECK_ARG(index[i] < shape[i] && index[i] >= 0,
                  "index out of bounds, got ", index[i], " for shape ",
                  vec_to_string(shape));
-    offset += index[i] * strides[i] / sizeof(T); // since strides are in bytes,
-    // we need to divide by sizeof(T) to get the correct offset
+    offset += index[i] * strides[i];
   }
-  // Copy the requested element from device to host
+  offset /= elemsize; // since strides are in bytes, divide by element size to get the correct offset
+
   T value;
-  CHECK_CUDA(cudaMemcpy(&value, ptr.get() + offset, sizeof(T),
-                        cudaMemcpyDeviceToHost));
+  CHECK_CUDA(cudaMemcpy(&value, static_cast<char*>(ptr.get()) + offset, elemsize, cudaMemcpyDeviceToHost));
   return value;
 }
 
-template <typename T> int CudaArray<T>::ndim() const { return shape.size(); }
+int CudaArray::ndim() const { return shape.size(); }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::mat_mul(const CudaArray &other) const {
+CudaArray CudaArray::mat_mul(const CudaArray &other) const {
   // if a is a vector and the other is a matrix, add a dimension to a
   bool added_a_dim = false;
   bool added_b_dim = false;
@@ -406,10 +395,10 @@ CudaArray<T> CudaArray<T>::mat_mul(const CudaArray &other) const {
     // rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1 check its
     // implementation for more details
     int new_size = (a.shape.at(0) / MAX_THREADS_PER_BLOCK) + 1;
-    CudaArray out(new_size, {(size_t)new_size});
-    vector_dot_product_accum<<<new_size, MAX_THREADS_PER_BLOCK,
-                               MAX_THREADS_PER_BLOCK * sizeof(T)>>>(
-        a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
+    CudaArray out(new_size, {(size_t)new_size}, dtype);
+    
+    launch_vector_dot_product_accum_kernel(dim3(new_size), dim3(MAX_THREADS_PER_BLOCK),
+     MAX_THREADS_PER_BLOCK * dtype_to_size(dtype), dtype, a.ptr.get(), b.ptr.get(), out.ptr.get(), a.shape.at(0));
     PG_CUDA_KERNEL_END;
     if (new_size > 1) {
       // if size > 1, we need to reduce the vector to a single value
@@ -459,36 +448,36 @@ CudaArray<T> CudaArray<T>::mat_mul(const CudaArray &other) const {
                                    std::multiplies<int>());
 
     dim3 gridSize(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
-    CudaArray out(new_size, new_shape);
+    CudaArray out(new_size, new_shape, dtype);
     cuda_unique_ptr<size_t> lhs_shape =
         cuda_unique_ptr_from_host(a.ndim(), a.shape.data());
     cuda_unique_ptr<size_t> rhs_shape =
         cuda_unique_ptr_from_host(b.ndim(), b.shape.data());
-    batched_matmul_kernel<<<gridSize, block_size>>>(
-        a.ptr.get(), b.ptr.get(), out.ptr.get(), lhs_shape.get(),
-        rhs_shape.get(), a.ndim());
+    launch_batched_matmul_kernel(gridSize, block_size, dtype, a.ptr.get(),
+                                 b.ptr.get(), out.ptr.get(), lhs_shape.get(),
+                                 rhs_shape.get(), a.ndim());
     PG_CUDA_KERNEL_END;
     return out;
   }
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::outer_product(const CudaArray &other) const {
+CudaArray CudaArray::outer_product(const CudaArray &other) const {
   PG_CHECK_ARG(ndim() == 1 && other.ndim() == 1,
                "got non vectors in outer product, shapes: ",
                vec_to_string(shape), " and ", vec_to_string(other.shape));
   int total_idxs = size * other.size;
   dim3 grid_size(ceil(total_idxs / (float)DEFAULT_BLOCK_SIZE));
   shape_t new_shape = {size, other.size};
-  CudaArray out(total_idxs, new_shape);
-  vector_outer_product_kernel<<<grid_size, DEFAULT_BLOCK_SIZE>>>(
-      ptr.get(), other.ptr.get(), out.ptr.get(), size, other.size);
+  CudaArray out(total_idxs, new_shape, dtype);
+  launch_vector_outer_product_kernel(grid_size, DEFAULT_BLOCK_SIZE, dtype, ptr.get(),
+                                     other.ptr.get(), out.ptr.get(), size,
+                                     other.size);
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::reduce(reduction_kernel<T> ker, axis_t axis,
+
+CudaArray CudaArray::reduce(ReduceKernelType ker, axis_t axis,
                                   bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().reduce(ker, axis, keepdims);
@@ -503,23 +492,23 @@ CudaArray<T> CudaArray<T>::reduce(reduction_kernel<T> ker, axis_t axis,
   new_shape[axis] = 1;
   size_t new_size = size / shape[axis];
   size_t n_dims = shape.size();
-  CudaArray out(new_size, new_shape);
+  CudaArray out(new_size, new_shape, dtype);
   cuda_unique_ptr<size_t> d_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());
   cuda_unique_ptr<size_t> d_shape =
       cuda_unique_ptr_from_host(n_dims, shape.data());
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
-  ker<<<grid_size, block_size>>>(ptr.get(), out.ptr.get(), d_strides.get(),
-                                 d_shape.get(), n_dims, axis);
+  launch_reduce_kernel(ker, dtype, grid_size, block_size, ptr.get(), out.ptr.get(),
+                       d_strides.get(), d_shape.get(), n_dims, axis);
   PG_CUDA_KERNEL_END;
   if (keepdims) {
     return out;
   }
   return out.squeeze(axis);
 }
-template <typename T>
-CudaArray<T> CudaArray<T>::reduce(reduction_kernel<T> ker, axes_t axes,
+
+CudaArray CudaArray::reduce(ReduceKernelType ker, axes_t axes,
                                   bool keepdims) const {
   CudaArray out = *this;
   for (size_t axis : axes) {
@@ -531,8 +520,7 @@ CudaArray<T> CudaArray<T>::reduce(reduction_kernel<T> ker, axes_t axes,
   return out.squeeze(axes);
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::reduce(reduction_kernel<T> ker,
+CudaArray CudaArray::reduce(ReduceKernelType ker,
                                   bool keepdims) const {
   CudaArray out = *this;
   for (size_t axis = 0; axis < shape.size(); ++axis) {
@@ -544,35 +532,35 @@ CudaArray<T> CudaArray<T>::reduce(reduction_kernel<T> ker,
   return out.squeeze();
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::max(bool keepdims) const {
-  return reduce(max_kernel, keepdims);
+CudaArray CudaArray::max(bool keepdims) const {
+  return reduce(ReduceKernelType::MAX, keepdims);
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::max(axes_t axes, bool keepdims) const {
-  return reduce(max_kernel, axes, keepdims);
+
+CudaArray CudaArray::max(axes_t axes, bool keepdims) const {
+  return reduce(ReduceKernelType::MAX, axes, keepdims);
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::max(axis_t axis, bool keepdims) const {
-  return reduce(max_kernel, axis, keepdims);
+
+CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
+  return reduce(ReduceKernelType::MAX, axis, keepdims);
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::sum(bool keepdims) const {
-  return reduce(sum_kernel, keepdims);
+CudaArray CudaArray::sum(bool keepdims) const {
+  return reduce(ReduceKernelType::SUM, keepdims);
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::sum(axes_t axes, bool keepdims) const {
-  return reduce(sum_kernel, axes, keepdims);
+
+CudaArray CudaArray::sum(axes_t axes, bool keepdims) const {
+  return reduce(ReduceKernelType::SUM, axes, keepdims);
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::sum(axis_t axis, bool keepdims) const {
-  return reduce(sum_kernel, axis, keepdims);
+
+CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
+  return reduce(ReduceKernelType::SUM, axis, keepdims);
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::squeeze(axis_t axis) const {
+CudaArray CudaArray::squeeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis;
   }
@@ -589,7 +577,7 @@ template <typename T> CudaArray<T> CudaArray<T>::squeeze(axis_t axis) const {
   return out;
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::squeeze(axes_t _axes) const {
+CudaArray CudaArray::squeeze(axes_t _axes) const {
   CudaArray out(*this);
   // since axes may not be sorted, we need to sort them first, substituting
   // negatives first and then sorting
@@ -607,7 +595,7 @@ template <typename T> CudaArray<T> CudaArray<T>::squeeze(axes_t _axes) const {
   return out;
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::squeeze() const {
+CudaArray CudaArray::squeeze() const {
   CudaArray out(*this);
   // squeezes all dims that are 1
   shape_t indices_to_squeeze;
@@ -634,7 +622,7 @@ template <typename T> CudaArray<T> CudaArray<T>::squeeze() const {
   return out;
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::unsqueeze(axes_t axes) const {
+CudaArray CudaArray::unsqueeze(axes_t axes) const {
   CudaArray out(*this);
   for (size_t axis : axes) {
     out = out.unsqueeze(axis);
@@ -642,7 +630,7 @@ template <typename T> CudaArray<T> CudaArray<T>::unsqueeze(axes_t axes) const {
   return out;
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::unsqueeze(axis_t axis) const {
+CudaArray CudaArray::unsqueeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis + 1;
   }
@@ -651,13 +639,13 @@ template <typename T> CudaArray<T> CudaArray<T>::unsqueeze(axis_t axis) const {
   CudaArray out(*this);
   out.shape.insert(out.shape.begin() + axis, 1);
   size_t new_stride =
-      (axis < strides.size()) ? strides[std::max(0, (int)axis - 1)] : sizeof(T);
+      (axis < strides.size()) ? strides[std::max(0, (int)axis - 1)] : dtype_to_size(dtype);
   out.strides.insert(out.strides.begin() + axis, new_stride);
   return out;
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::reshape(std::vector<int> &_new_shape) const {
+
+CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
   shape_t new_shape(_new_shape.size());
   size_t total_new = 1;
 
@@ -684,7 +672,7 @@ CudaArray<T> CudaArray<T>::reshape(std::vector<int> &_new_shape) const {
         " not compatible with ", vec_to_string(_new_shape));
   }
   total_new = total_old;
-  CudaArray out(total_new, new_shape);
+  CudaArray out(total_new, new_shape, dtype);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(total_new / (float)DEFAULT_BLOCK_SIZE));
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
@@ -693,15 +681,16 @@ CudaArray<T> CudaArray<T>::reshape(std::vector<int> &_new_shape) const {
       cuda_unique_ptr_from_host(new_shape.size(), new_shape.data());
   auto &out_strides =
       cuda_unique_ptr_from_host(new_shape.size(), out.strides.data());
-  copy_with_out_strides_kernel<T><<<grid_size, block_size>>>(
-      in_strides.get(), in_shape.get(), out_strides.get(), out_shape.get(),
-      ndim(), out.ndim(), ptr.get(), out.ptr.get());
+  
+  launch_copy_with_out_strides_kernel(dtype, grid_size, block_size, in_strides.get(), in_shape.get(), out_strides.get(), out_shape.get(), ndim(), out.ndim(), ptr.get(), out.ptr.get());
+  
   PG_CUDA_KERNEL_END;
   return out;
 }
 
+
 template <typename T>
-CudaArray<T> CudaArray<T>::from_numpy(py::array_t<T> np_array) {
+CudaArray CudaArray::from_numpy(py::array_t<T> np_array) {
   py::buffer_info buffer_info = np_array.request();
   auto size = buffer_info.size;
   shape_t shape;
@@ -718,90 +707,89 @@ CudaArray<T> CudaArray<T>::from_numpy(py::array_t<T> np_array) {
   }
 
   auto *ptr = static_cast<T *>(buffer_info.ptr);
-  CudaArray arr(size, shape, strides);
+  CudaArray arr((size_t)size, shape, strides, dtype_from_pytype<T>());
   CHECK_CUDA(
-      cudaMemcpy(arr.ptr.get(), ptr, size * sizeof(T), cudaMemcpyHostToDevice));
+      cudaMemcpy(arr.ptr.get(), ptr, (size_t)size * sizeof(T), cudaMemcpyHostToDevice));
   return arr;
 }
 
-template <typename T> py::array_t<T> CudaArray<T>::to_numpy() const {
+template <typename T> py::array_t<T> CudaArray::to_numpy() const {
+  // assert that the array has compatible type
+  PG_CHECK_ARG(dtype == dtype_from_pytype<T>(),
+               "cannot convert to numpy array, expected type ", dtype_to_string(dtype),
+               " but got ", dtype_to_string(dtype_from_pytype<T>()));
   py::array_t<T> result(shape, strides);
   CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr.get(), size * sizeof(T),
                         cudaMemcpyDeviceToHost));
   return result;
 }
 
-template <typename T> std::string CudaArray<T>::to_string() const {
-  T *host = new T[size];
+std::string CudaArray::to_string() const {
+  /*void *host = malloc(size * dtype_to_size(dtype));
   CHECK_CUDA(
       cudaMemcpy(host, ptr.get(), size * sizeof(T), cudaMemcpyDeviceToHost));
-
+  */
   std::stringstream ss;
-  ss << "CudaArray<" << typeid(T).name() << ">(" << size << ") [";
-  for (size_t i = 0; i < std::min(size, static_cast<size_t>(10)); i++) {
-    ss << host[i];
-    if (i < std::min(size, static_cast<size_t>(10)) - 1) {
-      ss << ", ";
-    }
-  }
-  ss << "]";
-
-  delete[] host;
+  ss << "CudaArray<" << dtype_to_string(dtype) << ">(" << size << ") with shape " << vec_to_string(shape)
+     << " and strides " << vec_to_string(strides);
   return ss.str();
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::fill(shape_t shape, T value) {
+template <typename T> CudaArray CudaArray::fill(shape_t shape, T value) {
+  // calculate correct dtype
+  DType _dtype = dtype_from_cpptype<T>();
   CudaArray out(
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>()),
-      shape);
+      shape, _dtype);
   fill_kernel<<<ceil(out.size / (float)DEFAULT_BLOCK_SIZE),
-                DEFAULT_BLOCK_SIZE>>>(out.ptr.get(), out.size, value);
+                DEFAULT_BLOCK_SIZE>>>((T*)out.ptr.get(), out.size, value);
   PG_CUDA_KERNEL_END;
   return out;
 };
 
-template <typename T> CudaArray<T>::~CudaArray() {}
+CudaArray::~CudaArray() {}
 
-template <typename T>
-CudaArray<T>::CudaArray(const CudaArray &other)
+
+CudaArray::CudaArray(const CudaArray &other)
     : size(other.size), shape(other.shape), strides(other.strides),
-      ptr(other.ptr) {}
+      ptr(other.ptr), dtype(other.dtype) {}
 
-template <typename T>
-CudaArray<T> &CudaArray<T>::operator=(const CudaArray &other) {
+
+CudaArray &CudaArray::operator=(const CudaArray &other) {
   if (this != &other) {
     size = other.size;
     shape = other.shape;
     strides = other.strides;
     ptr = other.ptr;
+    dtype = other.dtype;
   }
   return *this;
 }
 
-template <typename T>
-CudaArray<T>::CudaArray(CudaArray &&other)
-    : size(other.size), shape(std::move(other.shape)),
-      strides(std::move(other.strides)), ptr(std::move(other.ptr)) {}
 
-template <typename T> CudaArray<T> &CudaArray<T>::operator=(CudaArray &&other) {
+CudaArray::CudaArray(CudaArray &&other)
+    : size(other.size), shape(std::move(other.shape)),
+      strides(std::move(other.strides)), ptr(std::move(other.ptr)), dtype(other.dtype) {}
+
+CudaArray &CudaArray::operator=(CudaArray &&other) {
   if (this != &other) {
     size = other.size;
     shape = std::move(other.shape);
     strides = std::move(other.strides);
     ptr = std::move(other.ptr);
+    dtype = other.dtype;
   }
   return *this;
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::clone() const {
-  CudaArray out(size, shape, strides);
-  CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), size * sizeof(T),
+CudaArray CudaArray::clone() const {
+  CudaArray out(size, shape, strides, dtype);
+  CHECK_CUDA(cudaMemcpy(out.ptr.get(), ptr.get(), size * dtype_to_size(dtype),
                         cudaMemcpyDeviceToDevice));
   return out;
 }
 
-template <typename T>
-CudaArray<T> CudaArray<T>::elwiseop(element_wise_op_kernel<T> ker) const {
+CudaArray CudaArray::elwiseop(UnaryKernelType ker) const {
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   size_t n_dims = shape.size();
@@ -809,18 +797,19 @@ CudaArray<T> CudaArray<T>::elwiseop(element_wise_op_kernel<T> ker) const {
       cuda_unique_ptr_from_host(n_dims, strides.data());
   cuda_unique_ptr<size_t> d_shape =
       cuda_unique_ptr_from_host(n_dims, shape.data());
-  CudaArray out(size, shape);
-  ker<<<grid_size, block_size>>>(d_strides.get(), d_shape.get(), n_dims,
-                                 this->ptr.get(), out.ptr.get());
+  CudaArray out(size, shape, dtype);
+
+  launch_unary_kernel(ker, dtype, grid_size, block_size, d_strides.get(), 
+                       d_shape.get(), n_dims, ptr.get(), out.ptr.get());
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::as_contiguous() const {
-  return is_contiguous() ? *this : elwiseop(copy_kernel);
+CudaArray CudaArray::as_contiguous() const {
+  return is_contiguous() ? *this : elwiseop(UnaryKernelType::COPY);
 }
 
-template <typename T> CudaArray<T> CudaArray<T>::permute(shape_t axes) const {
+CudaArray CudaArray::permute(shape_t axes) const {
   PG_CHECK_ARG(axes.size() == shape.size(),
                "axes must have same size as shape, got ", axes.size(), " and ",
                shape.size());
@@ -832,6 +821,6 @@ template <typename T> CudaArray<T> CudaArray<T>::permute(shape_t axes) const {
     new_strides[i] = strides[axes[i]];
   }
 
-  CudaArray out(size, new_shape, new_strides, ptr);
+  CudaArray out(size, new_shape, new_strides, ptr, dtype);
   return out;
 }

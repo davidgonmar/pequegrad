@@ -4,30 +4,17 @@
 #include <vector>
 
 #include "reduce_ops_kernels.cuh"
+#include "binary_ops_kernels.cuh"
+#include "unary_ops_kernels.cuh"
+#include "ternary_ops_kernels.cuh"
+#include "dtype.cuh"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
 
-template <typename T>
-using binary_op_kernel = void (*)(const size_t *strides, const size_t *ostrides,
-                                  const size_t *shape, const size_t ndim,
-                                  const T *a, const T *b, T *out);
 
-template <typename T>
-using element_wise_op_kernel = void (*)(const size_t *in_strides,
-                                        const size_t *shape,
-                                        const size_t num_dims, const T *in,
-                                        T *out);
-
-template <typename T>
-using ternary_op_kernel = void (*)(const size_t *first_strides,
-                                   const size_t *second_strides,
-                                   const size_t *third_strides,
-                                   const size_t *shape, const size_t num_dims,
-                                   const T *first, const T *second,
-                                   const T *third, T *out);
 
 using shape_t = std::vector<size_t>;
 
@@ -36,18 +23,21 @@ using shape_t = std::vector<size_t>;
 using axis_t = int;
 using axes_t = std::vector<axis_t>;
 
-template <typename T> class CudaArray {
+
+
+class CudaArray {
 public:
   bool is_contiguous() const;
-  std::shared_ptr<T> ptr;
+  std::shared_ptr<void> ptr;
   size_t size;
   shape_t shape;
   shape_t strides;
+  DType dtype;
 
   CudaArray(size_t size, const shape_t &shape, const shape_t &strides,
-            const std::shared_ptr<T> &shared_ptr);
-  CudaArray(size_t size, shape_t shape, shape_t strides);
-  CudaArray(size_t size, shape_t shape);
+            const std::shared_ptr<void> &shared_ptr, DType dtype);
+  CudaArray(size_t size, shape_t shape, shape_t strides, DType dtype);
+  CudaArray(size_t size, shape_t shape, DType dtype);
 
   ~CudaArray();
   CudaArray(const CudaArray &other);
@@ -58,24 +48,31 @@ public:
 
   CudaArray broadcast_to(const shape_t _shape) const;
 
-  template <typename T2>
-  CudaArray binop(const CudaArray<T2> &other, binary_op_kernel<T> Ker) const;
+  CudaArray binop(const CudaArray &other, BinaryKernelType kt) const;
 
-  template <typename T2>
-  CudaArray binop(const py::array_t<T2> &other, binary_op_kernel<T> Ker) const;
+  template <typename T>
+  CudaArray binop(const py::array_t<T> &other, BinaryKernelType kt) const;
 
-  template <typename T2> // scalars
-  CudaArray binop(const T2 other, binary_op_kernel<T> Ker) const;
+  template <typename T> // scalars
+  CudaArray binop(const T other, BinaryKernelType kt) const;
 
   CudaArray ternaryop(const CudaArray &second, const CudaArray &third,
-                      ternary_op_kernel<T> ker) const;
+                      TernaryKernelType ker) const;
+
+  template <typename T>
   CudaArray ternaryop(const py::array_t<T> &second, const py::array_t<T> &third,
-                      ternary_op_kernel<T> ker) const;
+                      TernaryKernelType ker) const;
+  template <typename T>
   CudaArray ternaryop(const CudaArray &second, const py::array_t<T> &third,
-                      ternary_op_kernel<T> ker) const;
+                      TernaryKernelType ker) const;
+
+  template <typename T>
   CudaArray ternaryop(const py::array_t<T> &second, const CudaArray &third,
-                      ternary_op_kernel<T> ker) const;
-  CudaArray elwiseop(element_wise_op_kernel<T> ker) const;
+                     TernaryKernelType ker) const;
+
+  CudaArray elwiseop(UnaryKernelType kt) const;
+
+  template <typename T>
   T getitem(shape_t index) const;
   int ndim() const;
   CudaArray mat_mul(const CudaArray &other) const;
@@ -99,20 +96,25 @@ public:
 
   CudaArray im2col(shape_t kernel_shape, int stride) const;
   CudaArray col2im(shape_t kernel_shape, shape_t out_shape, int stride) const;
+
+  template <typename T>
   static CudaArray from_numpy(py::array_t<T> np_array);
+  
+  template <typename T>
   py::array_t<T> to_numpy() const;
 
   std::string to_string() const;
-
+  
+  template <typename T>
   static CudaArray fill(shape_t shape, T value);
 
-  template <typename T2> CudaArray<T2> astype() const;
+  CudaArray astype(DType new_dtype) const;
 
 private:
-  CudaArray reduce(reduction_kernel<T> ker, axes_t axes, bool keepdims) const;
-  CudaArray reduce(reduction_kernel<T> ker, axis_t axis, bool keepdims) const;
-  CudaArray reduce(reduction_kernel<T> ker, bool keepdims) const;
+  CudaArray reduce(ReduceKernelType ker, axes_t axes, bool keepdims) const;
+  CudaArray reduce(ReduceKernelType ker, axis_t axis, bool keepdims) const;
+  CudaArray reduce(ReduceKernelType ker, bool keepdims) const;
 
   CudaArray binop_same_dtype(const CudaArray &other,
-                             binary_op_kernel<T> Ker) const;
+                             BinaryKernelType kt) const;
 };

@@ -345,7 +345,6 @@ class NumpyStorage(AbstractStorage):
         return NumpyStorage(np.max(self.data, axis, keepdims=keepdims))
 
     def mean(self, axis: int, keepdims: bool = False) -> "NumpyStorage":
-        # todo -- why do we need to specify the dtype here?
         return NumpyStorage(
             np.mean(self.data, axis, keepdims=keepdims, dtype=self.data.dtype)
         )

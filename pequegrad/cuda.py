@@ -21,18 +21,14 @@ try:
         if os.path.exists(build_path):
             sys.path.append(build_path)
 
-        from pequegrad_cu import CudaArrayInt32, CudaArrayFloat32, CudaArrayFloat64
+        from pequegrad_cu import CudaArray
 
         CUDA_AVAILABLE = True
     else:
-        CudaArrayInt32 = DummyCudaArray
-        CudaArrayFloat32 = DummyCudaArray
-        CudaArrayFloat64 = DummyCudaArray
+        CudaArray = DummyCudaArray
         CUDA_AVAILABLE = False
 
 except ImportError:
     warnings.warn("Tried to use cuda, but it is not available")
-    CudaArrayInt32 = DummyCudaArray
-    CudaArrayFloat32 = DummyCudaArray
-    CudaArrayFloat64 = DummyCudaArray
+    CudaArray = DummyCudaArray
     CUDA_AVAILABLE = False

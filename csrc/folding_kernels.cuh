@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dtype.cuh"
 template <typename T>
 __global__ void im2col_kernel(T *in, T *out, size_t k_h, size_t k_w, size_t x_h,
                               size_t x_w, size_t stride, size_t batch_size,
@@ -34,6 +35,11 @@ __global__ void im2col_kernel(T *in, T *out, size_t k_h, size_t k_w, size_t x_h,
                 (h + in_y_offset) * x_w + (w + in_x_offset)];
 }
 
+void launch_im2col_kernel(DType dtype, dim3 blocks, dim3 threads, void *in,
+                          void *out, size_t k_h, size_t k_w, size_t x_h,
+                          size_t x_w, size_t stride, size_t batch_size,
+                          size_t in_channels);
+
 template <typename T>
 __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
                               size_t k_w, size_t in_h, size_t in_w,
@@ -63,3 +69,8 @@ __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
     }
   }
 }
+
+void launch_col2im_kernel(DType dtype, dim3 blocks, dim3 threads, void *in,
+                          void *out, size_t out_channels, size_t k_h, size_t k_w,
+                          size_t in_h, size_t in_w, size_t batch_size,
+                          size_t out_h, size_t out_w, size_t stride);
