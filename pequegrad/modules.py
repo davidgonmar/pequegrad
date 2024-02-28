@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor
-from pequegrad.storage import NumpyStorage
+from pequegrad.storage import NumpyStorage, CudaStorage
 import numpy as np
 from typing import List
 import pickle
@@ -34,10 +34,12 @@ class Module:
             loaded_params = []
             orig_storage_type = self.parameters()[0].storage_type
             for p, p_loaded in zip(self.parameters(), d["params"]):
-                p.data = NumpyStorage(p_loaded)  # always load to numpy (cpu) by default
-
+                p.assign(
+                    NumpyStorage(p_loaded)
+                    if orig_storage_type == "np"
+                    else CudaStorage(p_loaded)
+                )
             self._parameters = loaded_params  # force re-creation of the parameters list
-            self.to("cuda" if orig_storage_type == "cuda" else "np")
 
     def to(self, storage_type):
         for p in self.parameters():

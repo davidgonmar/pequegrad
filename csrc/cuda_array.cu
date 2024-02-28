@@ -623,11 +623,15 @@ CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
   CudaArray out(total_new, new_shape);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(total_new / (float)DEFAULT_BLOCK_SIZE));
-  auto& in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
+  auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
   auto &in_shape = cuda_unique_ptr_from_host(shape.size(), shape.data());
-  auto &out_shape = cuda_unique_ptr_from_host(new_shape.size(), new_shape.data());
-  auto &out_strides = cuda_unique_ptr_from_host(new_shape.size(), out.strides.data());
-  copy_with_out_strides_kernel<<<grid_size, block_size>>>(in_strides.get(), in_shape.get(), out_strides.get(), out_shape.get(), ndim(), out.ndim(),  ptr.get(), out.ptr.get());
+  auto &out_shape =
+      cuda_unique_ptr_from_host(new_shape.size(), new_shape.data());
+  auto &out_strides =
+      cuda_unique_ptr_from_host(new_shape.size(), out.strides.data());
+  copy_with_out_strides_kernel<<<grid_size, block_size>>>(
+      in_strides.get(), in_shape.get(), out_strides.get(), out_shape.get(),
+      ndim(), out.ndim(), ptr.get(), out.ptr.get());
   PG_CUDA_KERNEL_END;
   return out;
 }

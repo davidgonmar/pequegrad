@@ -27,9 +27,9 @@ class Tensor:
 
         storage = storage if storage else "np"  # default to numpy storage
         if storage == "np":
-            self.data: NumpyStorage = NumpyStorage(data)
+            self._data: NumpyStorage = NumpyStorage(data)
         elif storage == "cuda":
-            self.data: CudaStorage = CudaStorage(data)
+            self._data: CudaStorage = CudaStorage(data)
         else:
             raise ValueError("storage must be 'np' or 'cuda'")
 
@@ -41,6 +41,21 @@ class Tensor:
         # The context is the function that created this tensor, along with its inputs. The function
         # is responsible for assigning itself to the _ctx attribute of the tensor
         self._ctx: Optional[Function] = None
+
+    @property
+    def data(self) -> AbstractStorage:
+        return self._data
+
+    def assign(self, data: AbstractStorage) -> None:
+        """
+        Assigns the tensor to the given data
+        """
+        assert isinstance(
+            data, self._data.__class__
+        ), "data must be of the same type as the current storage, expected {}, got {}".format(
+            self._data.__class__, data.__class__
+        )
+        self._data = data
 
     def to(self, storage_type: str) -> "Tensor":
         """
@@ -55,11 +70,11 @@ class Tensor:
         """
         # if the grad is not initialized, we don't need to move it
         if storage_type == "np":
-            self.data = NumpyStorage(self.data.numpy())
+            self._data = NumpyStorage(self.data.numpy())
             if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
                 self._grad.to_(storage_type)
         elif storage_type == "cuda":
-            self.data = CudaStorage(self.data.numpy())
+            self._data = CudaStorage(self.data.numpy())
             if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
                 self._grad.to_(storage_type)
 
