@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dtype.cuh"
+#include "dtype.hpp"
 template <typename T>
 __global__ void im2col_kernel(T *in, T *out, size_t k_h, size_t k_w, size_t x_h,
                               size_t x_w, size_t stride, size_t batch_size,

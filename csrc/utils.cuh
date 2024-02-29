@@ -1,10 +1,12 @@
 #pragma once
+
 #include <cuda_runtime.h>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <stdio.h>
+#include <vector>
 
 #define CHECK_CUDA(x)                                                          \
   do {                                                                         \
@@ -69,3 +71,16 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
     CHECK_CUDA(cudaGetLastError());                                            \
     CHECK_CUDA(cudaDeviceSynchronize());                                       \
   } while (0)
+
+template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
+  std::stringstream ss;
+  ss << "[";
+  for (size_t i = 0; i < vec.size(); ++i) {
+    ss << vec[i];
+    if (i < vec.size() - 1) {
+      ss << ", ";
+    }
+  }
+  ss << "]";
+  return ss.str();
+}

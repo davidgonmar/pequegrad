@@ -1,9 +1,5 @@
-#include "binary_ops_kernels.cuh"
 #include "cuda_array.cuh"
-#include "cuda_array_impl.cuh"
-#include "matmul_kernels.cuh"
-#include "ternary_ops_kernels.cuh"
-#include "unary_ops_kernels.cuh"
+#include "kernels/all.cuh"
 #include "utils.cuh"
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>

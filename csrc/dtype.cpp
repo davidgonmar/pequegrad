@@ -1,4 +1,4 @@
-#include "dtype.cuh"
+#include "dtype.hpp"
 #include <stdexcept>
 #include <string>
 

@@ -1,5 +1,4 @@
-#include "ternary_ops_kernels.cuh"
-#include "ternary_ops_macro.cuh"
+#include "ternary.cuh"
 #include <cmath>
 
 DEF_TERNARY_OP_KERNEL(where_kernel, x ? y : z, float)
@@ -14,21 +13,21 @@ void launch_ternary_kernel(TernaryKernelType kt, DType dtype, dim3 grid_size,
                            const void *second, const void *third, void *out) {
   switch (dtype) {
   case DType::Float32:
-    __launch_ternary_kernel<float>(
+    launch_ternary_kernel_helper<float>(
         kt, grid_size, block_size, first_strides, second_strides, third_strides,
         shape, num_dims, static_cast<const float *>(first),
         static_cast<const float *>(second), static_cast<const float *>(third),
         static_cast<float *>(out));
     break;
   case DType::Float64:
-    __launch_ternary_kernel<double>(
+    launch_ternary_kernel_helper<double>(
         kt, grid_size, block_size, first_strides, second_strides, third_strides,
         shape, num_dims, static_cast<const double *>(first),
         static_cast<const double *>(second), static_cast<const double *>(third),
         static_cast<double *>(out));
     break;
   case DType::Int32:
-    __launch_ternary_kernel<int>(
+    launch_ternary_kernel_helper<int>(
         kt, grid_size, block_size, first_strides, second_strides, third_strides,
         shape, num_dims, static_cast<const int *>(first),
         static_cast<const int *>(second), static_cast<const int *>(third),

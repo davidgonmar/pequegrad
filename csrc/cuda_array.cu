@@ -1,32 +1,14 @@
 #pragma once
 
-#include "binary_ops_kernels.cuh"
 #include "cuda_array.cuh"
-#include "dtype.cuh"
-#include "folding_kernels.cuh"
-#include "init_kernels.cuh"
-#include "matmul_kernels.cuh"
-#include "reduce_ops_kernels.cuh"
-#include "ternary_ops_kernels.cuh"
-#include "unary_ops_kernels.cuh"
+#include "dtype.hpp"
+#include "kernels/all.cuh"
 #include "utils.cuh"
 #include <cmath>
 #include <iostream>
+#include <string>
 
 #define MAX_THREADS_PER_BLOCK 512
-
-template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
-  std::stringstream ss;
-  ss << "[";
-  for (size_t i = 0; i < vec.size(); ++i) {
-    ss << vec[i];
-    if (i < vec.size() - 1) {
-      ss << ", ";
-    }
-  }
-  ss << "]";
-  return ss.str();
-}
 
 CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   if (!is_contiguous()) {
@@ -193,19 +175,6 @@ CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
   return out;
 }
 
-template <typename T>
-CudaArray CudaArray::binop(const py::array_t<T> &np_array,
-                           BinaryKernelType kt) const {
-  CudaArray other = CudaArray::from_numpy(np_array);
-  return binop(other, kt);
-}
-
-template <typename T>
-CudaArray CudaArray::binop(const T scalar, BinaryKernelType kt) const {
-  CudaArray other = CudaArray::fill({}, scalar);
-  return binop(other, kt);
-}
-
 CudaArray CudaArray::astype(DType new_type) const {
   if (dtype == new_type) {
     return *this;
@@ -272,31 +241,6 @@ CudaArray CudaArray::binop(const CudaArray &other, BinaryKernelType kt) const {
   return binop_same_dtype(other.astype(this->dtype), kt);
 }
 
-template <typename T>
-CudaArray CudaArray::ternaryop(const py::array_t<T> &second,
-                               const py::array_t<T> &third,
-                               TernaryKernelType ker) const {
-  CudaArray second_arr = CudaArray::from_numpy(second);
-  CudaArray third_arr = CudaArray::from_numpy(third);
-  return ternaryop(second_arr, third_arr, ker);
-}
-
-template <typename T>
-CudaArray CudaArray::ternaryop(const CudaArray &second,
-                               const py::array_t<T> &third,
-                               TernaryKernelType ker) const {
-  CudaArray third_arr = CudaArray::from_numpy(third);
-  return ternaryop(second, third_arr, ker);
-}
-
-template <typename T>
-CudaArray CudaArray::ternaryop(const py::array_t<T> &second,
-                               const CudaArray &third,
-                               TernaryKernelType ker) const {
-  CudaArray second_arr = CudaArray::from_numpy(second);
-  return ternaryop(second_arr, third, ker);
-}
-
 CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
                                TernaryKernelType ker) const {
   if (second.shape != third.shape || shape != second.shape ||
@@ -340,28 +284,6 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
                         second.ptr.get(), third.ptr.get(), out.ptr.get());
   PG_CUDA_KERNEL_END;
   return out;
-}
-
-template <typename T> T CudaArray::getitem(shape_t index) const {
-  PG_CHECK_ARG(index.size() == shape.size(),
-               "index size must be equal to shape size, got ", index.size(),
-               " and ", shape.size());
-  // Calculate the offset for the multi-dimensional index
-  size_t elemsize = dtype_to_size(dtype);
-  size_t offset = 0;
-  for (size_t i = 0; i < index.size(); i++) {
-    PG_CHECK_ARG(index[i] < shape[i] && index[i] >= 0,
-                 "index out of bounds, got ", index[i], " for shape ",
-                 vec_to_string(shape));
-    offset += index[i] * strides[i];
-  }
-  offset /= elemsize; // since strides are in bytes, divide by element size to
-                      // get the correct offset
-
-  T value;
-  CHECK_CUDA(cudaMemcpy(&value, static_cast<char *>(ptr.get()) + offset,
-                        elemsize, cudaMemcpyDeviceToHost));
-  return value;
 }
 
 int CudaArray::ndim() const { return shape.size(); }
@@ -697,41 +619,6 @@ CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
   return out;
 }
 
-template <typename T> CudaArray CudaArray::from_numpy(py::array_t<T> np_array) {
-  py::buffer_info buffer_info = np_array.request();
-  auto size = buffer_info.size;
-  shape_t shape;
-  shape_t strides;
-
-  if (buffer_info.ndim == 0) { // Handle scalar as a special case
-    shape = {};                // Empty shape for scalar
-    strides = {};              // Empty strides for scalar
-  } else {
-    std::vector<py::ssize_t> py_strides = buffer_info.strides;
-    strides.assign(py_strides.begin(), py_strides.end());
-    std::vector<py::ssize_t> py_shape = buffer_info.shape;
-    shape.assign(py_shape.begin(), py_shape.end());
-  }
-
-  auto *ptr = static_cast<T *>(buffer_info.ptr);
-  CudaArray arr((size_t)size, shape, strides, dtype_from_pytype<T>());
-  CHECK_CUDA(cudaMemcpy(arr.ptr.get(), ptr, (size_t)size * sizeof(T),
-                        cudaMemcpyHostToDevice));
-  return arr;
-}
-
-template <typename T> py::array_t<T> CudaArray::to_numpy() const {
-  // assert that the array has compatible type
-  PG_CHECK_ARG(dtype == dtype_from_pytype<T>(),
-               "cannot convert to numpy array, expected type ",
-               dtype_to_string(dtype), " but got ",
-               dtype_to_string(dtype_from_pytype<T>()));
-  py::array_t<T> result(shape, strides);
-  CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr.get(), size * sizeof(T),
-                        cudaMemcpyDeviceToHost));
-  return result;
-}
-
 std::string CudaArray::to_string() const {
   /*void *host = malloc(size * dtype_to_size(dtype));
   CHECK_CUDA(
@@ -743,18 +630,6 @@ std::string CudaArray::to_string() const {
      << vec_to_string(strides);
   return ss.str();
 }
-
-template <typename T> CudaArray CudaArray::fill(shape_t shape, T value) {
-  // calculate correct dtype
-  DType _dtype = dtype_from_cpptype<T>();
-  CudaArray out(
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>()),
-      shape, _dtype);
-  fill_kernel<<<ceil(out.size / (float)DEFAULT_BLOCK_SIZE),
-                DEFAULT_BLOCK_SIZE>>>((T *)out.ptr.get(), out.size, value);
-  PG_CUDA_KERNEL_END;
-  return out;
-};
 
 CudaArray::~CudaArray() {}
 

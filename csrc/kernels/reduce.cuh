@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dtype.cuh"
+#include "dtype.hpp"
 // operation and initial accumulator value
 template <typename Op, typename T>
 __device__ void reduce_base_fn(const T *in, T *out, const size_t *in_strides,
@@ -102,7 +102,7 @@ __global__ void max_kernel(const T *in, T *out, const size_t *in_strides,
 enum class ReduceKernelType { SUM, MAX };
 
 template <typename T>
-void __launch_reduce_kernel(ReduceKernelType type, dim3 blocks, dim3 threads,
+void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks, dim3 threads,
                             const T *in, T *out, const size_t *in_strides,
                             const size_t *in_shape, const size_t n_dims,
                             const size_t red_axis) {

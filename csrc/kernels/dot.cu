@@ -1,4 +1,4 @@
-#include "matmul_kernels.cuh"
+#include "dot.cuh"
 
 void launch_matmul_kernel(dim3 grid_size, dim3 block_size, DType dtype,
                           const void *a, const void *b, void *out,
