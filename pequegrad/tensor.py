@@ -382,15 +382,15 @@ class Tensor:
         """Returns the transpose of the tensor"""
         return self.transpose(0, 1)
 
-    def conv2d(self, filter: "Tensor", bias: "Tensor" = None) -> "Tensor":
+    def conv2d(self, filter: "Tensor", bias: "Tensor" = None, stride: int = 1) -> "Tensor":
         """Returns the 2d convolution of the tensor with the given filter"""
-        inp_unf = self.unfold(filter.shape[-2:])
+        inp_unf = self.unfold(filter.shape[-2:], stride=stride)
         out_unf = (
             inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T
         ).transpose(1, 2)
         after_conv_size = (
-            self.shape[-2] - filter.shape[-2] + 1,
-            self.shape[-1] - filter.shape[-1] + 1,
+            (self.shape[-2] - filter.shape[-2]) // stride + 1,
+            (self.shape[-1] - filter.shape[-1]) // stride + 1,
         )
         out = out_unf.fold((1, 1), after_conv_size)
 

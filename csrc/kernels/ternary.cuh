@@ -16,9 +16,9 @@ __global__ void where_kernel(KERNEL_PARAMS_TER(int));
       const size_t *first_strides,  /* in bytes */                             \
       const size_t *second_strides, /* in bytes */                             \
       const size_t *third_strides,  /* in bytes */                             \
-      const size_t *shape,   /* both lhs and rhs should have equal shape, we   \
-                             dont   handle broadcasting here */                \
-      const size_t num_dims, /* equals len of strides and shape */             \
+      const size_t *shape,   /* all inputs should have equal shape, we   \
+                             don't handle broadcasting here */                \
+      const size_t num_dims, /* equals len of strides and len of shape */             \
       const T *first, const T *second, const T *third, T *out) {               \
     int idx = blockDim.x * blockIdx.x + threadIdx.x;                           \
     if (get_max_idx(shape, num_dims) <= idx)                                   \

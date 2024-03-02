@@ -3,24 +3,23 @@
 #include "dtype.hpp"
 #include "utils.cuh"
 
-#define KERNEL_PARAMS_UN(T)                                                    \
+#define KERNEL_PARAMS_UNARY(T)                                                    \
   const size_t *in_strides, const size_t *shape, const size_t num_dims,        \
       const T *in, T *out
 
-__global__ void copy_kernel(KERNEL_PARAMS_UN(float));
-__global__ void copy_kernel(KERNEL_PARAMS_UN(double));
-__global__ void copy_kernel(KERNEL_PARAMS_UN(int));
-__global__ void exp_kernel(KERNEL_PARAMS_UN(float));
-__global__ void exp_kernel(KERNEL_PARAMS_UN(double));
-__global__ void exp_kernel(KERNEL_PARAMS_UN(int));
-__global__ void log_kernel(KERNEL_PARAMS_UN(float));
-__global__ void log_kernel(KERNEL_PARAMS_UN(double));
-__global__ void log_kernel(KERNEL_PARAMS_UN(int));
+__global__ void copy_kernel(KERNEL_PARAMS_UNARY(float));
+__global__ void copy_kernel(KERNEL_PARAMS_UNARY(double));
+__global__ void copy_kernel(KERNEL_PARAMS_UNARY(int));
+__global__ void exp_kernel(KERNEL_PARAMS_UNARY(float));
+__global__ void exp_kernel(KERNEL_PARAMS_UNARY(double));
+__global__ void exp_kernel(KERNEL_PARAMS_UNARY(int));
+__global__ void log_kernel(KERNEL_PARAMS_UNARY(float));
+__global__ void log_kernel(KERNEL_PARAMS_UNARY(double));
+__global__ void log_kernel(KERNEL_PARAMS_UNARY(int));
 
 
 #define DEF_UNARY_OP_KERNEL(KERNEL_NAME, FN, T)                                \
-  __global__ void KERNEL_NAME(const size_t *in_strides, const size_t *shape,   \
-                              const size_t num_dims, const T *in, T *out) {    \
+  __global__ void KERNEL_NAME(KERNEL_PARAMS_UNARY(T)) {                          \
     const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
     if (get_max_idx(shape, num_dims) <= idx)                                   \
       return;                                                                  \
@@ -34,6 +33,7 @@ enum class UnaryKernelType {
   EXP,
   LOG,
 };
+
 
 template <typename T>
 __global__ void
@@ -51,9 +51,11 @@ copy_with_out_strides_kernel(const size_t *in_strides, const size_t *in_shape,
   out[out_idx] = in[in_idx];
 }
 
-template <typename InT, typename OutT> // both have same strides and everything
+template <typename InT, typename OutT>
 __global__ void astype_kernel(const size_t *in_strides, const size_t *in_shape,
                               const size_t num_dims, const InT *in, OutT *out) {
+  
+  // 'out' is assumed to be contiguous in memory, and have the same shape as 'in'
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (get_max_idx(in_shape, num_dims) < idx)
     return;
@@ -114,4 +116,4 @@ void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks,
 void launch_unary_kernel(UnaryKernelType type, DType dtype, dim3 blocks,
                          dim3 threads, const size_t *in_strides,
                          const size_t *shape, const size_t num_dims,
-                         const void *_in, void *_out);
+                         const void *in, void *out);

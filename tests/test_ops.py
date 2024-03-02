@@ -385,34 +385,36 @@ class _TestOps:
 
     @pytest.mark.parametrize(
         "data",
-        # shape_input, shape_kernel, bias
+        # shape_input, shape_kernel, bias, strides
         [
             # for input: batch_size, input_channels, input_height, input_width
             # for kernel: output_channels, input_channels, kernel_height, kernel_width
-            [(1, 1, 10, 5), (1, 1, 3, 3), True],
-            [(1, 1, 10, 5), (1, 1, 3, 3), False],
-            [(1, 1, 10, 5), (1, 1, 1, 1), True],
-            [(1, 1, 10, 5), (1, 1, 1, 1), False],
-            [(5, 1, 10, 5), (3, 1, 3, 3), True],
-            [(5, 1, 10, 5), (3, 1, 3, 3), False],
-            [(5, 1, 10, 5), (3, 1, 1, 1), True],
-            [(5, 1, 10, 5), (3, 1, 1, 1), False],
-            [(5, 1, 10, 5), (3, 1, 5, 5), True],
-            [(5, 1, 10, 5), (3, 1, 5, 5), False],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1],
+            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2],
+            [(1, 1, 10, 5), (1, 1, 1, 1), True, 1],
+            [(1, 1, 10, 5), (1, 1, 1, 1), False, 2],
+            [(5, 1, 10, 5), (3, 1, 3, 3), True, 1],
+            [(5, 1, 10, 5), (3, 1, 3, 3), False, 2],
+            [(5, 1, 10, 5), (3, 1, 1, 1), True, 1],
+            [(5, 1, 10, 5), (3, 1, 1, 1), False, 2],
+            [(5, 1, 10, 5), (3, 1, 5, 5), True, 1],
+            [(5, 1, 10, 5), (3, 1, 5, 5), False, 2],
+            [(5, 3, 20, 10), (5, 3, 3, 3), True, 4],
+            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50], # large stride
         ],
     )
     def test_conv2d(self, data):
-        shape_input, shape_kernel, use_bias = data
+        shape_input, shape_kernel, use_bias, stride = data
 
         def torch_fn(x, y, b=None):
             if b is None:
-                return torch.nn.functional.conv2d(x, y)
-            return torch.nn.functional.conv2d(x, y, bias=b)
+                return torch.nn.functional.conv2d(x, y, stride=stride)
+            return torch.nn.functional.conv2d(x, y, bias=b, stride=stride)
 
         def peq_fn(x, y, b=None):
             if b is None:
-                return x.conv2d(y)
-            return x.conv2d(y, b)
+                return x.conv2d(y, stride=stride)
+            return x.conv2d(y, bias=b, stride=stride)
 
         if use_bias:
             bias_shape = (shape_kernel[0],)
