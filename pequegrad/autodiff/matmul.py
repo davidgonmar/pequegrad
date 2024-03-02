@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor
-from pequegrad.function import Function
+from .function import Function
 
 
 class MatMul(Function):

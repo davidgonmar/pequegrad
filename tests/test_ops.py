@@ -400,7 +400,7 @@ class _TestOps:
             [(5, 1, 10, 5), (3, 1, 5, 5), True, 1],
             [(5, 1, 10, 5), (3, 1, 5, 5), False, 2],
             [(5, 3, 20, 10), (5, 3, 3, 3), True, 4],
-            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50], # large stride
+            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50],  # large stride
         ],
     )
     def test_conv2d(self, data):

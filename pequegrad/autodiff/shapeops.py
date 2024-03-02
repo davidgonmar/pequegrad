@@ -1,6 +1,6 @@
 from pequegrad.tensor import Tensor
 from typing import Tuple
-from pequegrad.function import Function
+from .function import Function
 import numpy as np
 
 

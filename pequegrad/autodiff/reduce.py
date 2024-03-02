@@ -1,6 +1,6 @@
 from typing import Optional
 from pequegrad.tensor import Tensor
-from pequegrad.function import Function
+from .function import Function
 
 
 class ReduceFunction(Function):

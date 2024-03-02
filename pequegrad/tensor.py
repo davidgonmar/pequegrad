@@ -382,7 +382,9 @@ class Tensor:
         """Returns the transpose of the tensor"""
         return self.transpose(0, 1)
 
-    def conv2d(self, filter: "Tensor", bias: "Tensor" = None, stride: int = 1) -> "Tensor":
+    def conv2d(
+        self, filter: "Tensor", bias: "Tensor" = None, stride: int = 1
+    ) -> "Tensor":
         """Returns the 2d convolution of the tensor with the given filter"""
         inp_unf = self.unfold(filter.shape[-2:], stride=stride)
         out_unf = (
@@ -544,7 +546,7 @@ class Tensor:
         return len(self.data)
 
 
-from .function import (  # noqa: E402 avoid circular imports
+from .autodiff import (  # noqa: E402 avoid circular imports
     Add,
     MatMul,
     ReLU,

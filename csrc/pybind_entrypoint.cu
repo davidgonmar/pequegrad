@@ -15,7 +15,7 @@ namespace py = pybind11;
 using ItemVariant = std::variant<float, int, double>;
 using NpArrayVariant =
     std::variant<py::array_t<float>, py::array_t<int>, py::array_t<double>>;
-    
+
 PYBIND11_MODULE(pequegrad_cu, m) {
   namespace py = pybind11;
 

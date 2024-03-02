@@ -1,6 +1,6 @@
 from typing import Union
 from pequegrad.tensor import Tensor
-from pequegrad.function import Function
+from .function import Function
 
 
 class Pow(Function):
