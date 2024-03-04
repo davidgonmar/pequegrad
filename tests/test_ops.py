@@ -43,9 +43,7 @@ def _compare_fn_with_torch(
             t.shape == torch_t.shape
         ), f"t.shape: {t.shape} != torch_t.shape: {torch_t.shape}"
 
-        assert np.allclose(
-            list1, list2, atol=tol, equal_nan=True
-        ), f"t: {list1} != torch_t: {list2}"
+        np.testing.assert_allclose(list1, list2, rtol=tol, atol=tol)
 
     _compare(peq_res, torch_res, tol)
 
@@ -401,6 +399,12 @@ class _TestOps:
             [(5, 1, 10, 5), (3, 1, 5, 5), False, 2],
             [(5, 3, 20, 10), (5, 3, 3, 3), True, 4],
             [(5, 3, 20, 10), (5, 3, 3, 3), False, 50],  # large stride
+            # now with stride as tuple
+            [(5, 3, 20, 10), (5, 3, 3, 3), True, (4, 2)],  # 12
+            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3)],
+            [(1, 3, 20, 10), (1, 3, 3, 3), False, (3, 1)],
+            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3)],
+            [(1, 3, 20, 10), (1, 3, 3, 3), False, (2, 5)],
         ],
     )
     def test_conv2d(self, data):

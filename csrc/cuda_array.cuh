@@ -86,8 +86,9 @@ public:
 
   CudaArray reshape(std::vector<int> &new_shape) const;
 
-  CudaArray im2col(shape_t kernel_shape, int stride) const;
-  CudaArray col2im(shape_t kernel_shape, shape_t out_shape, int stride) const;
+  CudaArray im2col(shape_t kernel_shape, int stride_y, int stride_x) const;
+  CudaArray col2im(shape_t kernel_shape, shape_t out_shape, int stride_y,
+                   int stride_x) const;
 
   template <typename T> static CudaArray from_numpy(py::array_t<T> np_array);
 

@@ -339,13 +339,23 @@ class CudaStorage(AbstractStorage):
             )
         )
 
-    def im2col(self, kernel_size: Tuple[int, int], stride: int) -> "CudaStorage":
-        return CudaStorage(self.data.im2col(kernel_size, stride))
+    def im2col(self, kernel_size: Tuple[int, int], stride: Union[int, Tuple[int, int]]):
+        return CudaStorage(
+            self.data.im2col(
+                kernel_size, stride if isinstance(stride, Tuple) else (stride, stride)
+            )
+        )
 
     def col2im(
         self,
         kernel_shape: Tuple[int, int],
         output_shape: Tuple[int, int],
-        stride: int = 1,
+        stride: Union[int, Tuple[int, int]],
     ) -> "CudaStorage":
-        return CudaStorage(self.data.col2im(kernel_shape, output_shape, stride))
+        return CudaStorage(
+            self.data.col2im(
+                kernel_shape,
+                output_shape,
+                stride if isinstance(stride, Tuple) else (stride, stride),
+            )
+        )

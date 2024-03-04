@@ -366,13 +366,20 @@ PYBIND11_MODULE(pequegrad_cu, m) {
              return arr.reshape(new_shape);
            })
       .def("im2col",
-           [](const CudaArray &arr, shape_t kernel_shape, size_t stride) {
-             return arr.im2col(kernel_shape, stride);
+           [](const CudaArray &arr, shape_t kernel_shape, shape_t stride) {
+             if (stride.size() != 2) {
+               throw std::runtime_error("Stride must be a 2D array");
+             }
+             return arr.im2col(kernel_shape, stride.at(0), stride.at(1));
            })
       .def("col2im",
            [](const CudaArray &arr, shape_t kernel_shape, shape_t output_shape,
-              size_t stride) {
-             return arr.col2im(kernel_shape, output_shape, stride);
+              shape_t stride) {
+             if (stride.size() != 2) {
+               throw std::runtime_error("Stride must be a 2D array");
+             }
+             return arr.col2im(kernel_shape, output_shape, stride.at(0),
+                               stride.at(1));
            })
       .def_static(
           "fill",

@@ -10,9 +10,10 @@
 
 #define MAX_THREADS_PER_BLOCK 512
 
-CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
+CudaArray CudaArray::im2col(shape_t kernel_shape, int stride_y,
+                            int stride_x) const {
   if (!is_contiguous()) {
-    return as_contiguous().im2col(kernel_shape, stride);
+    return as_contiguous().im2col(kernel_shape, stride_y, stride_x);
   }
   PG_CHECK_ARG(ndim() == 4, "ndim has to be 4 in im2col, got shape ",
                vec_to_string(shape));
@@ -26,8 +27,8 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   size_t x_h = shape[2];
   size_t x_w = shape[3];
 
-  size_t out_h = (x_h - k_h) / stride + 1;
-  size_t out_w = (x_w - k_w) / stride + 1;
+  size_t out_h = (x_h - k_h) / stride_y + 1;
+  size_t out_w = (x_w - k_w) / stride_x + 1;
 
   PG_CHECK_RUNTIME(out_h > 0 && out_w > 0,
                    "output height and width should be > 0, got out_h=", out_h,
@@ -45,15 +46,16 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride) const {
   int grid_size = ceil(total_iters / (float)block_size);
 
   launch_im2col_kernel(dtype, grid_size, block_size, ptr.get(), out.ptr.get(),
-                       k_h, k_w, x_h, x_w, stride, batch_size, in_channels);
+                       k_h, k_w, x_h, x_w, stride_x, stride_y, batch_size,
+                       in_channels);
   PG_CUDA_KERNEL_END;
   return out;
 }
 
 CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
-                            int stride) const {
+                            int stride_y, int stride_x) const {
   if (!is_contiguous()) {
-    return as_contiguous().col2im(kernel_shape, out_shape, stride);
+    return as_contiguous().col2im(kernel_shape, out_shape, stride_y, stride_x);
   }
 
   PG_CHECK_ARG(ndim() == 3, "ndim has to be 3 in col2im, got shape ",
@@ -86,7 +88,7 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
       ceil(out_batch_size * out_channels / (float)DEFAULT_BLOCK_SIZE));
   launch_col2im_kernel(dtype, grid_size, block_size, ptr.get(), out.ptr.get(),
                        out_channels, k_h, k_w, in_h, in_w, out_batch_size,
-                       out_h, out_w, stride);
+                       out_h, out_w, stride_x, stride_y);
   PG_CUDA_KERNEL_END;
   return out;
 }
