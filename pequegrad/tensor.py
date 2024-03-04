@@ -387,18 +387,22 @@ class Tensor:
         filter: "Tensor",
         bias: "Tensor" = None,
         stride: Union[int, Tuple[int, int]] = 1,
+        dilation: Union[int, Tuple[int, int]] = 1,
     ) -> "Tensor":
         """Returns the 2d convolution of the tensor with the given filter"""
-        s_x, s_y = (stride, stride) if isinstance(stride, int) else stride
-        inp_unf = self.unfold(filter.shape[-2:], stride=(s_x, s_y))
+        s_y, s_x = (stride, stride) if isinstance(stride, int) else stride
+        d_y, d_x = (dilation, dilation) if isinstance(dilation, int) else dilation
+        inp_unf = self.unfold(filter.shape[-2:], stride=(s_y, s_x), dilation=(d_y, d_x))
         out_unf = (
             inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T
         ).transpose(1, 2)
         after_conv_size = (
-            (self.shape[-2] - filter.shape[-2]) // s_x + 1,
-            (self.shape[-1] - filter.shape[-1]) // s_y + 1,
+            (self.shape[-2] - (filter.shape[-2] - 1) * d_y - 1) // s_y + 1,
+            (self.shape[-1] - (filter.shape[-1] - 1) * d_x - 1) // s_x + 1,
         )
-        out = out_unf.fold((1, 1), after_conv_size)
+        out = out_unf.fold(
+            (1, 1), after_conv_size
+        )  # dilation and strides are implicitly 1
 
         if bias is not None:
             assert bias.shape == (
@@ -439,18 +443,28 @@ class Tensor:
         return maxed.reshape(new_shape)
 
     def unfold(
-        self, kernel_shape: Tuple[int, ...], stride: Union[int, Tuple[int, int]]
+        self,
+        kernel_shape: Tuple[int, ...],
+        stride: Union[int, Tuple[int, int]] = 1,
+        dilation: Union[int, Tuple[int, int]] = 1,
     ):
-        return Unfold.apply(self, kernel_shape=kernel_shape, stride=stride)
+        return Unfold.apply(
+            self, kernel_shape=kernel_shape, stride=stride, dilation=dilation
+        )
 
     def fold(
         self,
         kernel_shape: Tuple[int, ...],
         output_shape: Tuple[int, ...],
-        stride: int = 1,
+        stride: Union[int, Tuple[int, int]] = 1,
+        dilation: Union[int, Tuple[int, int]] = 1,
     ):
         return Fold.apply(
-            self, kernel_shape=kernel_shape, output_shape=output_shape, stride=stride
+            self,
+            kernel_shape=kernel_shape,
+            output_shape=output_shape,
+            stride=stride,
+            dilation=dilation,
         )
 
     def var(self, dim=None, keepdim=True, correction=1):

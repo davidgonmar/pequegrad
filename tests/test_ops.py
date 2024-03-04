@@ -30,8 +30,8 @@ def _compare_fn_with_torch(
         torch_tensor(arr, dtype=torch.float64, requires_grad=True) for arr in np_arr
     ]  # Using double precision
 
-    peq_res = pequegrad_fn(*tensors)
     torch_res = torch_fn(*torch_tensors)
+    peq_res = pequegrad_fn(*tensors)
 
     def _compare(t: Tensor, torch_t: TorchTensor, tol: float = 1e-5):
         list1 = np.array(t.numpy()) if t is not None else None
@@ -385,40 +385,45 @@ class _TestOps:
         "data",
         # shape_input, shape_kernel, bias, strides
         [
-            # for input: batch_size, input_channels, input_height, input_width
-            # for kernel: output_channels, input_channels, kernel_height, kernel_width
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1],
-            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2],
-            [(1, 1, 10, 5), (1, 1, 1, 1), True, 1],
-            [(1, 1, 10, 5), (1, 1, 1, 1), False, 2],
-            [(5, 1, 10, 5), (3, 1, 3, 3), True, 1],
-            [(5, 1, 10, 5), (3, 1, 3, 3), False, 2],
-            [(5, 1, 10, 5), (3, 1, 1, 1), True, 1],
-            [(5, 1, 10, 5), (3, 1, 1, 1), False, 2],
-            [(5, 1, 10, 5), (3, 1, 5, 5), True, 1],
-            [(5, 1, 10, 5), (3, 1, 5, 5), False, 2],
-            [(5, 3, 20, 10), (5, 3, 3, 3), True, 4],
-            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50],  # large stride
+            # for input: batch_size, input_channels, input_height, input_width, dilation
+            # for kernel: output_channels, input_channels, kernel_height, kernel_width, dilation
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 1],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 2],
+            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2, 1],
+            [(1, 1, 10, 5), (1, 1, 1, 1), True, 1, 1],
+            [(1, 1, 10, 5), (1, 1, 1, 1), False, 2, 1],
+            [(5, 1, 10, 5), (3, 1, 3, 3), True, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 3, 3), False, 2, 1],
+            [(5, 1, 10, 5), (3, 1, 1, 1), True, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 1, 1), False, 2, 1],
+            [(5, 1, 10, 5), (3, 1, 5, 5), True, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 5, 5), False, 2, 1],
+            [(5, 3, 20, 10), (5, 3, 3, 3), True, 4, 1],
+            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50, 1],  # large stride
             # now with stride as tuple
-            [(5, 3, 20, 10), (5, 3, 3, 3), True, (4, 2)],  # 12
-            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3)],
-            [(1, 3, 20, 10), (1, 3, 3, 3), False, (3, 1)],
-            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3)],
-            [(1, 3, 20, 10), (1, 3, 3, 3), False, (2, 5)],
+            [(5, 3, 20, 10), (5, 3, 3, 3), True, (4, 2), 1],  # 12
+            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1],
+            [(1, 3, 20, 10), (1, 3, 3, 3), False, (3, 1), 1],
+            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1],
+            [(1, 3, 20, 10), (1, 3, 3, 3), False, (2, 5), 1],
         ],
     )
     def test_conv2d(self, data):
-        shape_input, shape_kernel, use_bias, stride = data
+        shape_input, shape_kernel, use_bias, stride, dilation = data
 
         def torch_fn(x, y, b=None):
             if b is None:
-                return torch.nn.functional.conv2d(x, y, stride=stride)
-            return torch.nn.functional.conv2d(x, y, bias=b, stride=stride)
+                return torch.nn.functional.conv2d(
+                    x, y, stride=stride, dilation=dilation
+                )
+            return torch.nn.functional.conv2d(
+                x, y, bias=b, stride=stride, dilation=dilation
+            )
 
         def peq_fn(x, y, b=None):
             if b is None:
-                return x.conv2d(y, stride=stride)
-            return x.conv2d(y, bias=b, stride=stride)
+                return x.conv2d(y, stride=stride, dilation=dilation)
+            return x.conv2d(y, bias=b, stride=stride, dilation=dilation)
 
         if use_bias:
             bias_shape = (shape_kernel[0],)

@@ -4,9 +4,9 @@
 template <typename T>
 __global__ void im2col_kernel(T *in, T *out, size_t k_h, size_t k_w, size_t x_h,
                               size_t x_w, size_t stride_x, size_t stride_y, size_t batch_size,
-                              size_t in_channels) {
-  int out_h = (x_h - k_h) / stride_y + 1;
-  int out_w = (x_w - k_w) / stride_x + 1;
+                              size_t in_channels, size_t dilation_x, size_t dilation_y) {
+  int out_h = (x_h - dilation_y * (k_h - 1) - 1) / stride_y + 1;
+  int out_w = (x_w - dilation_x * (k_w - 1) - 1) / stride_x + 1;
 
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -32,19 +32,19 @@ __global__ void im2col_kernel(T *in, T *out, size_t k_h, size_t k_w, size_t x_h,
   int row = (channel * k_h * k_w) + h * k_w + w;
   out[batch * in_channels * k_h * k_w * out_h * out_w + out_w * out_h * row +
       col] = in[batch * in_channels * x_h * x_w + channel * x_h * x_w +
-                (h + in_y_offset) * x_w + (w + in_x_offset)];
+                (h * dilation_y + in_y_offset) * x_w + (w * dilation_x + in_x_offset)];
 }
 
 void launch_im2col_kernel(DType dtype, dim3 blocks, dim3 threads, void *in,
                           void *out, size_t k_h, size_t k_w, size_t x_h,
                           size_t x_w, size_t stride_x, size_t stride_y, size_t batch_size,
-                          size_t in_channels);
+                          size_t in_channels, size_t dilation_x, size_t dilation_y);
 
 template <typename T>
 __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
                               size_t k_w, size_t in_h, size_t in_w,
                               size_t batch_size, size_t out_h, size_t out_w,
-                              size_t stride_x, size_t stride_y) {
+                              size_t stride_x, size_t stride_y, size_t dilation_x, size_t dilation_y) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
   int batch = idx / out_channels;
@@ -54,7 +54,7 @@ __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
     return;
   }
 
-  int n_horizontal_slides = (out_w - k_w) / stride_x + 1;
+  int n_horizontal_slides = (out_w - (k_w - 1) * dilation_x - 1) / stride_x + 1;
 
   for (int col = 0; col < in_w; col++) {
     int out_x_offset = col % n_horizontal_slides * stride_x;
@@ -63,7 +63,7 @@ __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
       for (int kx = 0; kx < k_w; kx++) {
         int in_row = ky * k_w + kx + channel * k_w * k_h;
         out[batch * out_channels * out_h * out_w + channel * out_h * out_w +
-            out_y_offset * out_w + ky * out_w + out_x_offset + kx] +=
+            out_y_offset * out_w + ky * out_w * dilation_y + out_x_offset + kx * dilation_x] +=
             in[batch * in_w * in_h + in_row * in_w + col];
       }
     }
@@ -74,4 +74,4 @@ void launch_col2im_kernel(DType dtype, dim3 blocks, dim3 threads, void *in,
                           void *out, size_t out_channels, size_t k_h,
                           size_t k_w, size_t in_h, size_t in_w,
                           size_t batch_size, size_t out_h, size_t out_w,
-                          size_t stride_x, size_t stride_y);
+                          size_t stride_x, size_t stride_y, size_t dilation_x, size_t dilation_y);

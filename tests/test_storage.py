@@ -512,50 +512,49 @@ class _TestStorage:
 
     @pytest.mark.parametrize(
         "data",
-        # shape_input, kernel_size, stride
+        # shape_input, kernel_size, stride, dilation
         [
-            [(2, 2, 3, 3), (2, 2), 1],
-            [(2, 2, 3, 3), (2, 2), 2],
-            [(2, 2, 3, 3), (2, 2), 3],
-            [(1, 1, 10, 5), (3, 3), 1],
-            [(1, 1, 10, 5), (3, 3), 2],
-            [(1, 1, 10, 5), (3, 3), 3],
-            [(1, 1, 10, 5), (2, 2), 1],
-            [(1, 1, 10, 5), (2, 2), 2],
-            [(1, 1, 10, 5), (2, 2), 3],
-            [(1, 1, 10, 5), (1, 1), 1],
-            [(1, 1, 10, 5), (1, 1), 2],
-            [(1, 1, 10, 5), (1, 1), 3],
-            [(5, 1, 10, 5), (3, 3), 1],
-            [(5, 1, 10, 5), (3, 3), 2],
-            [(5, 1, 10, 5), (3, 3), 3],
-            [(5, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (1, 1), 2],
-            [(5, 1, 10, 5), (1, 1), 3],
-            [(5, 1, 10, 5), (5, 5), 1],
-            [(5, 1, 10, 5), (5, 5), 2],
-            [(5, 1, 10, 5), (5, 5), 3],
-            [(1, 1, 3, 3), (3, 3), 1],
-            [(1, 1, 3, 3), (3, 3), 2],
-            [(1, 1, 3, 3), (3, 3), 3],
-            [(1, 1, 5, 5), (3, 3), 1],
-            [(1, 1, 5, 5), (3, 3), 2],
-            [(1, 1, 5, 5), (3, 3), 3],
+            [(2, 2, 3, 3), (2, 2), 1, 1],
+            [(2, 2, 3, 3), (2, 2), 2, (1, 1)],
+            [(2, 2, 3, 3), (2, 2), 3, (2, 2)],
+            [(1, 1, 10, 5), (3, 3), 1, 1],
+            [(1, 1, 10, 5), (3, 3), 2, (1, 1)],
+            [(1, 1, 10, 5), (3, 3), 3, (2, 2)],
+            [(1, 1, 10, 5), (2, 2), 1, 1],
+            [(1, 1, 10, 5), (2, 2), 2, (1, 1)],
+            [(1, 1, 10, 5), (2, 2), 3, (2, 2)],
+            [(1, 1, 10, 5), (1, 1), 1, 1],
+            [(1, 1, 10, 5), (1, 1), 2, (1, 1)],
+            [(1, 1, 10, 5), (1, 1), 3, (2, 2)],
+            [(5, 1, 10, 5), (3, 3), 1, 1],
+            [(5, 1, 10, 5), (3, 3), 2, (1, 1)],
+            [(5, 1, 10, 5), (3, 3), 3, (2, 2)],
+            [(5, 1, 10, 5), (1, 1), 1, 1],
+            [(5, 1, 10, 5), (1, 1), 2, (1, 1)],
+            [(5, 1, 10, 5), (1, 1), 3, (2, 2)],
+            [(5, 1, 10, 5), (5, 5), 1, 1],
+            [(5, 1, 10, 5), (5, 5), 2, (1, 1)],
+            [(1, 1, 3, 3), (3, 3), 1, 1],
+            [(1, 1, 3, 3), (3, 3), 2, (1, 1)],
+            [(1, 1, 5, 5), (3, 3), 1, 1],
+            [(1, 1, 5, 5), (3, 3), 2, (1, 1)],
+            [(1, 1, 5, 5), (3, 3), 3, (2, 2)],
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_im2col(self, data, class_storage):
         if self.dtype != np.float32:
             raise pytest.skip("im2col only supported for float32")
-        shape_input, kernel_size, stride = data
+        shape_input, kernel_size, stride, dilation = data
 
         nparr = np.random.rand(*shape_input).astype(self.dtype)
         x = class_storage(nparr)
-        x_transformed = x.im2col(kernel_size, stride)
         x_torch = torch.tensor(nparr)
         x_torch_transformed = torch.nn.functional.unfold(
-            x_torch, kernel_size, stride=stride
+            x_torch, kernel_size, stride=stride, dilation=dilation
         )
+        x_transformed = x.im2col(kernel_size, stride, dilation)
+
         self._compare_with_numpy(
             x_transformed,
             x_torch_transformed.numpy().astype(self.dtype),
@@ -566,55 +565,57 @@ class _TestStorage:
         "data",
         # shape_input, kernel_size
         [
-            [(2, 2, 3, 3), (2, 2), 1],
-            [(2, 2, 3, 3), (2, 2), 2],
-            [(2, 2, 3, 3), (2, 2), 3],
-            [(1, 1, 10, 5), (3, 3), 1],
-            [(1, 1, 10, 5), (3, 3), 2],
-            [(1, 1, 10, 5), (3, 3), 3],
-            [(1, 1, 10, 5), (2, 2), 1],
-            [(1, 1, 10, 5), (2, 2), 2],
-            [(1, 1, 10, 5), (2, 2), 3],
-            [(1, 1, 10, 5), (1, 1), 1],
-            [(1, 1, 10, 5), (1, 1), 2],
-            [(1, 1, 10, 5), (1, 1), 3],
-            [(5, 1, 10, 5), (3, 3), 1],
-            [(5, 1, 10, 5), (3, 3), 2],
-            [(5, 1, 10, 5), (3, 3), 3],
-            [(5, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (1, 1), 2],
-            [(5, 1, 10, 5), (1, 1), 3],
-            [(5, 1, 10, 5), (5, 5), 1],
-            [(5, 1, 10, 5), (5, 5), 2],
-            [(5, 1, 10, 5), (5, 5), 3],
-            [(1, 1, 3, 3), (3, 3), 1],
-            [(1, 1, 3, 3), (3, 3), 2],
-            [(1, 1, 3, 3), (3, 3), 3],
-            [(1, 1, 5, 5), (3, 3), 1],
-            [(1, 1, 5, 5), (3, 3), 2],
-            [(1, 1, 5, 5), (3, 3), 3],
+            [(2, 2, 3, 3), (2, 2), 1, 1],
+            [(2, 2, 3, 3), (2, 2), 2, (1, 1)],
+            [(2, 2, 3, 3), (2, 2), 3, (2, 2)],
+            [(1, 1, 10, 5), (3, 3), 1, 1],
+            [(1, 1, 10, 5), (3, 3), 2, (1, 1)],
+            [(1, 1, 10, 5), (3, 3), 3, (2, 2)],
+            [(1, 1, 10, 5), (2, 2), 1, 1],
+            [(1, 1, 10, 5), (2, 2), 2, (1, 1)],
+            [(1, 1, 10, 5), (2, 2), 3, (2, 2)],
+            [(1, 1, 10, 5), (1, 1), 1, 1],
+            [(1, 1, 10, 5), (1, 1), 2, (1, 1)],
+            [(1, 1, 10, 5), (1, 1), 3, (2, 2)],
+            [(5, 1, 10, 5), (3, 3), 1, 1],
+            [(5, 1, 10, 5), (3, 3), 2, (1, 1)],
+            [(5, 1, 10, 5), (3, 3), 3, (2, 2)],
+            [(5, 1, 10, 5), (1, 1), 1, 1],
+            [(5, 1, 10, 5), (1, 1), 2, (1, 1)],
+            [(5, 1, 10, 5), (1, 1), 3, (2, 2)],
+            [(5, 1, 10, 5), (5, 5), 1, 1],
+            [(5, 1, 10, 5), (5, 5), 2, (1, 1)],
+            [(1, 1, 3, 3), (3, 3), 1, 1],
+            [(1, 1, 3, 3), (3, 3), 2, (1, 1)],
+            [(1, 1, 5, 5), (3, 3), 1, 1],
+            [(1, 1, 5, 5), (3, 3), 2, (1, 1)],
+            [(1, 1, 5, 5), (3, 3), 3, (2, 2)],
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)
     def test_col2im(self, data, class_storage):
         if self.dtype != np.float32:
             raise pytest.skip("col2im only supported for float32")
-        shape_input, kernel_size, stride = data
+        shape_input, kernel_size, stride, dilation = data
 
         nparr = np.random.rand(*shape_input).astype(self.dtype)
         torch_unfolded = torch.nn.functional.unfold(
-            torch.tensor(nparr), kernel_size, stride=stride
+            torch.tensor(nparr), kernel_size, stride=stride, dilation=dilation
         )
         torch_folded = (
             torch.nn.functional.fold(
-                torch_unfolded, shape_input[2:], kernel_size, stride=stride
+                torch_unfolded,
+                shape_input[2:],
+                kernel_size,
+                stride=stride,
+                dilation=dilation,
             )
             .detach()
             .numpy()
         )
 
         unfolded = class_storage(torch_unfolded.detach().numpy())
-        folded = unfolded.col2im(kernel_size, shape_input[2:], stride)
+        folded = unfolded.col2im(kernel_size, shape_input[2:], stride, dilation)
         self._compare_with_numpy(folded, torch_folded, test_strides=False)
 
     # test fill

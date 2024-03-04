@@ -156,7 +156,10 @@ class NumpyStorage(AbstractStorage):
         )
 
     def im2col(
-        self, kernel_shape: Tuple[int, int], stride: Union[Tuple[int, int], int] = 1
+        self,
+        kernel_shape: Tuple[int, int],
+        stride: Union[Tuple[int, int], int] = 1,
+        dilation: Union[Tuple[int, int], int] = 1,
     ) -> "NumpyStorage":
         """
         Unfold a numpy array to a 3D array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
@@ -175,8 +178,10 @@ class NumpyStorage(AbstractStorage):
         batch_size, in_channels, x_h, x_w = x.shape
         k_h, k_w = kernel_shape
         s_h, s_w = stride if isinstance(stride, tuple) else (stride, stride)
-        out_h = (x_h - k_h) // s_h + 1
-        out_w = (x_w - k_w) // s_w + 1
+        d_h, d_w = dilation if isinstance(dilation, tuple) else (dilation, dilation)
+        assert d_h > 0 and d_w > 0, "Dilation must be greater than 0"
+        out_h = (x_h - (d_h * (k_h - 1)) - 1) // s_h + 1
+        out_w = (x_w - (d_w * (k_w - 1)) - 1) // s_w + 1
 
         if out_h <= 0 or out_w <= 0:
             raise ValueError(
@@ -187,12 +192,12 @@ class NumpyStorage(AbstractStorage):
 
         for i in range(0, out_h):
             start_i = i * s_h
-            end_i = start_i + k_h
+            end_i = start_i + (k_h - 1) * d_h + 1
             for j in range(0, out_w):
                 start_j = j * s_w
-                end_j = start_j + k_w
+                end_j = start_j + (k_w - 1) * d_w + 1
                 cols[:, :, i * out_w + j] = x[
-                    :, :, start_i:end_i, start_j:end_j
+                    :, :, start_i:end_i:d_h, start_j:end_j:d_w
                 ].reshape(batch_size, -1)
 
         return NumpyStorage(cols)
@@ -202,6 +207,7 @@ class NumpyStorage(AbstractStorage):
         kernel_shape: Tuple[int, int],
         output_shape: Tuple[int, int],
         stride: Union[Tuple[int, int], int] = 1,
+        dilation: Union[Tuple[int, int], int] = 1,
     ):
         """
         Fold a 3D array of shape (batch_size, k_h * k_w * n_channels, (x_h - k_h + 1) * (x_w - k_w + 1))
@@ -226,20 +232,21 @@ class NumpyStorage(AbstractStorage):
 
         k_h, k_w = kernel_shape
         s_h, s_w = stride if isinstance(stride, tuple) else (stride, stride)
+        d_h, d_w = dilation if isinstance(dilation, tuple) else (dilation, dilation)
         out_h, out_w = output_shape
         out_channels = unfolded.shape[1] // (k_h * k_w)
         out_batch = unfolded.shape[0]
 
         out = np.zeros((out_batch, out_channels, out_h, out_w))
 
-        for i in range(0, (out_h - k_h) // s_h + 1):
-            for j in range(0, (out_w - k_w) // s_w + 1):
-                col = unfolded[:, :, i * ((out_w - k_w) // s_w + 1) + j]
+        for i in range(0, (out_h - (k_h - 1) * d_w - 1) // s_h + 1):
+            for j in range(0, (out_w - (k_w - 1) * d_w - 1) // s_w + 1):
+                col = unfolded[:, :, i * ((out_w - (k_w - 1) * d_w - 1) // s_w + 1) + j]
                 start_i = i * s_h
-                end_i = start_i + k_h
+                end_i = start_i + (k_h - 1) * d_h + 1
                 start_j = j * s_w
-                end_j = start_j + k_w
-                out[:, :, start_i:end_i, start_j:end_j] += col.reshape(
+                end_j = start_j + (k_w - 1) * d_w + 1
+                out[:, :, start_i:end_i:d_h, start_j:end_j:d_w] += col.reshape(
                     out_batch, out_channels, k_h, k_w
                 )
 
