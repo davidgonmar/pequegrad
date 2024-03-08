@@ -25,8 +25,13 @@ public:
   size_t size;
   shape_t shape;
   shape_t strides;
+  size_t offset;
   DType dtype;
 
+  // returns the base pointer of the array, offsetted by the offset
+  void *get_base_ptr() const {
+    return static_cast<char *>(ptr.get()) + offset;
+  }
   CudaArray(size_t size, const shape_t &shape, const shape_t &strides,
             const std::shared_ptr<void> &shared_ptr, DType dtype);
   CudaArray(size_t size, shape_t shape, shape_t strides, DType dtype);
@@ -165,7 +170,7 @@ template <typename T> T CudaArray::getitem(shape_t index) const {
                       // get the correct offset
 
   T value;
-  CHECK_CUDA(cudaMemcpy(&value, static_cast<char *>(ptr.get()) + offset,
+  CHECK_CUDA(cudaMemcpy(&value, static_cast<char *>(this->get_base_ptr()) + offset,
                         elemsize, cudaMemcpyDeviceToHost));
   return value;
 }
@@ -188,7 +193,7 @@ template <typename T> CudaArray CudaArray::from_numpy(py::array_t<T> np_array) {
 
   auto *ptr = static_cast<T *>(buffer_info.ptr);
   CudaArray arr((size_t)size, shape, strides, dtype_from_pytype<T>());
-  CHECK_CUDA(cudaMemcpy(arr.ptr.get(), ptr, (size_t)size * sizeof(T),
+  CHECK_CUDA(cudaMemcpy(arr.get_base_ptr(), ptr, (size_t)size * sizeof(T),
                         cudaMemcpyHostToDevice));
   return arr;
 }
@@ -200,7 +205,7 @@ template <typename T> py::array_t<T> CudaArray::to_numpy() const {
                dtype_to_string(dtype), " but got ",
                dtype_to_string(dtype_from_pytype<T>()));
   py::array_t<T> result(shape, strides);
-  CHECK_CUDA(cudaMemcpy(result.mutable_data(), ptr.get(), size * sizeof(T),
+  CHECK_CUDA(cudaMemcpy(result.mutable_data(), this->get_base_ptr(), size * sizeof(T),
                         cudaMemcpyDeviceToHost));
   return result;
 }
@@ -212,7 +217,7 @@ template <typename T> CudaArray CudaArray::fill(shape_t shape, T value) {
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>()),
       shape, _dtype);
   fill_kernel<<<ceil(out.size / (float)DEFAULT_BLOCK_SIZE),
-                DEFAULT_BLOCK_SIZE>>>((T *)out.ptr.get(), out.size, value);
+                DEFAULT_BLOCK_SIZE>>>((T *)out.get_base_ptr(), out.size, value);
   PG_CUDA_KERNEL_END;
   return out;
 };
