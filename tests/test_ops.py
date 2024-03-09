@@ -587,6 +587,38 @@ class _TestOps:
 
         _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_storage=self.storage)
 
+    # test slice + slice autograd
+    @pytest.mark.parametrize(
+        "data",  # tensor_shape, slices(arr of slices)
+        [
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+        ],
+    )
+    def test_slice(self, data):
+        tensor_shape, slices = data
+
+        def torch_fn(x):
+            return x[slices]
+
+        def peq_fn(x):
+            return x[slices]
+
+        _compare_fn_with_torch(
+            [tensor_shape],
+            peq_fn,
+            torch_fn,
+            pq_storage=self.storage,
+        )
+
 
 # Run the tests for the different storage types
 class TestOpsNP(_TestOps):

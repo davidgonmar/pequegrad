@@ -5,3 +5,4 @@ from .reduce import *  # noqa
 from .unary import *  # noqa
 from .shapeops import *  # noqa
 from .matmul import *  # noqa
+from .slice import *  # noqa

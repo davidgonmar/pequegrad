@@ -346,7 +346,13 @@ class NumpyStorage(AbstractStorage):
         return NumpyStorage(self.data[key])
 
     def __setitem__(self, key, value):
-        self.data[key] = value.data
+        self.data[key] = (
+            value
+            if isinstance(value, np.ndarray)
+            else value.data
+            if isinstance(value, NumpyStorage)
+            else value
+        )
 
     def __repr__(self):
         assert type(self.data) == np.ndarray

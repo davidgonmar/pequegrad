@@ -93,10 +93,10 @@ class Tensor:
         return f"Tensor(data={self.data.numpy()}, fn={self._ctx.__class__.__name__ if self._ctx else None}, requires_grad={self.requires_grad}, storage={self.storage_type})"
 
     def __getitem__(self, key):
-        if self.data.ndim == 0:
-            raise IndexError("0-d tensors cannot be indexed")
+        return Slice.apply(self, key=key)
 
-        return self.data[key]
+    def __setitem__(self, key, value):
+        self.data[key] = value
 
     def backward(self, gradient: Type["Tensor"] = None, retain_ctx: bool = False):
         """
@@ -585,6 +585,7 @@ from .autodiff import (  # noqa: E402 avoid circular imports
     Function,
     Permute,
     Div,
+    Slice,
 )
 
 
