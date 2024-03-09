@@ -658,13 +658,44 @@ class _TestStorage:
         x = class_storage(nparr)
         self._compare_with_numpy(x[slices], nparr[slices])
 
-
-class TestStorageFloat32(_TestStorage):
-    dtype = np.float32
+    # test assign
+    @pytest.mark.parametrize(
+        "data",  # shape, slices, assign_vals_shape
+        [
+            [(3, 4), (slice(0, 2), slice(1, 3)), (2, 2)],
+            [(5,), (slice(1, 3),), (2,)],
+            [(1, 2, 3), (slice(0, 1), slice(0, 2), slice(1, 3)), (1, 2, 2)],
+            [(3, 1), (slice(0, 3), slice(0, 1)), (3, 1)],
+            [(1, 3, 1), (slice(0, 1), slice(0, 3), slice(0, 1)), (1, 3, 1)],
+            [(1, 2, 3), (0, slice(0, 2), slice(1, 3)), (2, 2)],
+            [(3, 1), (slice(0, 3), 0), (3,)],
+            [(1, 3, 1), (0, slice(None), 0), (3,)],
+            [(3, 4), (1, slice(None)), (4,)],
+            [(1, 2, 3), (0, slice(None), slice(None)), (2, 3)],
+            [(3, 1), (slice(None), 0), (3,)],
+            [(1, 3, 1), (0, slice(None), slice(None)), (1, 3, 1)],
+            [(1,), (slice(None),), (1,)],
+            [(1,), (0,), (1,)],
+            [(1,), (0,), ()],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_assign(self, data, class_storage):
+        shape, slices, assign_vals_shape = data
+        nparr = np.array(np.random.rand(*shape)).astype(self.dtype)
+        assign_vals = np.array(np.random.rand(*assign_vals_shape)).astype(self.dtype)
+        x = class_storage(nparr)
+        x[slices] = class_storage(assign_vals)
+        nparr[slices] = assign_vals
+        self._compare_with_numpy(x, nparr)
 
 
 class TestStorageInt32(_TestStorage):
     dtype = np.int32
+
+
+class TestStorageFloat32(_TestStorage):
+    dtype = np.float32
 
 
 class TestStorageFloat64(_TestStorage):

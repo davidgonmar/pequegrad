@@ -100,7 +100,7 @@ public:
   CudaArray unsqueeze(axis_t axis) const;
   CudaArray unsqueeze(axes_t axes) const;
 
-  CudaArray reshape(std::vector<int> &new_shape) const;
+  CudaArray reshape(const std::vector<int> &new_shape) const;
 
   CudaArray im2col(shape_t kernel_shape, int stride_y, int stride_x,
                    int dilation_y, int dilation_x) const;
@@ -118,6 +118,7 @@ public:
   CudaArray astype(DType new_dtype) const;
 
   CudaArray slice(const slice_t &slices) const;
+  CudaArray assign(const slice_t &slices, const CudaArray &vals);
 private:
   CudaArray reduce(ReduceKernelType ker, axes_t axes, bool keepdims) const;
   CudaArray reduce(ReduceKernelType ker, axis_t axis, bool keepdims) const;

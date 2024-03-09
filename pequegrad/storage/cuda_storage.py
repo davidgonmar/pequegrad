@@ -281,7 +281,7 @@ class CudaStorage(AbstractStorage):
         return CudaStorage(self.data.slice(key))
 
     def __setitem__(self, key, value):
-        raise NotImplementedError
+        self.data.assign(key, value.data if isinstance(value, CudaStorage) else value)
 
     def __repr__(self):
         return f"CudaStorage({self.data.to_numpy()})"

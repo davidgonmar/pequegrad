@@ -1,7 +1,7 @@
 #include "cuda_array.cuh"
 
 
-CudaArray CudaArray::reshape(std::vector<int> &_new_shape) const {
+CudaArray CudaArray::reshape(const std::vector<int> &_new_shape) const {
   shape_t new_shape(_new_shape.size());
   size_t total_new = 1;
 
