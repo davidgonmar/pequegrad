@@ -643,6 +643,12 @@ class _TestStorage:
             [(1, 2, 3), (0, slice(0, 2), slice(1, 3))],
             [(3, 1), (slice(0, 3), 0)],
             [(1,), (0,)],
+            [(1, 3, 1), (0, slice(None), 0)],
+            [(3, 4), (1, slice(None))],
+            [(1, 2, 3), (0, slice(None), slice(None))],
+            [(3, 1), (slice(None), 0)],
+            [(1,), (slice(None),)],
+            [(1, 3, 1), (0, slice(None), slice(None))],
         ],
     )
     @pytest.mark.parametrize("class_storage", storages_to_test)

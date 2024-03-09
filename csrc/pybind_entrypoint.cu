@@ -437,7 +437,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
         if (std::holds_alternative<py::slice>(slices)) {
           py::slice single_slice = std::get<py::slice>(slices);
           py::ssize_t start, stop, step, slicelength;
-          if (single_slice.compute(arr.size, &start, &stop, &step,
+          if (single_slice.compute(arr.shape[0], &start, &stop, &step,
                                    &slicelength)) {
             slice_pairs.push_back(std::make_pair(static_cast<int>(start),
                                                  static_cast<int>(stop)));
@@ -447,18 +447,22 @@ PYBIND11_MODULE(pequegrad_cu, m) {
         } else {
           std::vector<std::variant<py::slice, int>> slices_vector =
               std::get<std::vector<std::variant<py::slice, int>>>(slices);
+          int i = 0;
           for (auto slice : slices_vector) {
             if (std::holds_alternative<py::slice>(slice)) {
               py::slice single_slice = std::get<py::slice>(slice);
               py::ssize_t start, stop, step, slicelength;
-              if (single_slice.compute(arr.size, &start, &stop, &step,
+              if (single_slice.compute(arr.shape[i], &start, &stop, &step,
                                        &slicelength)) {
                 slice_pairs.push_back(std::make_pair(static_cast<int>(start),
                                                      static_cast<int>(stop)));
+              } else {
+                throw std::runtime_error("Invalid slice");
               }
             } else if (std::holds_alternative<int>(slice)) {
               slice_pairs.push_back(std::get<int>(slice));
             }
+            i++;
           }
         }
         return arr.slice(slice_pairs);
