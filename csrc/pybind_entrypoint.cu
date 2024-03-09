@@ -415,16 +415,52 @@ PYBIND11_MODULE(pequegrad_cu, m) {
                throw std::runtime_error("Unsupported data type");
              }
            })
-      .def("dtype", [](const CudaArray &arr) -> py::dtype {
-        switch (arr.dtype) {
-        case DType::Float32:
-          return py::dtype::of<float>();
-        case DType::Int32:
-          return py::dtype::of<int>();
-        case DType::Float64:
-          return py::dtype::of<double>();
-        default:
-          throw std::runtime_error("Unsupported data type");
+      .def("dtype",
+           [](const CudaArray &arr) -> py::dtype {
+             switch (arr.dtype) {
+             case DType::Float32:
+               return py::dtype::of<float>();
+             case DType::Int32:
+               return py::dtype::of<int>();
+             case DType::Float64:
+               return py::dtype::of<double>();
+             default:
+               throw std::runtime_error("Unsupported data type");
+             }
+           })
+      .def("slice", [](const CudaArray &arr,
+                       std::variant<std::vector<std::variant<py::slice, int>>,
+                                    py::slice, int>
+                           slices) {
+        slice_t slice_pairs;
+
+        if (std::holds_alternative<py::slice>(slices)) {
+          py::slice single_slice = std::get<py::slice>(slices);
+          py::ssize_t start, stop, step, slicelength;
+          if (single_slice.compute(arr.size, &start, &stop, &step,
+                                   &slicelength)) {
+            slice_pairs.push_back(std::make_pair(static_cast<int>(start),
+                                                 static_cast<int>(stop)));
+          }
+        } else if (std::holds_alternative<int>(slices)) {
+          slice_pairs.push_back(std::get<int>(slices));
+        } else {
+          std::vector<std::variant<py::slice, int>> slices_vector =
+              std::get<std::vector<std::variant<py::slice, int>>>(slices);
+          for (auto slice : slices_vector) {
+            if (std::holds_alternative<py::slice>(slice)) {
+              py::slice single_slice = std::get<py::slice>(slice);
+              py::ssize_t start, stop, step, slicelength;
+              if (single_slice.compute(arr.size, &start, &stop, &step,
+                                       &slicelength)) {
+                slice_pairs.push_back(std::make_pair(static_cast<int>(start),
+                                                     static_cast<int>(stop)));
+              }
+            } else if (std::holds_alternative<int>(slice)) {
+              slice_pairs.push_back(std::get<int>(slice));
+            }
+          }
         }
+        return arr.slice(slice_pairs);
       });
 }

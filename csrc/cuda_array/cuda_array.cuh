@@ -23,6 +23,10 @@ using shape_t = std::vector<size_t>;
 using axis_t = int;
 using axes_t = std::vector<axis_t>;
 
+
+using slice_item_t = std::variant<int, std::pair<int, int>>;
+using slice_t = std::vector<slice_item_t>;
+
 class CudaArray {
 public:
   bool is_contiguous() const;
@@ -39,6 +43,8 @@ public:
   }
   CudaArray(size_t size, const shape_t &shape, const shape_t &strides,
             const std::shared_ptr<void> &shared_ptr, DType dtype);
+  CudaArray(size_t size, const shape_t &shape, const shape_t &strides,
+            const std::shared_ptr<void> &shared_ptr, DType dtype, int offset);
   CudaArray(size_t size, shape_t shape, shape_t strides, DType dtype);
   CudaArray(size_t size, shape_t shape, DType dtype);
 
@@ -111,6 +117,7 @@ public:
 
   CudaArray astype(DType new_dtype) const;
 
+  CudaArray slice(const slice_t &slices) const;
 private:
   CudaArray reduce(ReduceKernelType ker, axes_t axes, bool keepdims) const;
   CudaArray reduce(ReduceKernelType ker, axis_t axis, bool keepdims) const;
@@ -204,6 +211,9 @@ template <typename T> CudaArray CudaArray::from_numpy(py::array_t<T> np_array) {
 }
 
 template <typename T> py::array_t<T> CudaArray::to_numpy() const {
+  if (!is_contiguous()) {
+    return as_contiguous().to_numpy<T>();
+  }
   // assert that the array has compatible type
   PG_CHECK_ARG(dtype == dtype_from_pytype<T>(),
                "cannot convert to numpy array, expected type ",

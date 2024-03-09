@@ -629,6 +629,29 @@ class _TestStorage:
         x = class_storage.fill(shape, value, dtype=self.dtype)
         self._compare_with_numpy(x, np.full(shape, value, dtype=self.dtype))
 
+    # test slicing
+    @pytest.mark.parametrize(
+        "data",  # shape, slices
+        [
+            [(3, 4), (slice(0, 2), slice(1, 3))],
+            [(5,), (slice(1, 3),)],
+            [(1, 2, 3), (slice(0, 1), slice(0, 2), slice(1, 3))],
+            [(3, 1), (slice(0, 3), slice(0, 1))],
+            [(1,), (slice(0, 1),)],
+            [(1, 3, 1), (slice(0, 1), slice(0, 3), slice(0, 1))],
+            [(3, 4), (1, slice(0, 2))],
+            [(1, 2, 3), (0, slice(0, 2), slice(1, 3))],
+            [(3, 1), (slice(0, 3), 0)],
+            [(1,), (0,)],
+        ],
+    )
+    @pytest.mark.parametrize("class_storage", storages_to_test)
+    def test_slicing(self, data, class_storage):
+        shape, slices = data
+        nparr = np.random.rand(*shape).astype(self.dtype)
+        x = class_storage(nparr)
+        self._compare_with_numpy(x[slices], nparr[slices])
+
 
 class TestStorageFloat32(_TestStorage):
     dtype = np.float32

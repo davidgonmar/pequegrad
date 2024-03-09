@@ -278,7 +278,7 @@ class CudaStorage(AbstractStorage):
         return self.shape[0]
 
     def __getitem__(self, key):
-        return self.data[key]
+        return CudaStorage(self.data.slice(key))
 
     def __setitem__(self, key, value):
         raise NotImplementedError

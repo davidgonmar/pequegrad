@@ -10,6 +10,9 @@
 
 
 bool CudaArray::is_contiguous() const {
+  if (offset != 0) {
+    return false;
+  }
   if (strides.size() != shape.size()) {
     return false;
   }
