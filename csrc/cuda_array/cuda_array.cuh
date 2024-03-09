@@ -9,6 +9,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+
+
+#define MAX_THREADS_PER_BLOCK 512
+
+
 namespace py = pybind11;
 
 using shape_t = std::vector<size_t>;

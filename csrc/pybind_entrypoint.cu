@@ -1,4 +1,4 @@
-#include "cuda_array.cuh"
+#include "cuda_array/cuda_array.cuh"
 #include "kernels/all.cuh"
 #include "utils.cuh"
 #include <cuda_runtime.h>

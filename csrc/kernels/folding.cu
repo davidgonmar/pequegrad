@@ -1,4 +1,3 @@
-#include "cuda_array.cuh"
 #include "folding.cuh"
 
 void launch_im2col_kernel(DType dtype, dim3 blocks, dim3 threads, void *in,
