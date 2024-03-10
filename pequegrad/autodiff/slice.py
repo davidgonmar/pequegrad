@@ -13,14 +13,12 @@ class Slice(Function):
         self.ret = Tensor(
             self.x.data[self.key],
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
     def backward(self):
         if self.x.requires_grad:
-            g = Tensor.zeros(self.x.shape, requires_grad=False, storage=self.storage)
-
+            g = Tensor.zeros(self.x.shape, requires_grad=False, backend=self.backend)
             g[self.key] = self.ret.grad.data
-
             self.x._grad += g

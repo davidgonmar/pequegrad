@@ -1,17 +1,17 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
 
-CudaArray CudaArray::mat_mul(const CudaArray &other) const {
+CudaTensor CudaTensor::mat_mul(const CudaTensor &other) const {
   // if a is a vector and the other is a matrix, add a dimension to a
   bool added_a_dim = false;
   bool added_b_dim = false;
-  CudaArray a = (this->ndim() == 1 && other.ndim() != 1)
+  CudaTensor a = (this->ndim() == 1 && other.ndim() != 1)
                     ? this->unsqueeze(0)
                     : this->as_contiguous();
   if (this->ndim() == 1 && other.ndim() != 1) {
     added_a_dim = true;
   }
-  CudaArray b = (other.ndim() == 1 && this->ndim() != 1)
+  CudaTensor b = (other.ndim() == 1 && this->ndim() != 1)
                     ? other.unsqueeze(1)
                     : other.as_contiguous();
   if (other.ndim() == 1 && this->ndim() != 1) {
@@ -29,7 +29,7 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
     // rather into a vector of size (size / MAX_THREADS_PER_BLOCK) + 1 check its
     // implementation for more details
     int new_size = (a.shape.at(0) / MAX_THREADS_PER_BLOCK) + 1;
-    CudaArray out(new_size, {(size_t)new_size}, dtype);
+    CudaTensor out(new_size, {(size_t)new_size}, dtype);
 
     launch_vector_dot_product_accum_kernel(
         dim3(new_size), dim3(MAX_THREADS_PER_BLOCK),
@@ -84,7 +84,7 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
                                    std::multiplies<int>());
 
     dim3 gridSize(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
-    CudaArray out(new_size, new_shape, dtype);
+    CudaTensor out(new_size, new_shape, dtype);
     cuda_unique_ptr<size_t> lhs_shape =
         cuda_unique_ptr_from_host(a.ndim(), a.shape.data());
     cuda_unique_ptr<size_t> rhs_shape =
@@ -97,14 +97,14 @@ CudaArray CudaArray::mat_mul(const CudaArray &other) const {
   }
 }
 
-CudaArray CudaArray::outer_product(const CudaArray &other) const {
+CudaTensor CudaTensor::outer_product(const CudaTensor &other) const {
   PG_CHECK_ARG(ndim() == 1 && other.ndim() == 1,
                "got non vectors in outer product, shapes: ",
                vec_to_string(shape), " and ", vec_to_string(other.shape));
   int total_idxs = size * other.size;
   dim3 grid_size(ceil(total_idxs / (float)DEFAULT_BLOCK_SIZE));
   shape_t new_shape = {size, other.size};
-  CudaArray out(total_idxs, new_shape, dtype);
+  CudaTensor out(total_idxs, new_shape, dtype);
   launch_vector_outer_product_kernel(grid_size, DEFAULT_BLOCK_SIZE, dtype,
                                      get_base_ptr(), other.get_base_ptr(), out.get_base_ptr(),
                                      size, other.size);

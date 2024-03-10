@@ -24,7 +24,7 @@ class Unfold(Function):
         self.ret = Tensor(
             unfolded,
             requires_grad=self.requires_grad,
-            storage=self.input.device,
+            backend=self.input.device,
         )
         return self.ret
 
@@ -36,7 +36,7 @@ class Unfold(Function):
                 stride=self.stride,
                 dilation=self.dilation,
             )
-            self.input._grad += Tensor(folded_grad, storage=self.storage)
+            self.input._grad += Tensor(folded_grad, backend=self.backend)
 
 
 class Fold(Function):
@@ -65,7 +65,7 @@ class Fold(Function):
         self.ret = Tensor(
             folded,
             requires_grad=self.requires_grad,
-            storage=self.input.device,
+            backend=self.input.device,
         )
         return self.ret
 
@@ -74,4 +74,4 @@ class Fold(Function):
             unfolded = self.ret.grad.data.im2col(
                 self.kernel_shape, stride=self.stride, dilation=self.dilation
             )
-            self.input._grad += Tensor(unfolded, storage=self.storage)
+            self.input._grad += Tensor(unfolded, backend=self.backend)

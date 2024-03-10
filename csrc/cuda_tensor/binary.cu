@@ -1,7 +1,7 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
 
-CudaArray CudaArray::binop_same_dtype(const CudaArray &other,
+CudaTensor CudaTensor::binop_same_dtype(const CudaTensor &other,
                                       BinaryKernelType kt) const {
   if (shape != other.shape) {
     // try to broadcast, from smaller to larger
@@ -29,7 +29,7 @@ CudaArray CudaArray::binop_same_dtype(const CudaArray &other,
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   // Default stride calculation
-  CudaArray out(size, shape, dtype);
+  CudaTensor out(size, shape, dtype);
   size_t n_dims = shape.size();
 
   cuda_unique_ptr<size_t> d_strides =
@@ -46,7 +46,7 @@ CudaArray CudaArray::binop_same_dtype(const CudaArray &other,
   return out;
 }
 
-CudaArray CudaArray::binop(const CudaArray &other, BinaryKernelType kt) const {
+CudaTensor CudaTensor::binop(const CudaTensor &other, BinaryKernelType kt) const {
   // we need to decide on the casting, always biggest type
   return binop_same_dtype(other.astype(this->dtype), kt);
 }

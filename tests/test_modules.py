@@ -38,8 +38,8 @@ class TestModules:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
-            assert m.parameters()[0].storage_type == "np"
-            assert m2.parameters()[0].storage_type == "np"
+            assert m.parameters()[0].backend == "np"
+            assert m2.parameters()[0].backend == "np"
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
@@ -51,8 +51,8 @@ class TestModules:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
-            assert m.parameters()[0].storage_type == "cuda"
-            assert m2.parameters()[0].storage_type == "cuda"
+            assert m.parameters()[0].backend == "cuda"
+            assert m2.parameters()[0].backend == "cuda"
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
@@ -84,23 +84,23 @@ class TestModules:
             m2.load(path)
             m2.to("cuda")
             for p1, p2 in zip(m.parameters(), m2.parameters()):
-                assert p1.storage_type == "np"
-                assert p2.storage_type == "cuda"
+                assert p1.backend == "np"
+                assert p2.backend == "cuda"
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
         m2.to("cuda")
         for p1, p2 in zip(m.parameters(), m2.parameters()):
-            assert p1.storage_type == "np"
-            assert p2.storage_type == "cuda"
+            assert p1.backend == "np"
+            assert p2.backend == "cuda"
             np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
         m2.to("np")
         for p1, p3 in zip(m.parameters(), m2.parameters()):
-            assert p1.storage_type == "np"
-            assert p3.storage_type == "np"
+            assert p1.backend == "np"
+            assert p3.backend == "np"
             np.testing.assert_allclose(p1.numpy(), p3.numpy())
 
         m2.to("cuda")
         for p1, p4 in zip(m.parameters(), m2.parameters()):
-            assert p1.storage_type == "np"
-            assert p4.storage_type == "cuda"
+            assert p1.backend == "np"
+            assert p4.backend == "cuda"
             np.testing.assert_allclose(p1.numpy(), p4.numpy())

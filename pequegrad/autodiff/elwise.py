@@ -27,7 +27,7 @@ class Add(ElWiseFunction):
         self.ret = Tensor(
             self.x.data + self.y.data,
             requires_grad=self.requires_grad,
-            storage=self.x.device,
+            backend=self.x.device,
         )
         return self.ret
 
@@ -36,10 +36,10 @@ class Add(ElWiseFunction):
 
         if self.x.requires_grad:
             grad = self._unbroadcast(grad_output, self.x.shape)
-            self.x._grad += Tensor(grad, storage=self.storage).reshape(self.x.shape)
+            self.x._grad += Tensor(grad, backend=self.backend).reshape(self.x.shape)
         if self.y.requires_grad:
             grad = self._unbroadcast(grad_output, self.y.shape)
-            self.y._grad += Tensor(grad, storage=self.storage).reshape(self.y.shape)
+            self.y._grad += Tensor(grad, backend=self.backend).reshape(self.y.shape)
 
 
 class Mul(ElWiseFunction):
@@ -47,7 +47,7 @@ class Mul(ElWiseFunction):
         self.ret = Tensor(
             self.x.data * self.y.data,
             requires_grad=self.requires_grad,
-            storage=self.x.device,
+            backend=self.x.device,
         )
         return self.ret
 
@@ -56,12 +56,12 @@ class Mul(ElWiseFunction):
         if self.x.requires_grad:
             grad = grad_output * self.y.data
             grad = self._unbroadcast(grad, self.x.shape)
-            self.x._grad += Tensor(grad, storage=self.storage).reshape(self.x.shape)
+            self.x._grad += Tensor(grad, backend=self.backend).reshape(self.x.shape)
 
         if self.y.requires_grad:
             grad = grad_output * self.x.data
             grad = self._unbroadcast(grad, self.y.shape)
-            self.y._grad += Tensor(grad, storage=self.storage).reshape(self.y.shape)
+            self.y._grad += Tensor(grad, backend=self.backend).reshape(self.y.shape)
 
 
 class Div(ElWiseFunction):
@@ -69,7 +69,7 @@ class Div(ElWiseFunction):
         self.ret = Tensor(
             self.x.data / self.y.data,
             requires_grad=self.requires_grad,
-            storage=self.x.device,
+            backend=self.x.device,
         )
         return self.ret
 
@@ -78,9 +78,9 @@ class Div(ElWiseFunction):
         if self.x.requires_grad:
             grad = grad_output / self.y.data
             grad = self._unbroadcast(grad, self.x.shape)
-            self.x._grad += Tensor(grad, storage=self.storage).reshape(self.x.shape)
+            self.x._grad += Tensor(grad, backend=self.backend).reshape(self.x.shape)
 
         if self.y.requires_grad:
             grad = -grad_output * self.x.data / (self.y.data**2)
             grad = self._unbroadcast(grad, self.y.shape)
-            self.y._grad += Tensor(grad, storage=self.storage).reshape(self.y.shape)
+            self.y._grad += Tensor(grad, backend=self.backend).reshape(self.y.shape)

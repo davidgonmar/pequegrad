@@ -1,6 +1,6 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
-CudaArray CudaArray::im2col(shape_t kernel_shape, int stride_y, int stride_x,
+CudaTensor CudaTensor::im2col(shape_t kernel_shape, int stride_y, int stride_x,
                             int dilation_y, int dilation_x) const {
   if (!is_contiguous()) {
     return as_contiguous().im2col(kernel_shape, stride_y, stride_x, dilation_y,
@@ -29,7 +29,7 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride_y, int stride_x,
   size_t out_size = std::accumulate(out_shape.begin(), out_shape.end(), 1,
                                     std::multiplies<size_t>());
 
-  CudaArray out(out_size, out_shape, dtype);
+  CudaTensor out(out_size, out_shape, dtype);
 
   int total_iters = batch_size * out_h * out_w * in_channels * k_h *
                     k_w; // check kernel code for more details
@@ -43,7 +43,7 @@ CudaArray CudaArray::im2col(shape_t kernel_shape, int stride_y, int stride_x,
   return out;
 }
 
-CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
+CudaTensor CudaTensor::col2im(shape_t kernel_shape, shape_t out_shape,
                             int stride_y, int stride_x, int dilation_y,
                             int dilation_x) const {
   if (!is_contiguous()) {
@@ -72,7 +72,7 @@ CudaArray CudaArray::col2im(shape_t kernel_shape, shape_t out_shape,
   shape_t _out_shape = {out_batch_size, out_channels, out_h, out_w};
   size_t out_size = std::accumulate(_out_shape.begin(), _out_shape.end(), 1,
                                     std::multiplies<size_t>());
-  CudaArray out(out_size, _out_shape, dtype);
+  CudaTensor out(out_size, _out_shape, dtype);
   CHECK_CUDA(cudaMemset(out.get_base_ptr(), 0, out_size * dtype_to_size(dtype)));
 
   dim3 block_size(DEFAULT_BLOCK_SIZE);

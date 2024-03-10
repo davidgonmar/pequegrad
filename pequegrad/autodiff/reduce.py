@@ -24,7 +24,7 @@ class Mean(ReduceFunction):
         self.ret = Tensor(
             self.a.data.mean(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
@@ -41,7 +41,7 @@ class Mean(ReduceFunction):
                 total_els = 1
                 for d in self.dim:
                     total_els *= self.a.shape[d]
-            self.a._grad += Tensor(grad_broadcasted, storage=self.storage) / total_els
+            self.a._grad += Tensor(grad_broadcasted, backend=self.backend) / total_els
 
 
 class Sum(ReduceFunction):
@@ -49,7 +49,7 @@ class Sum(ReduceFunction):
         self.ret = Tensor(
             self.a.data.sum(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
@@ -58,7 +58,7 @@ class Sum(ReduceFunction):
     ):
         if self.a.requires_grad:
             grad_broadcasted = self._unreduce(self.ret.grad.data)
-            self.a._grad += Tensor(grad_broadcasted, storage=self.storage)
+            self.a._grad += Tensor(grad_broadcasted, backend=self.backend)
 
 
 class Max(ReduceFunction):
@@ -72,7 +72,7 @@ class Max(ReduceFunction):
         self.ret = Tensor(
             self.a.data.max(axis=self.dim, keepdims=self.keepdim),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
@@ -82,6 +82,6 @@ class Max(ReduceFunction):
             ret_broadcasted = self._unreduce(self.ret.data)
 
             self.a._grad += Tensor(
-                grad_broadcasted.where(self.a.data == ret_broadcasted, 0),
-                storage=self.storage,
+                (self.a.data == ret_broadcasted).where(grad_broadcasted, 0),
+                backend=self.backend,
             )

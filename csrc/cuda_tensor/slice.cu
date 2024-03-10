@@ -1,9 +1,8 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 #include "utils.cuh"
 
 
-CudaArray CudaArray::slice(const slice_t &slices) const {
-
+CudaTensor CudaTensor::slice(const slice_t &slices) const {
     shape_t new_shape;
     shape_t new_strides;
     int _offset = 0;
@@ -37,31 +36,36 @@ CudaArray CudaArray::slice(const slice_t &slices) const {
     }
 
     size_t size = std::accumulate(new_shape.begin(), new_shape.end(), 1, std::multiplies<size_t>());
-    CudaArray out(size, new_shape, new_strides, ptr, dtype, _offset);
+    CudaTensor out(size, new_shape, new_strides, ptr, dtype, _offset);
 
     return out;
 }
 
 
-CudaArray CudaArray::assign(const slice_t &slices, const CudaArray &vals) {
+CudaTensor CudaTensor::assign(const slice_t &slices, const CudaTensor &vals) {
     // We just create a sliced view of the original memory, and then copy the vals into it
     // ez pz
-    const CudaArray _sliced = this->slice(slices); 
+    const CudaTensor _sliced = this->slice(slices);
 
-    axes_t reshape_axes;
-    for (int i = 0; i < vals.ndim(); i++) {
-        reshape_axes.push_back(i);
+    // broadcast the vals to the shape of the sliced array. We must first remove the dimensions that are 1 on the left
+    // for example, we would be trying to bc from [1, 3, 1] to [3, 1] if we didnt remove the 1s
+    axes_t squeeze_dims;
+    for (int i = 0; i < vals.shape.size(); i++) {
+        if (vals.shape[i] != 1) {
+            break;
+        } else  {
+            squeeze_dims.push_back(i);
+        }
     }
-    const CudaArray _vals = vals.reshape(reshape_axes).astype(dtype);
-
+    const CudaTensor _vals = vals.squeeze(squeeze_dims).broadcast_to(_sliced.shape).astype(_sliced.dtype);
     dim3 block_size(DEFAULT_BLOCK_SIZE);
     dim3 grid_size(ceil(_vals.size / (float)DEFAULT_BLOCK_SIZE));
     auto &sliced_strides = cuda_unique_ptr_from_host(_sliced.shape.size(), _sliced.strides.data());
     auto &sliced_shape = cuda_unique_ptr_from_host(_sliced.shape.size(), _sliced.shape.data());
     auto &vals_shape =
-      cuda_unique_ptr_from_host(vals.shape.size(), vals.shape.data());
+      cuda_unique_ptr_from_host(_vals.shape.size(), _vals.shape.data());
     auto &vals_strides =
-      cuda_unique_ptr_from_host(vals.strides.size(), vals.strides.data());
+      cuda_unique_ptr_from_host(_vals.strides.size(), _vals.strides.data());
 
     // copy vals into _sliced (which is a memory view of original array)
     launch_copy_with_out_strides_kernel(

@@ -1,7 +1,7 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
 
-CudaArray CudaArray::reshape(const std::vector<int> &_new_shape) const {
+CudaTensor CudaTensor::reshape(const std::vector<int> &_new_shape) const {
   shape_t new_shape(_new_shape.size());
   size_t total_new = 1;
 
@@ -36,9 +36,9 @@ CudaArray CudaArray::reshape(const std::vector<int> &_new_shape) const {
                            ? dtype_to_size(dtype)
                            : new_strides[i + 1] * new_shape[i + 1];
     }
-    return CudaArray(total_new, new_shape, new_strides, ptr, dtype);
+    return CudaTensor(total_new, new_shape, new_strides, ptr, dtype);
   }
-  CudaArray out(total_new, new_shape, dtype);
+  CudaTensor out(total_new, new_shape, dtype);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(total_new / (float)DEFAULT_BLOCK_SIZE));
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
@@ -59,7 +59,7 @@ CudaArray CudaArray::reshape(const std::vector<int> &_new_shape) const {
 
 
 
-CudaArray CudaArray::squeeze(axis_t axis) const {
+CudaTensor CudaTensor::squeeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis;
   }
@@ -69,15 +69,15 @@ CudaArray CudaArray::squeeze(axis_t axis) const {
                "cannot squeeze on a dimension that is not 1, got ", shape[axis],
                " in axis number ", axis, " for shape ", vec_to_string(shape));
 
-  CudaArray out(*this);
+  CudaTensor out(*this);
   out.shape.erase(out.shape.begin() + axis);
   out.strides.erase(out.strides.begin() + axis);
 
   return out;
 }
 
-CudaArray CudaArray::squeeze(axes_t _axes) const {
-  CudaArray out(*this);
+CudaTensor CudaTensor::squeeze(axes_t _axes) const {
+  CudaTensor out(*this);
   // since axes may not be sorted, we need to sort them first, substituting
   // negatives first and then sorting
   axes_t axes = _axes;
@@ -94,8 +94,8 @@ CudaArray CudaArray::squeeze(axes_t _axes) const {
   return out;
 }
 
-CudaArray CudaArray::squeeze() const {
-  CudaArray out(*this);
+CudaTensor CudaTensor::squeeze() const {
+  CudaTensor out(*this);
   // squeezes all dims that are 1
   shape_t indices_to_squeeze;
 
@@ -121,21 +121,21 @@ CudaArray CudaArray::squeeze() const {
   return out;
 }
 
-CudaArray CudaArray::unsqueeze(axes_t axes) const {
-  CudaArray out(*this);
+CudaTensor CudaTensor::unsqueeze(axes_t axes) const {
+  CudaTensor out(*this);
   for (size_t axis : axes) {
     out = out.unsqueeze(axis);
   }
   return out;
 }
 
-CudaArray CudaArray::unsqueeze(axis_t axis) const {
+CudaTensor CudaTensor::unsqueeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis + 1;
   }
   PG_CHECK_ARG(axis <= shape.size(), "axis out of bounds, got ", axis,
                " for shape ", vec_to_string(shape));
-  CudaArray out(*this);
+  CudaTensor out(*this);
   out.shape.insert(out.shape.begin() + axis, 1);
   size_t new_stride = (axis < strides.size())
                           ? strides[std::max(0, (int)axis - 1)]
@@ -145,7 +145,7 @@ CudaArray CudaArray::unsqueeze(axis_t axis) const {
 }
 
 
-CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
+CudaTensor CudaTensor::broadcast_to(const shape_t _shape) const {
   const shape_t shape_from = this->shape;
   const shape_t shape_to = _shape;
   // determine if we can broadcast
@@ -177,14 +177,14 @@ CudaArray CudaArray::broadcast_to(const shape_t _shape) const {
     }
     new_size *= dim_to;
   }
-  CudaArray out(new_size, shape_to, new_strides, dtype);
+  CudaTensor out(new_size, shape_to, new_strides, dtype);
   CHECK_CUDA(cudaMemcpy(out.get_base_ptr(), get_base_ptr(), size * dtype_to_size(dtype),
                         cudaMemcpyDeviceToDevice));
   return out;
 }
 
 
-CudaArray CudaArray::permute(shape_t axes) const {
+CudaTensor CudaTensor::permute(shape_t axes) const {
   PG_CHECK_ARG(axes.size() == shape.size(),
                "axes must have same size as shape, got ", axes.size(), " and ",
                shape.size());
@@ -196,6 +196,6 @@ CudaArray CudaArray::permute(shape_t axes) const {
     new_strides[i] = strides[axes[i]];
   }
 
-  CudaArray out(size, new_shape, new_strides, ptr, dtype);
+  CudaTensor out(size, new_shape, new_strides, ptr, dtype);
   return out;
 }

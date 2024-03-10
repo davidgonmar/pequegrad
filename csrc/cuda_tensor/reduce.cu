@@ -1,6 +1,6 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
-CudaArray CudaArray::reduce(ReduceKernelType ker, axis_t axis,
+CudaTensor CudaTensor::reduce(ReduceKernelType ker, axis_t axis,
                             bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().reduce(ker, axis, keepdims);
@@ -15,7 +15,7 @@ CudaArray CudaArray::reduce(ReduceKernelType ker, axis_t axis,
   new_shape[axis] = 1;
   size_t new_size = size / shape[axis];
   size_t n_dims = shape.size();
-  CudaArray out(new_size, new_shape, dtype);
+  CudaTensor out(new_size, new_shape, dtype);
   cuda_unique_ptr<size_t> d_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());
   cuda_unique_ptr<size_t> d_shape =
@@ -34,9 +34,9 @@ CudaArray CudaArray::reduce(ReduceKernelType ker, axis_t axis,
 
 
 
-CudaArray CudaArray::reduce(ReduceKernelType ker, axes_t axes,
+CudaTensor CudaTensor::reduce(ReduceKernelType ker, axes_t axes,
                             bool keepdims) const {
-  CudaArray out = *this;
+  CudaTensor out = *this;
   for (size_t axis : axes) {
     out = out.reduce(ker, axis, true);
   }
@@ -46,8 +46,8 @@ CudaArray CudaArray::reduce(ReduceKernelType ker, axes_t axes,
   return out.squeeze(axes);
 }
 
-CudaArray CudaArray::reduce(ReduceKernelType ker, bool keepdims) const {
-  CudaArray out = *this;
+CudaTensor CudaTensor::reduce(ReduceKernelType ker, bool keepdims) const {
+  CudaTensor out = *this;
   for (size_t axis = 0; axis < shape.size(); ++axis) {
     out = out.reduce(ker, axis, true);
   }
@@ -57,26 +57,47 @@ CudaArray CudaArray::reduce(ReduceKernelType ker, bool keepdims) const {
   return out.squeeze();
 }
 
-CudaArray CudaArray::max(bool keepdims) const {
+CudaTensor CudaTensor::mean(bool keepdims) const {
+  int total_elements = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  return sum(keepdims).binop(total_elements, BinaryKernelType::DIV);
+}
+
+CudaTensor CudaTensor::mean(axes_t axes, bool keepdims) const {
+  int total_elements = 1;
+  for (axis_t axis : axes) {
+    axis = axis < 0 ? shape.size() + axis : axis;
+    total_elements *= shape[axis];
+  }
+
+  return sum(axes, keepdims).binop(total_elements, BinaryKernelType::DIV);
+}
+
+CudaTensor CudaTensor::mean(axis_t axis, bool keepdims) const {
+  axis = axis < 0 ? shape.size() + axis : axis;
+  int axis_size = shape[axis];
+  return sum(axis, keepdims).binop(axis_size, BinaryKernelType::DIV);
+}
+
+CudaTensor CudaTensor::max(bool keepdims) const {
   return reduce(ReduceKernelType::MAX, keepdims);
 }
 
-CudaArray CudaArray::max(axes_t axes, bool keepdims) const {
+CudaTensor CudaTensor::max(axes_t axes, bool keepdims) const {
   return reduce(ReduceKernelType::MAX, axes, keepdims);
 }
 
-CudaArray CudaArray::max(axis_t axis, bool keepdims) const {
+CudaTensor CudaTensor::max(axis_t axis, bool keepdims) const {
   return reduce(ReduceKernelType::MAX, axis, keepdims);
 }
 
-CudaArray CudaArray::sum(bool keepdims) const {
+CudaTensor CudaTensor::sum(bool keepdims) const {
   return reduce(ReduceKernelType::SUM, keepdims);
 }
 
-CudaArray CudaArray::sum(axes_t axes, bool keepdims) const {
+CudaTensor CudaTensor::sum(axes_t axes, bool keepdims) const {
   return reduce(ReduceKernelType::SUM, axes, keepdims);
 }
 
-CudaArray CudaArray::sum(axis_t axis, bool keepdims) const {
+CudaTensor CudaTensor::sum(axis_t axis, bool keepdims) const {
   return reduce(ReduceKernelType::SUM, axis, keepdims);
 }

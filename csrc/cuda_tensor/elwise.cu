@@ -1,7 +1,7 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
 
-CudaArray CudaArray::elwiseop(UnaryKernelType ker) const {
+CudaTensor CudaTensor::elwiseop(UnaryKernelType ker) const {
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   size_t n_dims = shape.size();
@@ -9,7 +9,7 @@ CudaArray CudaArray::elwiseop(UnaryKernelType ker) const {
       cuda_unique_ptr_from_host(n_dims, strides.data());
   cuda_unique_ptr<size_t> d_shape =
       cuda_unique_ptr_from_host(n_dims, shape.data());
-  CudaArray out(size, shape, dtype);
+  CudaTensor out(size, shape, dtype);
 
   launch_unary_kernel(ker, dtype, grid_size, block_size, d_strides.get(),
                       d_shape.get(), n_dims, get_base_ptr(), out.get_base_ptr());

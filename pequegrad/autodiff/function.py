@@ -37,17 +37,17 @@ class Function:
                 device = t.device
                 break
         tensors = [
-            Tensor(t, storage=device) if not isinstance(t, Tensor) else t
+            Tensor(t, backend=device) if not isinstance(t, Tensor) else t
             for t in tensors
         ]
         # all devices should be the same
         assert all(
-            t.storage_type == device for t in tensors
+            t.backend == device for t in tensors
         ), "all tensors must be on the same device, got: {}".format(
             [t.device for t in tensors]
         )
 
-        cls.storage = device
+        cls.backend = device
 
         f = cls(*tensors, **kwargs)
         f.forward()

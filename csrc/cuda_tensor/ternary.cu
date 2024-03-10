@@ -1,7 +1,7 @@
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 
 
-CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
+CudaTensor CudaTensor::ternaryop(const CudaTensor &second, const CudaTensor &third,
                                TernaryKernelType ker) const {
   if (second.shape != third.shape || shape != second.shape ||
       shape != third.shape) {
@@ -20,15 +20,34 @@ CudaArray CudaArray::ternaryop(const CudaArray &second, const CudaArray &third,
       }
     }
 
+  
     return broadcast_to(target_shape)
         .ternaryop(second.broadcast_to(target_shape),
                    third.broadcast_to(target_shape), ker);
   }
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
+  DType biggest_dtype;
+  // prefer float64 over float32, and float32 over int32
+  if (dtype == DType::Float64 || second.dtype == DType::Float64 ||
+      third.dtype == DType::Float64) {
+    biggest_dtype = DType::Float64;
+  } else if (dtype == DType::Float32 || second.dtype == DType::Float32 ||
+             third.dtype == DType::Float32) {
+    biggest_dtype = DType::Float32;
+  } else {
+    biggest_dtype = DType::Int32;
+  }
+
+  if (biggest_dtype != dtype || biggest_dtype != second.dtype ||
+      biggest_dtype != third.dtype) {
+    return astype(biggest_dtype)
+        .ternaryop(second.astype(biggest_dtype), third.astype(biggest_dtype),
+                   ker);
+  }
 
   // Default stride calculation
-  CudaArray out(size, shape, dtype);
+  CudaTensor out(size, shape, dtype);
   size_t n_dims = shape.size();
   cuda_unique_ptr<size_t> d_first_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());

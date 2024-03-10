@@ -1,10 +1,12 @@
 from typing import List, Union, Type, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
-from .storage import AbstractStorage, NumpyStorage, CudaStorage, CUDA_AVAILABLE  # noqa
+from .backend import NumpyTensor, CudaTensor, CUDA_AVAILABLE  # noqa: F401
+
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
+_Backend = Union[NumpyTensor, CudaTensor]
 
 
 class Tensor:
@@ -12,26 +14,32 @@ class Tensor:
     Tensor implementation with autograd support
     """
 
-    storage: AbstractStorage
+    backend: _Backend
 
-    def __init__(self, data: _ArrayLike, requires_grad=False, storage="np"):
+    @property
+    def dtype(self):
+        return (
+            self.data.dtype() if isinstance(self.data, CudaTensor) else self.data.dtype
+        )
+
+    def __init__(self, data: _ArrayLike, requires_grad=False, backend="np"):
         # Internally, we store the data as a numpy array\
         if isinstance(data, Tensor):
-            data = data.numpy() if storage == "np" else data
-        elif isinstance(data, AbstractStorage):
-            data = data.numpy() if storage == "np" else data
+            data = data.numpy() if backend == "np" else data
+        elif isinstance(data, (CudaTensor, NumpyTensor)):
+            data = data.numpy() if backend == "np" else data
         elif isinstance(data, (int, float)):
             data = np.array(data)
         elif isinstance(data, list):
             data = np.array(data)
 
-        storage = storage if storage else "np"  # default to numpy storage
-        if storage == "np":
-            self._data: NumpyStorage = NumpyStorage(data)
-        elif storage == "cuda":
-            self._data: CudaStorage = CudaStorage(data)
+        backend = backend if backend else "np"  # default to numpy backend
+        if backend == "np":
+            self._data: NumpyTensor = NumpyTensor(data)
+        elif backend == "cuda":
+            self._data: CudaTensor = CudaTensor(data)
         else:
-            raise ValueError("storage must be 'np' or 'cuda'")
+            raise ValueError("backend must be 'np' or 'cuda'")
 
         # If the tensor was created under a no_grad context, it doesn't require gradients
         self.requires_grad: bool = requires_grad and pequegrad_context.grad_enabled
@@ -43,54 +51,54 @@ class Tensor:
         self._ctx: Optional[Function] = None
 
     @property
-    def data(self) -> AbstractStorage:
+    def data(self) -> _Backend:
         return self._data
 
-    def assign(self, data: AbstractStorage) -> None:
+    def assign(self, data: _Backend) -> None:
         """
         Assigns the tensor to the given data
         """
         assert isinstance(
             data, self._data.__class__
-        ), "data must be of the same type as the current storage, expected {}, got {}".format(
+        ), "data must be of the same type as the current backend, expected {}, got {}".format(
             self._data.__class__, data.__class__
         )
         self._data = data
 
-    def to(self, storage_type: str) -> "Tensor":
+    def to(self, backend: str) -> "Tensor":
         """
         Moves the tensor to the given device, returns a copy
         """
-        tensor = self.clone(storage=storage_type)
+        tensor = self.clone(backend=backend)
         return tensor
 
-    def to_(self, storage_type: str) -> None:
+    def to_(self, backend: str) -> None:
         """
         Moves the tensor to the given device in place
         """
         # if the grad is not initialized, we don't need to move it
-        if storage_type == "np":
-            self._data = NumpyStorage(self.data.numpy())
+        if backend == "np":
+            self._data = NumpyTensor(self.data.numpy())
             if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
-                self._grad.to_(storage_type)
-        elif storage_type == "cuda":
-            self._data = CudaStorage(self.data.numpy())
+                self._grad.to_(backend)
+        elif backend == "cuda":
+            self._data = CudaTensor(self.data.numpy())
             if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
-                self._grad.to_(storage_type)
+                self._grad.to_(backend)
 
     @property
     def device(self) -> str:
-        return "cuda" if isinstance(self.data, CudaStorage) else "np"
+        return "cuda" if isinstance(self.data, CudaTensor) else "np"
 
     @property
-    def storage_type(self) -> str:
-        return "cuda" if isinstance(self.data, CudaStorage) else "np"
+    def backend(self) -> str:
+        return "cuda" if isinstance(self.data, CudaTensor) else "np"
 
     def __iter__(self):
         return iter(self.data)
 
     def __repr__(self):
-        return f"Tensor(data={self.data.numpy()}, fn={self._ctx.__class__.__name__ if self._ctx else None}, requires_grad={self.requires_grad}, storage={self.storage_type})"
+        return f"Tensor(data={self.data.numpy()}, fn={self._ctx.__class__.__name__ if self._ctx else None}, requires_grad={self.requires_grad}, backend={self.backend}), dtype={self.dtype}"
 
     def __getitem__(self, key):
         return Slice.apply(self, key=key)
@@ -119,7 +127,7 @@ class Tensor:
         self._grad = (
             gradient
             if gradient is not None
-            else Tensor(1.0, storage=self.storage_type)
+            else Tensor(1.0, backend=self.backend)
             if self.dim == 0
             else None
         )
@@ -172,7 +180,7 @@ class Tensor:
 
         return self.data.numpy().tolist()
 
-    def clone(self, requires_grad: bool = None, storage=None) -> "Tensor":
+    def clone(self, requires_grad: bool = None, backend=None) -> "Tensor":
         """
         Returns an independent copy of the tensor.
         If requires_grad is not provided, the clone will have the same requires_grad as the original.
@@ -189,7 +197,7 @@ class Tensor:
             requires_grad=(
                 requires_grad if requires_grad is not None else self.requires_grad
             ),
-            storage=storage if storage is not None else self.storage_type,
+            backend=backend if backend is not None else self.backend,
         )
         return t
 
@@ -221,9 +229,9 @@ class Tensor:
         return Tensor(np.random.randn(*shape), requires_grad=requires_grad)
 
     @classmethod
-    def zeros(cls, shape: _Shape, requires_grad=False, storage=None) -> "Tensor":
+    def zeros(cls, shape: _Shape, requires_grad=False, backend=None) -> "Tensor":
         """Returns a tensor of zeros with the given shape"""
-        return cls.fill(shape, 0.0, requires_grad=requires_grad, storage=storage)
+        return cls.fill(shape, 0.0, requires_grad=requires_grad, backend=backend)
 
     @classmethod
     def ones(cls, shape: _Shape, requires_grad=False) -> "Tensor":
@@ -232,11 +240,21 @@ class Tensor:
 
     @classmethod
     def fill(
-        cls, shape: _Shape, value: float, requires_grad=False, storage=None
+        cls, shape: _Shape, value: float, requires_grad=False, backend=None
     ) -> "Tensor":
         """Returns a tensor of ones with the given shape"""
-        st = CudaStorage if storage == "cuda" else NumpyStorage
-        return cls(st.fill(shape, value), requires_grad=requires_grad, storage=storage)
+        st = NumpyTensor if backend == "np" or backend is None else CudaTensor
+        return cls(st.fill(shape, value), requires_grad=requires_grad, backend=backend)
+
+    def astype(self, dtype: str) -> "Tensor":
+        """
+        Returns a tensor with the given dtype
+        """
+        return Tensor(
+            self.data.astype(dtype),
+            requires_grad=self.requires_grad,
+            backend=self.backend,
+        )
 
     @classmethod
     def one_hot(
@@ -244,7 +262,7 @@ class Tensor:
         num_classes: int,
         indices: "Tensor",
         requires_grad=False,
-        storage_type: str = "np",
+        backend: str = "np",
     ) -> "Tensor":
         indices = indices.numpy().astype(int)
         assert indices.ndim == 1, "indices must be a vector"
@@ -261,7 +279,7 @@ class Tensor:
 
         np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
-        return cls(np_one_hot, requires_grad=requires_grad, storage=storage_type)
+        return cls(np_one_hot, requires_grad=requires_grad, backend=backend)
 
     def numpy(self) -> np.ndarray:
         return self.data.numpy()
@@ -363,9 +381,7 @@ class Tensor:
             self.shape[0] == target.shape[0]
         ), "input and target must have the same batch size"
 
-        one_hot_target = Tensor.one_hot(
-            self.shape[1], target, storage_type=self.storage_type
-        )
+        one_hot_target = Tensor.one_hot(self.shape[1], target, backend=self.backend)
 
         return self.cross_entropy_loss_probs(one_hot_target)
 
@@ -506,8 +522,8 @@ class Tensor:
         assert (
             self.dim >= ns_l
         ), "normalized_shape should be smaller than the number of dimensions of input tensor"
-        assert (
-            self.shape[-ns_l:] == normalized_shape
+        assert list(self.shape[-ns_l:]) == list(
+            normalized_shape
         ), "normalized_shape should be the last dimensions of input tensor"
 
         last_d_dims = tuple(range(self.dim - ns_l, self.dim))

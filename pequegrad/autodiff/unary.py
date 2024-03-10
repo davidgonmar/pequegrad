@@ -19,7 +19,7 @@ class Pow(Function):
         self.ret = Tensor(
             self.base.data.power(self.exponent.data),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
@@ -29,12 +29,12 @@ class Pow(Function):
                 self.ret.grad.data
                 * self.exponent.data
                 * self.base.data.power(self.exponent.data - 1),
-                storage=self.storage,
+                backend=self.backend,
             )
         if self.exponent.requires_grad:
             self.exponent._grad += Tensor(
                 self.ret.grad.data * self.ret.data * self.base.data.log(),
-                storage=self.storage,
+                backend=self.backend,
             )
 
 
@@ -47,7 +47,7 @@ class Log(Function):
         self.ret = Tensor(
             self.a.data.log(),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
 
     def backward(self):
@@ -64,12 +64,12 @@ class Exp(Function):
         self.ret = Tensor(
             self.a.data.exp(),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
 
     def backward(self):
         if self.a.requires_grad:
-            self.a._grad += self.ret.grad * Tensor(self.ret.data, storage=self.storage)
+            self.a._grad += self.ret.grad * Tensor(self.ret.data, backend=self.backend)
 
 
 class ReLU(Function):
@@ -84,7 +84,7 @@ class ReLU(Function):
         self.ret = Tensor(
             self.a.data.el_wise_max(0),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
@@ -94,10 +94,10 @@ class ReLU(Function):
             concrete_class = self.a.data.__class__
             self.a._grad += (
                 Tensor(
-                    # steal the concrete class from tensor storage
+                    # steal the concrete class from tensor backend
                     concrete_class.where_static(self.a.data > 0, 1, 0),
                     requires_grad=False,
-                    storage=self.storage,
+                    backend=self.backend,
                 )
                 * self.ret.grad
             )

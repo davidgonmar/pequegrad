@@ -11,7 +11,8 @@ std::string dtype_to_string(DType dtype) {
   case DType::Float64:
     return "float64";
   default:
-    throw std::runtime_error("Unknown dtype");
+    throw std::runtime_error("Unknown dtype: " +
+                             std::to_string(static_cast<int>(dtype)));
   }
 }
 
@@ -28,6 +29,7 @@ size_t dtype_to_size(DType dtype) {
   case DType::Float64:
     return sizeof(double);
   default:
-    throw std::runtime_error("Unknown dtype");
+    throw std::runtime_error("Unknown dtype: " +
+                             std::to_string(static_cast<int>(dtype)));
   }
 }

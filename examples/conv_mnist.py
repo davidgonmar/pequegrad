@@ -36,8 +36,8 @@ def test_model(model, X_test, Y_test):
         correct = 0
         for i in range(0, len(X_test), batch_size):
             end_idx = min(i + batch_size, len(X_test))
-            batch_X = Tensor(X_test[i:end_idx], storage=model.storage_type)
-            batch_Y = Tensor(Y_test[i:end_idx], storage=model.storage_type)
+            batch_X = Tensor(X_test[i:end_idx], backend=model.backend)
+            batch_Y = Tensor(Y_test[i:end_idx], backend=model.backend)
             prediction = model.forward(batch_X)
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
 
@@ -51,8 +51,8 @@ def train(model, X_train, Y_train, epochs=13, batch_size=512):
     optim = Adam(model.parameters(), lr=0.033)
     for epoch in range(epochs):
         indices = np.random.choice(len(X_train), batch_size)
-        batch_X = Tensor(X_train[indices], storage=model.storage_type)
-        batch_Y = Tensor(Y_train[indices], storage=model.storage_type)
+        batch_X = Tensor(X_train[indices], backend=model.backend)
+        batch_Y = Tensor(Y_train[indices], backend=model.backend)
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate

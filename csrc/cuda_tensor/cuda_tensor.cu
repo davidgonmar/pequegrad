@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cuda_array.cuh"
+#include "cuda_tensor.cuh"
 #include "dtype.hpp"
 #include "kernels/all.cuh"
 #include "utils.cuh"
@@ -9,7 +9,7 @@
 #include <string>
 
 
-bool CudaArray::is_contiguous() const {
+bool CudaTensor::is_contiguous() const {
   if (offset != 0) {
     return false;
   }
@@ -30,11 +30,11 @@ bool CudaArray::is_contiguous() const {
   return true;
 }
 
-CudaArray CudaArray::astype(DType new_type) const {
+CudaTensor CudaTensor::astype(DType new_type) const {
   if (dtype == new_type) {
     return *this;
   }
-  CudaArray out(size, shape, new_type);
+  CudaTensor out(size, shape, new_type);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
@@ -46,30 +46,30 @@ CudaArray CudaArray::astype(DType new_type) const {
   return out;
 }
 
-int CudaArray::ndim() const { return shape.size(); }
+int CudaTensor::ndim() const { return shape.size(); }
 
 
-std::string CudaArray::to_string() const {
+std::string CudaTensor::to_string() const {
   /*void *host = malloc(size * dtype_to_size(dtype));
   CHECK_CUDA(
       cudaMemcpy(host, get_base_ptr(), size * sizeof(T), cudaMemcpyDeviceToHost));
   */
   std::stringstream ss;
-  ss << "CudaArray<" << dtype_to_string(dtype) << ">(" << size
+  ss << "CudaTensor<" << dtype_to_string(dtype) << ">(" << size
      << ") with shape " << vec_to_string(shape) << " and strides "
      << vec_to_string(strides);
   return ss.str();
 }
 
-CudaArray CudaArray::clone() const {
-  CudaArray out(size, shape, strides, dtype);
+CudaTensor CudaTensor::clone() const {
+  CudaTensor out(size, shape, strides, dtype);
   CHECK_CUDA(cudaMemcpy(out.get_base_ptr(), get_base_ptr(), size * dtype_to_size(dtype),
                         cudaMemcpyDeviceToDevice));
   return out;
 }
 
 
-CudaArray CudaArray::as_contiguous() const {
+CudaTensor CudaTensor::as_contiguous() const {
   return is_contiguous() ? *this : elwiseop(UnaryKernelType::COPY);
 }
 

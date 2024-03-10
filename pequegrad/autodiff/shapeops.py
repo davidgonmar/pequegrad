@@ -14,14 +14,14 @@ class Unsqueeze(Function):
         self.ret = Tensor(
             self.a.data.expand_dims(axis=self.dim),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
     def backward(self):
         if self.a.requires_grad:
             self.a._grad += Tensor(
-                self.ret.grad.data.squeeze(axis=self.dim), storage=self.storage
+                self.ret.grad.data.squeeze(axis=self.dim), backend=self.backend
             )
 
 
@@ -35,14 +35,14 @@ class Squeeze(Function):
         self.ret = Tensor(
             self.a.data.squeeze(axis=self.dim),
             requires_grad=self.requires_grad,
-            storage=self.storage,
+            backend=self.backend,
         )
         return self.ret
 
     def backward(self):
         if self.a.requires_grad:
             self.a._grad += Tensor(
-                self.ret.grad.data.expand_dims(axis=self.dim), storage=self.storage
+                self.ret.grad.data.expand_dims(axis=self.dim), backend=self.backend
             )
 
 
@@ -56,7 +56,7 @@ class Permute(Function):
         self.ret = Tensor(
             self.a.data.permute(*self.dims),
             requires_grad=self.requires_grad,
-            storage=self.a.device,
+            backend=self.a.device,
         )
 
         return self.ret
@@ -67,7 +67,7 @@ class Permute(Function):
         )  # computes the indices that would sort the dims back
         if self.a.requires_grad:
             self.a._grad += Tensor(
-                self.ret.grad.data.permute(*bw_dims), storage=self.storage
+                self.ret.grad.data.permute(*bw_dims), backend=self.backend
             )
 
 
@@ -80,14 +80,14 @@ class Reshape(Function):
 
     def forward(self) -> Tensor:
         self.ret = Tensor(
-            self.input.data.reshape(self.output_shape),
+            self.input.data.reshape(*self.output_shape),
             requires_grad=self.requires_grad,
-            storage=self.input.device,
+            backend=self.input.device,
         )
         return self.ret
 
     def backward(self) -> Tensor:
         if self.input.requires_grad:
             self.input._grad += Tensor(
-                self.ret.grad.data, storage=self.storage
+                self.ret.grad.data, backend=self.backend
             ).reshape(self.input_shape)
