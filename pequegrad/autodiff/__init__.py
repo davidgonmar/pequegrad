@@ -6,3 +6,4 @@ from .unary import *  # noqa
 from .shapeops import *  # noqa
 from .matmul import *  # noqa
 from .slice import *  # noqa
+from .pad import *  # noqa

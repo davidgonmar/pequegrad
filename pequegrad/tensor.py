@@ -346,6 +346,9 @@ class Tensor:
 
         return softmax
 
+    def pad_constant(self, pad: _Shape, constant=0):
+        return PadConstant.apply(self, pad=pad, constant=constant)
+
     def log_softmax(self, dim=-1) -> "Tensor":
         """Returns the log softmax of the tensor"""
         # Use the logsumexp trick to avoid numerical instability
@@ -602,6 +605,7 @@ from .autodiff import (  # noqa: E402 avoid circular imports
     Permute,
     Div,
     Slice,
+    PadConstant,
 )
 
 
