@@ -594,6 +594,8 @@ class _TestOps:
         [
             [(3, 3), (slice(0, 2), slice(0, 2))],
             [(4, 4), (slice(0, 1), slice(0, 2))],
+            # stepped slices
+            [(9, 11), (slice(0, 9, 2), slice(0, 11, 3))],
         ],
     )
     def test_slice(self, data):

@@ -1,4 +1,5 @@
 #include "cuda_tensor/cuda_tensor.cuh"
+#include "pybind_utils.cuh"
 #include "utils.cuh"
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>
@@ -558,86 +559,18 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            })
       .def("slice",
            [](const CudaTensor &arr,
-              std::variant<std::vector<std::variant<py::slice, int>>, py::slice,
-                           int>
-                  slices) {
-             slice_t slice_pairs;
-
-             if (std::holds_alternative<py::slice>(slices)) {
-               py::slice single_slice = std::get<py::slice>(slices);
-               py::ssize_t start, stop, step, slicelength;
-               if (single_slice.compute(arr.shape[0], &start, &stop, &step,
-                                        &slicelength)) {
-                 slice_pairs.push_back(std::make_pair(static_cast<int>(start),
-                                                      static_cast<int>(stop)));
-               }
-             } else if (std::holds_alternative<int>(slices)) {
-               slice_pairs.push_back(std::get<int>(slices));
-             } else {
-               std::vector<std::variant<py::slice, int>> slices_vector =
-                   std::get<std::vector<std::variant<py::slice, int>>>(slices);
-               int i = 0;
-               for (auto slice : slices_vector) {
-                 if (std::holds_alternative<py::slice>(slice)) {
-                   py::slice single_slice = std::get<py::slice>(slice);
-                   py::ssize_t start, stop, step, slicelength;
-                   if (single_slice.compute(arr.shape[i], &start, &stop, &step,
-                                            &slicelength)) {
-                     slice_pairs.push_back(std::make_pair(
-                         static_cast<int>(start), static_cast<int>(stop)));
-                   } else {
-                     throw std::runtime_error("Invalid slice");
-                   }
-                 } else if (std::holds_alternative<int>(slice)) {
-                   slice_pairs.push_back(std::get<int>(slice));
-                 }
-                 i++;
-               }
-             }
-
-             return arr.slice(slice_pairs);
+              const pybind_utils::pybind_slices_args_t slices) {
+             slice_t parsed =
+                 pybind_utils::parse_pybind_slices(slices, arr.shape);
+             return arr.slice(parsed);
            })
       .def("assign",
-           [](CudaTensor &arr,
-              std::variant<std::vector<std::variant<py::slice, int>>, py::slice,
-                           int>
-                  slices,
+           [](CudaTensor &arr, const pybind_utils::pybind_slices_args_t slices,
               CudaTensor vals) {
-             slice_t slice_pairs;
+             slice_t parsed =
+                 pybind_utils::parse_pybind_slices(slices, arr.shape);
 
-             if (std::holds_alternative<py::slice>(slices)) {
-               py::slice single_slice = std::get<py::slice>(slices);
-               py::ssize_t start, stop, step, slicelength;
-               if (single_slice.compute(arr.shape[0], &start, &stop, &step,
-                                        &slicelength)) {
-                 slice_pairs.push_back(std::make_pair(static_cast<int>(start),
-                                                      static_cast<int>(stop)));
-               }
-             } else if (std::holds_alternative<int>(slices)) {
-               slice_pairs.push_back(std::get<int>(slices));
-             } else {
-               std::vector<std::variant<py::slice, int>> slices_vector =
-                   std::get<std::vector<std::variant<py::slice, int>>>(slices);
-               int i = 0;
-               for (auto slice : slices_vector) {
-                 if (std::holds_alternative<py::slice>(slice)) {
-                   py::slice single_slice = std::get<py::slice>(slice);
-                   py::ssize_t start, stop, step, slicelength;
-                   if (single_slice.compute(arr.shape[i], &start, &stop, &step,
-                                            &slicelength)) {
-                     slice_pairs.push_back(std::make_pair(
-                         static_cast<int>(start), static_cast<int>(stop)));
-                   } else {
-                     throw std::runtime_error("Invalid slice");
-                   }
-                 } else if (std::holds_alternative<int>(slice)) {
-                   slice_pairs.push_back(std::get<int>(slice));
-                 }
-                 i++;
-               }
-             }
-
-             return arr.assign(slice_pairs, vals);
+             return arr.assign(parsed, vals);
            })
       .def(
           "expand_dims",

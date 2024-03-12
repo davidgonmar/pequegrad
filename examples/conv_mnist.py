@@ -51,8 +51,8 @@ def train(model, X_train, Y_train, epochs=13, batch_size=512):
     optim = Adam(model.parameters(), lr=0.033)
     for epoch in range(epochs):
         indices = np.random.choice(len(X_train), batch_size)
-        batch_X = Tensor(X_train[indices], backend=model.backend)
-        batch_Y = Tensor(Y_train[indices], backend=model.backend)
+        batch_X = X_train[indices]
+        batch_Y = Y_train[indices]
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
@@ -93,12 +93,16 @@ if __name__ == "__main__":
     if MODE == "eval":
         model.load("conv_mnist_model.pkl")
         print("Model loaded from conv_mnist_model.pkl")
-        X_train, y_train, X_test, y_test = get_mnist_dataset()
+        X_train, y_train, X_test, y_test = get_mnist_dataset(
+            backend="cuda" if CUDA else "np"
+        )
         correct, total = test_model(model, X_test, y_test)
         print(f"Test accuracy: {correct / total}")
 
     else:
-        X_train, y_train, X_test, y_test = get_mnist_dataset()
+        X_train, y_train, X_test, y_test = get_mnist_dataset(
+            backend="cuda" if CUDA else "np"
+        )
         start = time.time()
         train(model, X_train, y_train, epochs=13, batch_size=512)
         print(f"Time taken to train: {(time.time() - start):.2f}s")

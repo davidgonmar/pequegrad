@@ -109,7 +109,7 @@ try:
         )
         bind_method(CudaTensor, "power", CudaTensor.pow)
         bind_method(CudaTensor, "__matmul__", CudaTensor.matmul)
-
+        bind_method(CudaTensor, "__len__", lambda self: self.shape[0])
         bind_method_property(CudaTensor, "size", lambda self: np.prod(self.shape))
 
         def T(self):

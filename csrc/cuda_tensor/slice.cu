@@ -6,25 +6,28 @@ CudaTensor CudaTensor::slice(const slice_t &slices) const {
     shape_t new_shape;
     shape_t new_strides;
     int _offset = 0;
+    // print slices
     for (int i = 0; i < slices.size(); i++) {
         slice_item_t item = slices[i];
-        if (std::holds_alternative<std::pair<int, int>>(item)) {
+        if (std::holds_alternative<SliceFromSSS>(item)) {
             // at the moment, only positive slices are supported
-            auto pair = std::get<std::pair<int, int>>(item);
-            int start = pair.first;
-            int end = pair.second;
-            PG_CHECK_ARG(start >= 0 && end >= 0, "Only positive slices are supported, got: " + std::to_string(start) + ", " + std::to_string(end));
-            PG_CHECK_ARG(start < shape[i] && end <= shape[i], "Slice out of bounds, start: " + std::to_string(start) + ", end: " + std::to_string(end) + ", shape: " + std::to_string(shape[i]));
+            auto _item = std::get<SliceFromSSS>(item);
+            int start = _item.start;
+            int stop = _item.stop;
+            int step = _item.step;
+            PG_CHECK_ARG(start < shape[i] && stop <= shape[i], "Slice out of bounds, start: " + std::to_string(start) + ", end: " + std::to_string(stop) + ", shape: " + std::to_string(shape[i]));
             _offset += start * strides[i];
-
-            new_shape.push_back(end - start);
-            new_strides.push_back(strides[i]);
-        } else if (std::holds_alternative<int>(item)) {
-            PG_CHECK_ARG(std::get<int>(item) >= 0, "Only positive slices are supported, got: " + std::to_string(std::get<int>(item)));
-            PG_CHECK_ARG(std::get<int>(item) < shape[i], "Slice out of bounds, index: " + std::to_string(std::get<int>(item)) + ", shape: " + std::to_string(shape[i]));
-            _offset += std::get<int>(item) * strides[i];
+            new_shape.push_back((stop - start + step - 1) / step);
+            new_strides.push_back(strides[i] * step);
+        } else if (std::holds_alternative<SliceFromSingleIdx>(item)) {
+            int _item = std::get<SliceFromSingleIdx>(item).index;
+            PG_CHECK_ARG(_item >= 0, "Only positive slices are supported, got: " + std::to_string(_item));
+            PG_CHECK_ARG(_item < shape[i], "Slice out of bounds, index: ", std::to_string(_item) + ", shape: " + std::to_string(shape[i]));
+            _offset += _item * strides[i];
             // but here, since we are doing something like [:, 1], we dont add anything to the shape
             // we also dont add anything to the strides
+        } else if (std::holds_alternative<SliceFromIdxArray>(item)) {
+            throw std::runtime_error("Not implemented");
         }
     }
 

@@ -24,7 +24,25 @@ using axis_t = int;
 using axes_t = std::vector<axis_t>;
 
 
-using slice_item_t = std::variant<int, std::pair<int, int>>;
+struct SliceFromSSS {
+  int start;
+  int stop;
+  int step;
+  SliceFromSSS(int start, int stop, int step) : start(start), stop(stop), step(step) {}
+};
+
+struct SliceFromIdxArray {
+  std::vector<int> indices;
+  SliceFromIdxArray(const std::vector<int> &indices) : indices(indices) {}
+};
+
+struct SliceFromSingleIdx {
+  int index;
+  SliceFromSingleIdx(int index) : index(index) {}
+};
+
+// single item, start:stop, or [idx1, idx2, idx3, ...]
+using slice_item_t = std::variant<SliceFromSSS, SliceFromIdxArray, SliceFromSingleIdx>;
 using slice_t = std::vector<slice_item_t>;
 
 class CudaTensor {
