@@ -165,7 +165,7 @@ class Tensor:
                 node._ctx.backward()
                 assert (
                     node._grad.shape == node.shape
-                ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}"
+                ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}, tensor: {node}"
 
     @property
     def grad(self):
@@ -417,18 +417,39 @@ class Tensor:
         bias: "Tensor" = None,
         stride: Union[int, Tuple[int, int]] = 1,
         dilation: Union[int, Tuple[int, int]] = 1,
+        padding: Union[int, Tuple[int, int]] = 0,
     ) -> "Tensor":
         """Returns the 2d convolution of the tensor with the given filter"""
         s_y, s_x = (stride, stride) if isinstance(stride, int) else stride
         d_y, d_x = (dilation, dilation) if isinstance(dilation, int) else dilation
+        p_y, p_x = (padding, padding) if isinstance(padding, int) else padding
+
+
+        # tensor is always of shape (batch, channels, height, width)
+        # filter is always of shape (out_channels, in_channels, height, width)
+        assert (
+            self.dim == 4
+        ), "conv2d is only supported for tensors with 4 dimensions"
+        assert (
+            filter.dim == 4
+        ), "conv2d is only supported for filters with 4 dimensions"
+
+        if p_y > 0 or p_x > 0:
+            self = self.pad_constant((p_y, p_x, p_y, p_x))
+        
+
         inp_unf = self.unfold(filter.shape[-2:], stride=(s_y, s_x), dilation=(d_y, d_x))
         out_unf = (
             inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T
         ).transpose(1, 2)
         after_conv_size = (
-            (self.shape[-2] - (filter.shape[-2] - 1) * d_y - 1) // s_y + 1,
-            (self.shape[-1] - (filter.shape[-1] - 1) * d_x - 1) // s_x + 1,
+            (self.shape[-2] + 2 * p_y - (filter.shape[-2] - 1) * d_y - 1) // s_y + 1,
+            (self.shape[-1]  + 2 * p_x - (filter.shape[-1] - 1) * d_x - 1) // s_x + 1,
         )
+
+        print(after_conv_size)
+        print(out_unf.shape)
+        print(filter.shape)
         out = out_unf.fold(
             (1, 1), after_conv_size
         )  # dilation and strides are implicitly 1
@@ -443,12 +464,13 @@ class Tensor:
 
         return out
 
-    def max_pool2d(self, kernel_size: Tuple[int, int]) -> "Tensor":
+    def max_pool2d(self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None) -> "Tensor":
         """Returns the 2d maxpooling of the tensor with the given kernel size"""
         assert (
             self.dim == 4
         ), "max_pool2d is only supported for tensors with 4 dimensions"
-        stride = kernel_size
+        kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+        stride = kernel_size if stride is None else (stride, stride) if isinstance(stride, int) else stride
         assert stride[0] == stride[1], "kernel size must be square"
 
         new_shape = (

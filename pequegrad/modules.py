@@ -59,7 +59,7 @@ class StatefulModule:
                         params.extend(pp._search_parameters())
                     elif isinstance(pp, ModuleParam):
                         params.append(pp)
-                        
+
         return params
 
     def parameters(self):
@@ -90,16 +90,18 @@ class Linear(StatefulModule):
 
 
 class Conv2d(StatefulModule):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1):
         super().__init__()
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )
         self.bias = ModuleParam.zeros(out_channels, requires_grad=True)
-        assert padding == 0, "only padding=0 is supported"
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
 
-    def forward(self, input):
-        return input.conv2d(self.kernel, self.bias)
+    def forward(self, input: Tensor) -> Tensor:
+        return input.conv2d(self.kernel, self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
 
 class NonStatefulModule:
     def forward(self, input):
@@ -110,11 +112,12 @@ class NonStatefulModule:
 
 
 class MaxPool2d(NonStatefulModule):
-    def __init__(self, kernel_size):
+    def __init__(self, kernel_size: Union[int, tuple], stride: Union[int, tuple] = (1, 1)):
         self.kernel_size = kernel_size
+        self.stride = stride
 
     def forward(self, input: Tensor) -> Tensor:
-        return input.max_pool2d(self.kernel_size)
+        return input.max_pool2d(self.kernel_size, self.stride)
 
 class ReLU(NonStatefulModule):
     def forward(self, input: Tensor) -> Tensor:

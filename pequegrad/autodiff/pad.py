@@ -34,8 +34,13 @@ class PadConstant(Function):
             backend=self.backend,
         )
 
-        slices = tuple(slice(int(pad[0]), int(-pad[1])) for pad in padpairs)
+        slices = [slice(int(pad[0]), int(-pad[1])) for pad in padpairs]
 
+        for i, _slice in enumerate(slices):
+            if _slice.start == 0 and _slice.stop == 0:
+                slices[i] = slice(None, None, None) # same as a[:]
+
+        slices = tuple(slices)
         self.slices = slices  # save for backward
         new_t[slices] = self.x.data
 
