@@ -1,18 +1,18 @@
 from pequegrad.tensor import Tensor, CUDA_AVAILABLE
-from pequegrad.modules import Linear, Conv2d, Module
+from pequegrad.modules import Linear, Conv2d, StatefulModule
 import os
 import tempfile
 import pytest
 import numpy as np
 
 
-class CustomModule(Module):
+class CustomModule(StatefulModule):
     def __init__(self):
         self.a = Linear(2, 1)
         self.b = Linear(2, 1)
 
 
-class CustomConvModule(Module):
+class CustomConvModule(StatefulModule):
     def __init__(self):
         self.a = Conv2d(1, 3, 2)
         self.b = Conv2d(1, 3, 2)

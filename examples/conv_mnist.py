@@ -1,7 +1,7 @@
 from pequegrad.extra.mnist import get_mnist_dataset
 import numpy as np
 from pequegrad.optim import Adam
-from pequegrad.modules import Linear, Conv2d, Module
+from pequegrad.modules import Linear, Conv2d, StatefulModule, Sequential, Reshape, ReLU, MaxPool2d
 from pequegrad.context import no_grad
 import argparse
 import time
@@ -9,23 +9,24 @@ import time
 np.random.seed(0)
 
 
-class ConvNet(Module):
+class ConvNet(StatefulModule):
     def __init__(self):
         # input size = 28x28
-        self.conv1 = Conv2d(in_channels=1, out_channels=8, kernel_size=3)
-        self.conv2 = Conv2d(in_channels=8, out_channels=16, kernel_size=3)
+        self.convstack = Sequential(
+            Reshape((-1, 1, 28, 28)), # shape: (28, 28)
+            Conv2d(in_channels=1, out_channels=8, kernel_size=3), # shape: (28, 28) -> (26, 26)
+            ReLU(), # shape: (26, 26)
+            MaxPool2d(kernel_size=(2, 2)), # shape: (26, 26) -> (13, 13)
+            Conv2d(in_channels=8, out_channels=16, kernel_size=3), # shape: (13, 13) -> (11, 11)
+            ReLU(), # shape: (11, 11)
+            MaxPool2d(kernel_size=(2, 2)), # shape: (11, 11) -> (5, 5)
+            Reshape((-1, 16 * 5 * 5)), # shape: (5, 5) -> (16 * 5 * 5)
+        )
+            
         self.fc1 = Linear(16 * 5 * 5, 10)
 
     def forward(self, input):
-        input = input.reshape((-1, 1, 28, 28))  # shape: (28, 28)
-        input = (
-            self.conv1.forward(input).relu().max_pool2d(kernel_size=(2, 2))
-        )  # shape: (28, 28) -> (26, 26) -> (13, 13)
-        input = (
-            self.conv2.forward(input).relu().max_pool2d(kernel_size=(2, 2))
-        )  # shape: (13, 13) -> (11, 11) -> (5, 5)
-        input = input.reshape((-1, 16 * 5 * 5))
-        return self.fc1.forward(input)
+        return self.fc1(self.convstack(input))
 
 
 def test_model(model, X_test, Y_test):

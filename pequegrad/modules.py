@@ -1,7 +1,7 @@
 from pequegrad.tensor import Tensor
 from pequegrad.backend import NumpyTensor, CudaTensor
 import numpy as np
-from typing import List
+from typing import List, Union
 import pickle
 
 
@@ -15,12 +15,12 @@ def kaiming_init(shape):
     return ModuleParam.uniform(shape, -bound, bound, requires_grad=True)
 
 
-class Module:
+class StatefulModule:
     _parameters: List[ModuleParam] = None
 
     @property
     def backend(self):
-        return self.parameters()[0].backend
+        return self.parameters()[0].backend if len(self.parameters()) > 0 else None
 
     def save(self, path):
         params = [p.numpy() for p in self.parameters()]
@@ -51,8 +51,15 @@ class Module:
         for p in self.__dict__.values():
             if isinstance(p, ModuleParam):
                 params.append(p)
-            elif isinstance(p, Module):
+            elif isinstance(p, StatefulModule):
                 params.extend(p._search_parameters())
+            elif isinstance(p, (list, tuple)): # search in lists and tuples
+                for pp in p:
+                    if isinstance(pp, StatefulModule):
+                        params.extend(pp._search_parameters())
+                    elif isinstance(pp, ModuleParam):
+                        params.append(pp)
+                        
         return params
 
     def parameters(self):
@@ -65,8 +72,10 @@ class Module:
         for p in self.parameters():
             p.reset_grad()
 
-
-class Linear(Module):
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
+    
+class Linear(StatefulModule):
     def __init__(self, in_features, out_features):
         super().__init__()
         self.weights = kaiming_init((in_features, out_features))
@@ -80,15 +89,50 @@ class Linear(Module):
         self.bias.backward(output_grad)
 
 
-class Conv2d(Module):
+class Conv2d(StatefulModule):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super().__init__()
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )
         self.bias = ModuleParam.zeros(out_channels, requires_grad=True)
-        assert stride == 1, "only stride=1 is supported"
         assert padding == 0, "only padding=0 is supported"
 
     def forward(self, input):
         return input.conv2d(self.kernel, self.bias)
+
+class NonStatefulModule:
+    def forward(self, input):
+        raise NotImplementedError
+
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
+
+
+class MaxPool2d(NonStatefulModule):
+    def __init__(self, kernel_size):
+        self.kernel_size = kernel_size
+
+    def forward(self, input: Tensor) -> Tensor:
+        return input.max_pool2d(self.kernel_size)
+
+class ReLU(NonStatefulModule):
+    def forward(self, input: Tensor) -> Tensor:
+        return input.relu()
+
+class Reshape(NonStatefulModule):
+    def __init__(self, shape):
+        self.shape = shape
+
+    def forward(self, input: Tensor) -> Tensor:
+        return input.reshape(self.shape)
+
+class Sequential(StatefulModule):
+    def __init__(self, *args: Union[StatefulModule, NonStatefulModule]):
+        super().__init__()
+        self.modules = args
+
+    def forward(self, input:Tensor) -> Tensor:
+        for module in self.modules:
+            input = module.forward(input)
+        return input
