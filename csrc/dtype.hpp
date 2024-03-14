@@ -13,8 +13,8 @@ enum class DType {
 
 std::string dtype_to_string(DType dtype);
 
-constexpr DType max_dtype(DType a, DType b);
-
+DType max_dtype(DType a, DType b);
+DType promote_dtype(DType a, DType b);
 size_t dtype_to_size(DType dtype);
 
 template <typename T> DType dtype_from_pytype() {

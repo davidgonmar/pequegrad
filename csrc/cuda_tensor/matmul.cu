@@ -1,8 +1,14 @@
 #include "cuda_tensor.cuh"
+#include "dtype.hpp"
 
 
 CudaTensor CudaTensor::mat_mul(const CudaTensor &other) const {
   // if a is a vector and the other is a matrix, add a dimension to a
+  if (dtype != other.dtype) {
+    DType promoted_dtype = promote_dtype(dtype, other.dtype);
+
+    return this->astype(promoted_dtype).mat_mul(other.astype(promoted_dtype));
+  }
   bool added_a_dim = false;
   bool added_b_dim = false;
   CudaTensor a = (this->ndim() == 1 && other.ndim() != 1)

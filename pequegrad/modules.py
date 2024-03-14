@@ -53,7 +53,7 @@ class StatefulModule:
                 params.append(p)
             elif isinstance(p, StatefulModule):
                 params.extend(p._search_parameters())
-            elif isinstance(p, (list, tuple)): # search in lists and tuples
+            elif isinstance(p, (list, tuple)):  # search in lists and tuples
                 for pp in p:
                     if isinstance(pp, StatefulModule):
                         params.extend(pp._search_parameters())
@@ -74,7 +74,8 @@ class StatefulModule:
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
-    
+
+
 class Linear(StatefulModule):
     def __init__(self, in_features, out_features):
         super().__init__()
@@ -90,7 +91,9 @@ class Linear(StatefulModule):
 
 
 class Conv2d(StatefulModule):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1):
+    def __init__(
+        self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1
+    ):
         super().__init__()
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
@@ -101,7 +104,14 @@ class Conv2d(StatefulModule):
         self.dilation = dilation
 
     def forward(self, input: Tensor) -> Tensor:
-        return input.conv2d(self.kernel, self.bias, stride=self.stride, padding=self.padding, dilation=self.dilation)
+        return input.conv2d(
+            self.kernel,
+            self.bias,
+            stride=self.stride,
+            padding=self.padding,
+            dilation=self.dilation,
+        )
+
 
 class NonStatefulModule:
     def forward(self, input):
@@ -112,16 +122,20 @@ class NonStatefulModule:
 
 
 class MaxPool2d(NonStatefulModule):
-    def __init__(self, kernel_size: Union[int, tuple], stride: Union[int, tuple] = (1, 1)):
+    def __init__(
+        self, kernel_size: Union[int, tuple], stride: Union[int, tuple] = (1, 1)
+    ):
         self.kernel_size = kernel_size
         self.stride = stride
 
     def forward(self, input: Tensor) -> Tensor:
         return input.max_pool2d(self.kernel_size, self.stride)
 
+
 class ReLU(NonStatefulModule):
     def forward(self, input: Tensor) -> Tensor:
         return input.relu()
+
 
 class Reshape(NonStatefulModule):
     def __init__(self, shape):
@@ -130,12 +144,13 @@ class Reshape(NonStatefulModule):
     def forward(self, input: Tensor) -> Tensor:
         return input.reshape(self.shape)
 
+
 class Sequential(StatefulModule):
     def __init__(self, *args: Union[StatefulModule, NonStatefulModule]):
         super().__init__()
         self.modules = args
 
-    def forward(self, input:Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         for module in self.modules:
             input = module.forward(input)
         return input

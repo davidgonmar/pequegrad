@@ -16,8 +16,15 @@ std::string dtype_to_string(DType dtype) {
   }
 }
 
-constexpr DType max_dtype(DType a, DType b) {
+DType max_dtype(DType a, DType b) {
   return (static_cast<int>(a) > static_cast<int>(b)) ? a : b;
+}
+
+DType promote_dtype(DType a, DType b) {
+  if (a == b) {
+    return a;
+  }
+  return max_dtype(a, b);
 }
 
 size_t dtype_to_size(DType dtype) {

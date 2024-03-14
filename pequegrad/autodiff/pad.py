@@ -38,7 +38,7 @@ class PadConstant(Function):
 
         for i, _slice in enumerate(slices):
             if _slice.start == 0 and _slice.stop == 0:
-                slices[i] = slice(None, None, None) # same as a[:]
+                slices[i] = slice(None, None, None)  # same as a[:]
 
         slices = tuple(slices)
         self.slices = slices  # save for backward
