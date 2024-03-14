@@ -10,11 +10,9 @@ namespace pybind_utils {
 namespace py = pybind11;
 
 using pybind_slice_item_t = std::variant<py::slice, int, std::vector<int>>;
-using pybind_slices_args_t = std::vector<pybind_slice_item_t>;
 
 slice_item_t parse_pybind_slice_item(const pybind_slice_item_t &item,
                                      const int shape_in_dim);
-slice_t parse_pybind_slices(const pybind_slices_args_t &slices,
-                            const shape_t &arr_shape);
+slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape);
 
 } // namespace pybind_utils

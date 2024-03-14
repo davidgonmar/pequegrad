@@ -41,8 +41,31 @@ struct SliceFromSingleIdx {
   SliceFromSingleIdx(int index) : index(index) {}
 };
 
+struct SliceKeepDim {
+  SliceKeepDim() {}
+};
+
+enum class Device_SliceType {
+    SliceFromSSS,
+    SliceFromIdxArray,
+    SliceFromSingleIdx,
+    SliceKeepDim
+};
+struct Device_Slice {
+    Device_SliceType type;
+    int start;
+    int stop;
+    int step;
+    // this is a device pointer
+    int* indices;
+    int indexSize;
+    int index;
+};
+
+
+
 // single item, start:stop, or [idx1, idx2, idx3, ...]
-using slice_item_t = std::variant<SliceFromSSS, SliceFromIdxArray, SliceFromSingleIdx>;
+using slice_item_t = std::variant<SliceFromSSS, SliceFromIdxArray, SliceFromSingleIdx, SliceKeepDim>;
 using slice_t = std::vector<slice_item_t>;
 
 class CudaTensor {

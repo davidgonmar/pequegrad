@@ -27,12 +27,25 @@ slice_item_t parse_pybind_slice_item(const pybind_slice_item_t &item,
     throw std::runtime_error("Invalid slice");
   }
 }
-slice_t parse_pybind_slices(const pybind_slices_args_t &slices,
-                            const shape_t &arr_shape) {
+slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
   slice_t parsed_slices;
 
   // If user passed a single slice, convert it to a vector of slices
-  std::vector<pybind_slice_item_t> items = slices;
+  std::vector<pybind_slice_item_t> items;
+  for (int i = 0; i < slices.size(); i++) {
+    // assert that object is a slice, int or list of ints
+    py::object slice = slices[i];
+    if (py::isinstance<py::slice>(slice)) {
+      items.push_back(slice.cast<py::slice>());
+    } else if (py::isinstance<py::int_>(slice)) {
+      items.push_back(slice.cast<int>());
+    } else if (py::isinstance<py::list>(slice)) {
+      items.push_back(slice.cast<std::vector<int>>());
+    } else {
+      throw std::runtime_error("Invalid slice");
+    }
+  }
+
   PG_CHECK_ARG(items.size() <= arr_shape.size(),
                "Too many slices for the array, array ndim: ", arr_shape.size(),
                ", number of slices: ", items.size());

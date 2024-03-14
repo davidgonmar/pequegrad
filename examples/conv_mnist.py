@@ -1,6 +1,5 @@
 from pequegrad.extra.mnist import get_mnist_dataset
 import numpy as np
-from pequegrad.tensor import Tensor
 from pequegrad.optim import Adam
 from pequegrad.modules import Linear, Conv2d, Module
 from pequegrad.context import no_grad
@@ -36,9 +35,10 @@ def test_model(model, X_test, Y_test):
         correct = 0
         for i in range(0, len(X_test), batch_size):
             end_idx = min(i + batch_size, len(X_test))
-            batch_X = Tensor(X_test[i:end_idx], backend=model.backend)
-            batch_Y = Tensor(Y_test[i:end_idx], backend=model.backend)
+            batch_X = X_test[i:end_idx]
+            batch_Y = Y_test[i:end_idx]
             prediction = model.forward(batch_X)
+
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
 
         return correct, len(X_test)

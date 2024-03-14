@@ -557,19 +557,37 @@ PYBIND11_MODULE(pequegrad_cu, m) {
                throw std::runtime_error("Unsupported data type");
              }
            })
-      .def("slice",
-           [](const CudaTensor &arr,
-              const pybind_utils::pybind_slices_args_t slices) {
-             slice_t parsed =
-                 pybind_utils::parse_pybind_slices(slices, arr.shape);
-             return arr.slice(parsed);
-           })
+      .def(
+          "slice",
+          [](const CudaTensor &arr, const py::tuple slices) {
+            slice_t parsed =
+                pybind_utils::parse_pybind_slices(slices, arr.shape);
+            return arr.slice(parsed);
+          },
+          py::arg("slices").noconvert())
+      .def(
+          "slice",
+          [](const CudaTensor &arr,
+             const pybind_utils::pybind_slice_item_t sl) {
+            auto _tuple = py::make_tuple(sl);
+            slice_t parsed =
+                pybind_utils::parse_pybind_slices(_tuple, arr.shape);
+            return arr.slice(parsed);
+          },
+          py::arg("item"))
       .def("assign",
-           [](CudaTensor &arr, const pybind_utils::pybind_slices_args_t slices,
-              CudaTensor vals) {
+           [](CudaTensor &arr, const py::tuple slices, CudaTensor vals) {
              slice_t parsed =
                  pybind_utils::parse_pybind_slices(slices, arr.shape);
 
+             return arr.assign(parsed, vals);
+           })
+      .def("assign",
+           [](CudaTensor &arr, const pybind_utils::pybind_slice_item_t item,
+              CudaTensor vals) {
+             auto _tuple = py::make_tuple(item);
+             slice_t parsed =
+                 pybind_utils::parse_pybind_slices(_tuple, arr.shape);
              return arr.assign(parsed, vals);
            })
       .def(

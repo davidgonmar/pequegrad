@@ -16,6 +16,9 @@ class Tensor:
 
     backend: _Backend
 
+    def contiguous(self):
+        return self.data.contiguous()
+
     @property
     def dtype(self):
         return (
@@ -25,7 +28,14 @@ class Tensor:
     def __init__(self, data: _ArrayLike, requires_grad=False, backend="np"):
         # Internally, we store the data as a numpy array\
         if isinstance(data, Tensor):
-            data = data.numpy() if backend == "np" else data
+            if data.backend == "np" and backend == "np":
+                data = data.data
+            elif data.backend == "cuda" and backend == "cuda":
+                data = data.data
+            elif data.backend == "np" and backend == "cuda":
+                data = data.data
+            elif data.backend == "cuda" and backend == "np":
+                data = data.numpy()
         elif isinstance(data, (CudaTensor, NumpyTensor)):
             data = data.numpy() if backend == "np" else data
         elif isinstance(data, (int, float)):

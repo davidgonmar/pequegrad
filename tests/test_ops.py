@@ -593,9 +593,15 @@ class _TestOps:
         "data",  # tensor_shape, slices(arr of slices)
         [
             [(3, 3), (slice(0, 2), slice(0, 2))],
-            [(4, 4), (slice(0, 1), slice(0, 2))],
             # stepped slices
             [(9, 11), (slice(0, 9, 2), slice(0, 11, 3))],
+            # slice with array
+            [(3, 3), (slice(0, 2), [0, 1])],
+            # mix
+            [(3, 10, 5), (slice(0, 2), slice(0, 10), [0, 1])],
+            [(7, 5, 8), (1, slice(0, 5), slice(0, 8))],
+            # slice len < tensor ndim
+            [(3, 3), (slice(0, 2))],
         ],
     )
     def test_slice(self, data):
@@ -625,6 +631,7 @@ class _TestOps:
             [(7, 7), (1, 2, 3, 4), 2],  # different padding for each side, constant 2
         ],
     )
+    # @pytest.mark.skip(reason="padding not implemented")
     def test_pad_constant(self, data):
         tensor_shape, padding, constant = data
 
