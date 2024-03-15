@@ -480,7 +480,7 @@ class Tensor:
             (self.shape[2] - kernel_size[0]) // stride[0] + 1,
             (self.shape[3] - kernel_size[1]) // stride[1] + 1,
         )
-        unfolded = self.unfold(kernel_size, stride=stride[0])
+        unfolded = self.unfold(kernel_size, stride=stride)
         # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
         # concatenation of the channels, so we need to reshape to 'divide' the channels
         unfolded = unfolded.reshape(
@@ -493,6 +493,45 @@ class Tensor:
         )
         maxed = unfolded.max(2)
         return maxed.reshape(new_shape)
+
+    def avg_pool2d(
+        self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
+    ) -> "Tensor":
+        """Returns the 2d average pooling of the tensor with the given kernel size"""
+        assert (
+            self.dim == 4
+        ), "avg_pool2d is only supported for tensors with 4 dimensions"
+        kernel_size = (
+            (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+        )
+        stride = (
+            kernel_size
+            if stride is None
+            else (stride, stride)
+            if isinstance(stride, int)
+            else stride
+        )
+        assert stride[0] == stride[1], "kernel size must be square"
+
+        new_shape = (
+            self.shape[0],
+            self.shape[1],
+            (self.shape[2] - kernel_size[0]) // stride[0] + 1,
+            (self.shape[3] - kernel_size[1]) // stride[1] + 1,
+        )
+        unfolded = self.unfold(kernel_size, stride=stride)
+        # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
+        # concatenation of the channels, so we need to reshape to 'divide' the channels
+        unfolded = unfolded.reshape(
+            (
+                unfolded.shape[0], # batch
+                self.shape[1], # channels
+                kernel_size[0] * kernel_size[1], # kernel size 1 * kernel size 2
+                unfolded.shape[-1], # unfolded shape ('number of windows')
+            )
+        )
+        maxed = unfolded.mean(2)
+        return maxed.reshape(new_shape) # once we have the mean, we reshape to the new shape
 
     def unfold(
         self,

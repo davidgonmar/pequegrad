@@ -496,24 +496,31 @@ class _TestOps:
 
     @pytest.mark.parametrize(
         "data",
-        # shape_input, kernel_size
+        # shape_input, kernel_size, stride
         [
-            [(1, 1, 10, 5), (3, 3)],
-            [(1, 1, 10, 5), (1, 1)],
-            [(5, 1, 10, 5), (3, 3)],
-            [(5, 1, 10, 5), (1, 1)],
-            [(5, 1, 10, 5), (5, 5)],
-            [(5, 3, 10, 5), (5, 5)],
+            [(1, 1, 10, 5), (3, 3), 1],
+            [(1, 1, 10, 5), (3, 3), 2],
+            [(1, 1, 10, 5), (1, 1), 4],
+            [(1, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (3, 3), None],
+            [(5, 1, 10, 5), (1, 1), 1],
+            [(5, 1, 10, 5), (5, 5), None],
+            [(5, 3, 10, 5), (5, 5), 5],
         ],
     )
-    def test_max_pool2d(self, data):
-        shape_input, kernel_size = data
+    @pytest.mark.parametrize("method_name", ["avg_pool2d", "max_pool2d"])
+    def test_pool2d(self, data, method_name):
+        shape_input, kernel_size, stride = data
 
         def torch_fn(x):
-            return torch.nn.functional.max_pool2d(x, kernel_size)
+            if stride is None:
+                return torch.nn.functional.__getattribute__(method_name)(x, kernel_size)
+            return torch.nn.functional.__getattribute__(method_name)(x, kernel_size, stride)
 
         def peq_fn(x):
-            return x.max_pool2d(kernel_size)
+            if stride is None:
+                return x.__getattribute__(method_name)(kernel_size)
+            return x.__getattribute__(method_name)(kernel_size, stride=stride)
 
         _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_backend=self.backend)
 
