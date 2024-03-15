@@ -1,8 +1,7 @@
 from pequegrad.extra.mnist import get_mnist_dataset
 import numpy as np
-from pequegrad.tensor import Tensor
 from pequegrad.optim import Adam
-from pequegrad.modules import Linear, Module
+from pequegrad.modules import Linear,StatefulModule
 from pequegrad.context import no_grad
 import argparse
 import time
@@ -12,7 +11,7 @@ np.random.seed(0)
 model_path = "mlp_mnist_model.pkl"
 
 
-class MLP(Module):
+class MLP(StatefulModule):
     def __init__(self):
         self.fc1 = Linear(784, 200)
         self.fc2 = Linear(200, 10)
@@ -27,8 +26,8 @@ def train(model, X_train, Y_train, epochs=14, batch_size=4096):
     optim = Adam(model.parameters(), lr=0.021)
     for epoch in range(epochs):
         indices = np.random.choice(len(X_train), batch_size)
-        batch_X = Tensor(X_train[indices], backend=model.backend)
-        batch_Y = Tensor(Y_train[indices], backend=model.backend)
+        batch_X = X_train[indices]
+        batch_Y = Y_train[indices]
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
@@ -47,8 +46,8 @@ def test_model(model, X_test, Y_test):
         correct = 0
         for i in range(0, len(X_test), batch_size):
             end_idx = min(i + batch_size, len(X_test))
-            batch_X = Tensor(X_test[i:end_idx], backend=model.backend)
-            batch_Y = Tensor(Y_test[i:end_idx], backend=model.backend)
+            batch_X = X_test[i:end_idx]
+            batch_Y = Y_test[i:end_idx]
             prediction = model.forward(batch_X)
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
         return correct, len(X_test)
@@ -74,7 +73,7 @@ if __name__ == "__main__":
     else:
         mlp.to("np")
         print("Using CPU")
-    X_train, y_train, X_test, y_test = get_mnist_dataset()
+    X_train, y_train, X_test, y_test = get_mnist_dataset(backend="np" if not USE_CUDA else "cuda")
     if MODE == "train":
         print("Training the model")
         start = time.time()
