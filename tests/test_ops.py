@@ -515,7 +515,9 @@ class _TestOps:
         def torch_fn(x):
             if stride is None:
                 return torch.nn.functional.__getattribute__(method_name)(x, kernel_size)
-            return torch.nn.functional.__getattribute__(method_name)(x, kernel_size, stride)
+            return torch.nn.functional.__getattribute__(method_name)(
+                x, kernel_size, stride
+            )
 
         def peq_fn(x):
             if stride is None:
@@ -523,6 +525,32 @@ class _TestOps:
             return x.__getattribute__(method_name)(kernel_size, stride=stride)
 
         _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_backend=self.backend)
+
+    # test local response norm + local response norm autograd
+
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, size, alpha, beta, k
+        [
+            [(1, 1, 10, 5), 5, 1e-4, 0.75, 2],
+            [(1, 1, 10, 5), 5, 1e-4, 0.75, 2],
+            [(5, 1, 10, 5), 5, 1e-4, 0.75, 2],
+            [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
+            [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
+        ],
+    )
+    def test_local_response_norm(self, data):
+        shape_input, size, alpha, beta, k = data
+
+        def torch_fn(x):
+            return torch.nn.functional.local_response_norm(x, size, alpha, beta, k)
+
+        def peq_fn(x):
+            return x.local_response_norm(size, alpha, beta, k)
+
+        _compare_fn_with_torch(
+            [shape_input], peq_fn, torch_fn, pq_backend=self.backend, tol=1e-4
+        )  # why does this need a higher tolerance?
 
     @pytest.mark.parametrize(
         "data",

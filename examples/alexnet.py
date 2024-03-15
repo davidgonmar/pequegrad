@@ -23,12 +23,12 @@ class AlexNet(nn.StatefulModule):
             # Block 1: N x 3 x 224 x 224 -> N x 96 x 55 x 55
             nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=2),
             nn.ReLU(),
-            # nn.LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75),
+            nn.LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75),
             nn.MaxPool2d(kernel_size=3, stride=2),
             # Block 2: N x 96 x 55 x 55 -> N x 256 x 27 x 27
             nn.Conv2d(96, 256, kernel_size=5, padding=2),
             nn.ReLU(),
-            # nn.LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75),
+            nn.LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75),
             nn.MaxPool2d(kernel_size=3, stride=2),
             # Block 3: N x 256 x 27 x 27 -> N x 384 x 13 x 13
             nn.Conv2d(256, 384, kernel_size=3, padding=1),
@@ -68,6 +68,7 @@ import torch
 import torchvision
 import datetime
 import numpy as np
+
 transform = torchvision.transforms.Compose(
     [
         torchvision.transforms.ToTensor(),
@@ -80,13 +81,13 @@ trainset = torchvision.datasets.CIFAR100(
     root="./data", train=True, download=True, transform=transform
 )
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=48, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=16, shuffle=True)
 
 testset = torchvision.datasets.CIFAR100(
     root="./data", train=False, download=True, transform=transform
 )
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=48, shuffle=False)
+testloader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False)
 
 
 import argparse
@@ -108,7 +109,6 @@ parser.add_argument(
     "--test",
     action="store_true",
     help="Run the model on the test set after training",
-
 )
 
 parser.add_argument(
@@ -144,24 +144,39 @@ if not args.test:
             if i % 100 == 0:
                 print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
                 # format day_month_hour_minute
-                model.save("alexnet_checkpoint_{}.pkl".format(datetime.datetime.now().strftime("%d_%m_%H_%M")))
+                model.save(
+                    "alexnet_checkpoint_{}.pkl".format(
+                        datetime.datetime.now().strftime("%d_%m_%H_%M")
+                    )
+                )
             # this seems to be necessary to avoid memory leaks
             import gc
+
             gc.collect()
 
 if args.test:
     correct = 0
     total = 0
     for data in testloader:
-            images, labels = data
-            images = Tensor(images.numpy().astype("float32"), backend="cuda")
-            labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
-            outputs = model(images)
-            total += labels.shape[0]
-            correct += np.sum(outputs.numpy().argmax(1) == labels.numpy())
+        images, labels = data
+        images = Tensor(images.numpy().astype("float32"), backend="cuda")
+        labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
+        outputs = model(images)
+        total += labels.shape[0]
+        correct += np.sum(outputs.numpy().argmax(1) == labels.numpy())
 
-            print("Accuracy of the network on the 10000 test images: %d %%" % (100 * correct / total))
-            import gc
-            gc.collect()
-    print("Accuracy of the network on the 10000 test images: %d %%" % (100 * correct / total))
-    print("Accuracy of the network on the 10000 test images: %d %%" % (100 * correct / total))
+        print(
+            "Accuracy of the network on the 10000 test images: %d %%"
+            % (100 * correct / total)
+        )
+        import gc
+
+        gc.collect()
+    print(
+        "Accuracy of the network on the 10000 test images: %d %%"
+        % (100 * correct / total)
+    )
+    print(
+        "Accuracy of the network on the 10000 test images: %d %%"
+        % (100 * correct / total)
+    )

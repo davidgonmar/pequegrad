@@ -163,11 +163,13 @@ class Tensor:
         for node in reversed(nodes):
             if node._ctx is not None and node.requires_grad:
                 node._ctx.backward()
-                if not retain_ctx:
-                    node._ctx = None
                 assert (
                     node._grad.shape == node.shape
                 ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}, tensor: {node}"
+                if not retain_ctx:
+                    node._ctx = None
+                    node._grad = None
+                
 
     @property
     def grad(self):
@@ -524,14 +526,51 @@ class Tensor:
         # concatenation of the channels, so we need to reshape to 'divide' the channels
         unfolded = unfolded.reshape(
             (
-                unfolded.shape[0], # batch
-                self.shape[1], # channels
-                kernel_size[0] * kernel_size[1], # kernel size 1 * kernel size 2
-                unfolded.shape[-1], # unfolded shape ('number of windows')
+                unfolded.shape[0],  # batch
+                self.shape[1],  # channels
+                kernel_size[0] * kernel_size[1],  # kernel size 1 * kernel size 2
+                unfolded.shape[-1],  # unfolded shape ('number of windows')
             )
         )
         maxed = unfolded.mean(2)
-        return maxed.reshape(new_shape) # once we have the mean, we reshape to the new shape
+        return maxed.reshape(
+            new_shape
+        )  # once we have the mean, we reshape to the new shape
+
+    def local_response_norm(
+        self, size: int, alpha: float, beta: float, k: float
+    ) -> "Tensor":
+        """
+        Returns the local response normalization of the tensor
+
+        Args:
+            size: The size of the normalization window
+            alpha: Multiplicative factor
+            beta: Exponent
+            k: Additive factor
+        """
+
+        assert (
+            self.dim == 4
+        ), "local_response_norm is only supported for tensors with 4 dimensions"
+
+        # input of shape (batch, channels, height, width)
+        # we need to normalize accross channels
+
+        # first, pad the input so that we can calculate the normalization for the borders
+        # (so the normalized output has the same shape as the input)
+        pad = (size - 1) // 2
+        padded = self.pad_constant((pad, pad, pad, pad), constant=0)
+
+        # shape self: (batch, channels, height, width) -> (batch, size * size * channels, height, width)
+        unfolded = padded.unfold((size, size), stride=1).reshape(
+            (self.shape[0], -1, self.shape[2], self.shape[3])
+        )
+
+        # shape unfolded: (batch, size * size * channels, height, width) -> (batch, 1, height, width)
+        norm_factor = (unfolded**2).sum(1, keepdim=True) * alpha / size + k
+
+        return self / norm_factor**beta
 
     def unfold(
         self,

@@ -145,6 +145,15 @@ class Reshape(NonStatefulModule):
         return input.reshape(self.shape)
 
 
+class LocalResponseNorm(NonStatefulModule):
+    def __init__(self, size, alpha=1e-4, beta=0.75, k=2):
+        self.size = size
+        self.alpha = alpha
+        self.beta = beta
+        self.k = k
+
+    def forward(self, input: Tensor) -> Tensor:
+        return input.local_response_norm(self.size, self.alpha, self.beta, self.k)
 class Sequential(StatefulModule):
     def __init__(self, *args: Union[StatefulModule, NonStatefulModule]):
         super().__init__()
@@ -154,3 +163,4 @@ class Sequential(StatefulModule):
         for module in self.modules:
             input = module.forward(input)
         return input
+

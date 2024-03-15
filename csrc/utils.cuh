@@ -69,10 +69,10 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
 }
 
 #define PG_CUDA_KERNEL_END                                                     \
-  do {\
-    CHECK_CUDA(cudaDeviceSynchronize());                                                                      \
+  do {                                                                         \
+    CHECK_CUDA(cudaDeviceSynchronize());                                       \
     CHECK_CUDA(cudaGetLastError());                                            \
-                                          \
+                                                                               \
   } while (0)
 
 template <typename T> std::string vec_to_string(const std::vector<T> &vec) {

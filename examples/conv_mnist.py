@@ -117,7 +117,7 @@ if __name__ == "__main__":
             backend="cuda" if CUDA else "np"
         )
         start = time.time()
-        train(model, X_train, y_train, epochs=200, batch_size=512)
+        train(model, X_train, y_train, epochs=13, batch_size=512)
         print(f"Time taken to train: {(time.time() - start):.2f}s")
 
         print("Evaluating model...", end="\r")
