@@ -163,6 +163,8 @@ class Tensor:
         for node in reversed(nodes):
             if node._ctx is not None and node.requires_grad:
                 node._ctx.backward()
+                if not retain_ctx:
+                    node._ctx = None
                 assert (
                     node._grad.shape == node.shape
                 ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}, tensor: {node}"

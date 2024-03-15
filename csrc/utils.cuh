@@ -15,6 +15,8 @@
       std::ostringstream oss;                                                  \
       oss << "CUDA error " << _err << " on file/line " << __FILE__ << ":"      \
           << __LINE__ << " " << cudaGetErrorString(_err);                      \
+      std::cout << oss.str() << std::endl;                                     \
+      throw std::runtime_error(oss.str());                                     \
     }                                                                          \
   } while (0)
 
@@ -67,9 +69,10 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
 }
 
 #define PG_CUDA_KERNEL_END                                                     \
-  do {                                                                         \
+  do {\
+    CHECK_CUDA(cudaDeviceSynchronize());                                                                      \
     CHECK_CUDA(cudaGetLastError());                                            \
-    CHECK_CUDA(cudaDeviceSynchronize());                                       \
+                                          \
   } while (0)
 
 template <typename T> std::string vec_to_string(const std::vector<T> &vec) {

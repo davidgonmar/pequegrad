@@ -123,7 +123,7 @@ class NonStatefulModule:
 
 class MaxPool2d(NonStatefulModule):
     def __init__(
-        self, kernel_size: Union[int, tuple], stride: Union[int, tuple] = (1, 1)
+        self, kernel_size: Union[int, tuple], stride: Union[int, tuple] = None
     ):
         self.kernel_size = kernel_size
         self.stride = stride

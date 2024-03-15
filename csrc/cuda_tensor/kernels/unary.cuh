@@ -57,7 +57,7 @@ __global__ void astype_kernel(const size_t *in_strides, const size_t *in_shape,
   
   // 'out' is assumed to be contiguous in memory, and have the same shape as 'in'
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
-  if (get_max_idx(in_shape, num_dims) < idx)
+  if (get_max_idx(in_shape, num_dims) <= idx)
     return;
   int in_idx = get_idx_from_strides<InT>(in_shape, in_strides, num_dims, idx);
 

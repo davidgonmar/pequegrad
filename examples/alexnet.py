@@ -79,13 +79,13 @@ trainset = torchvision.datasets.CIFAR100(
     root="./data", train=True, download=True, transform=transform
 )
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=4, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=48, shuffle=True)
 
 testset = torchvision.datasets.CIFAR100(
     root="./data", train=False, download=True, transform=transform
 )
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False)
+testloader = torch.utils.data.DataLoader(testset, batch_size=48, shuffle=False)
 
 
 # train the model
@@ -98,14 +98,17 @@ for epoch in range(10):
     for i, data in enumerate(trainloader, 0):
         inputs, labels = data
 
-        inputs = Tensor(inputs.numpy(), backend="cuda")
-        labels = Tensor(labels.numpy(), backend="cuda")
+        inputs = Tensor(inputs.numpy().astype("float32"), backend="cuda")
+        labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
 
-        optim.reset_grad()
         outputs = model(inputs)
+
         loss = outputs.cross_entropy_loss_indices(labels)
         print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
         loss.backward()
         optim.step()
         if i % 100 == 0:
             print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
+        # this seems to be necessary to avoid memory leaks
+        import gc
+        gc.collect()
