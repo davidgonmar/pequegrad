@@ -66,7 +66,8 @@ class AlexNet(nn.StatefulModule):
 
 import torch
 import torchvision
-
+import datetime
+import numpy as np
 transform = torchvision.transforms.Compose(
     [
         torchvision.transforms.ToTensor(),
@@ -88,27 +89,79 @@ testset = torchvision.datasets.CIFAR100(
 testloader = torch.utils.data.DataLoader(testset, batch_size=48, shuffle=False)
 
 
+import argparse
+
 # train the model
+
+
+# allow to continue training from a checkpoint
+parser = argparse.ArgumentParser(description="Train AlexNet on CIFAR-100")
+
+parser.add_argument(
+    "--checkpoint",
+    type=str,
+    default=None,
+    help="Path to a checkpoint file to load and continue training",
+)
+
+parser.add_argument(
+    "--test",
+    action="store_true",
+    help="Run the model on the test set after training",
+
+)
+
+parser.add_argument(
+    "--epochs",
+    type=int,
+    default=10,
+    help="Number of epochs to train the model",
+)
 
 model = AlexNet(num_classes=100).to("cuda")
 
-optim = SGD(model.parameters(), lr=0.01)
+args = parser.parse_args()
 
-for epoch in range(10):
-    for i, data in enumerate(trainloader, 0):
-        inputs, labels = data
+if args.checkpoint is not None:
+    model.load(args.checkpoint)
 
-        inputs = Tensor(inputs.numpy().astype("float32"), backend="cuda")
-        labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
+if not args.test:
+    optim = SGD(model.parameters(), lr=0.01)
 
-        outputs = model(inputs)
+    for epoch in range(args.epochs):
+        for i, data in enumerate(trainloader, 0):
+            inputs, labels = data
 
-        loss = outputs.cross_entropy_loss_indices(labels)
-        print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
-        loss.backward()
-        optim.step()
-        if i % 100 == 0:
+            inputs = Tensor(inputs.numpy().astype("float32"), backend="cuda")
+            labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
+
+            outputs = model(inputs)
+
+            loss = outputs.cross_entropy_loss_indices(labels)
             print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
-        # this seems to be necessary to avoid memory leaks
-        import gc
-        gc.collect()
+            loss.backward()
+            optim.step()
+            if i % 100 == 0:
+                print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
+                # format day_month_hour_minute
+                model.save("alexnet_checkpoint_{}.pkl".format(datetime.datetime.now().strftime("%d_%m_%H_%M")))
+            # this seems to be necessary to avoid memory leaks
+            import gc
+            gc.collect()
+
+if args.test:
+    correct = 0
+    total = 0
+    for data in testloader:
+            images, labels = data
+            images = Tensor(images.numpy().astype("float32"), backend="cuda")
+            labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
+            outputs = model(images)
+            total += labels.shape[0]
+            correct += np.sum(outputs.numpy().argmax(1) == labels.numpy())
+
+            print("Accuracy of the network on the 10000 test images: %d %%" % (100 * correct / total))
+            import gc
+            gc.collect()
+    print("Accuracy of the network on the 10000 test images: %d %%" % (100 * correct / total))
+    print("Accuracy of the network on the 10000 test images: %d %%" % (100 * correct / total))
