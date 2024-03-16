@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor, CUDA_AVAILABLE
-from pequegrad.modules import Linear, Conv2d, StatefulModule
+from pequegrad.modules import Linear, Conv2d, StatefulModule, Dropout
 import os
 import tempfile
 import pytest
@@ -104,3 +104,19 @@ class TestModules:
             assert p1.backend == "np"
             assert p4.backend == "cuda"
             np.testing.assert_allclose(p1.numpy(), p4.numpy())
+
+    # test dropout behaviour during training and evaluation
+    def test_dropout(self):
+        # evaluate dropout during eval. It computes identity
+        m = Dropout(0.5)
+        m.eval()
+        x = Tensor.ones((10, 10))
+        y = m.forward(x)
+        assert np.all(y.numpy() == 1.0)
+
+        # evaluate dropout during training. It computes a mask + scaling of 1/(1-p)
+
+        m.train()
+        y = m.forward(x)
+        # so out can be either 0 or 2
+        assert np.all((y.numpy() == 0) | (y.numpy() == 2))

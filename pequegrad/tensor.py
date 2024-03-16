@@ -169,7 +169,6 @@ class Tensor:
                 if not retain_ctx:
                     node._ctx = None
                     node._grad = None
-                
 
     @property
     def grad(self):
@@ -650,6 +649,18 @@ class Tensor:
         std = (variance + eps).sqrt()
 
         return (self - mean) / std
+
+    # we pass training here to allow user to MANUALLY control dropout
+    # but in modules.Dropout, we will use the context manager to control dropout
+    def dropout(self, p=0.5, training=True):
+        """Applies dropout to the input"""
+        if training:
+            mask = Tensor(
+                np.random.binomial(1, 1 - p, size=self.shape), backend=self.backend
+            ) / (1 - p)
+            return self * mask
+        else:
+            return self
 
     @property
     def shape(self):

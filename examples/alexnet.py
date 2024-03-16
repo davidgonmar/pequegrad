@@ -44,10 +44,10 @@ class AlexNet(nn.StatefulModule):
 
         # Classifier: N x 256 x 6 x 6 -> N x num_classes
         self.classifier = nn.Sequential(
-            # nn.Dropout(p=0.5),
+            nn.Dropout(p=0.5),
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(),
-            # nn.Dropout(p=0.5),
+            nn.Dropout(p=0.5),
             nn.Linear(4096, 4096),
             nn.ReLU(),
             nn.Linear(4096, num_classes),
@@ -57,7 +57,6 @@ class AlexNet(nn.StatefulModule):
         x = self.features(x)
         # Flattens the tensor from N x 256 x 6 x 6 to N x 9216
         x = x.reshape((x.shape[0], 256 * 6 * 6))
-        assert x.shape[1] == 256 * 6 * 6
         x = self.classifier(x)
         return x
 

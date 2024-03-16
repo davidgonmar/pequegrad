@@ -1,7 +1,7 @@
 from pequegrad.extra.mnist import get_mnist_dataset
 import numpy as np
 from pequegrad.optim import Adam
-from pequegrad.modules import Linear,StatefulModule
+from pequegrad.modules import Linear, StatefulModule
 from pequegrad.context import no_grad
 import argparse
 import time
@@ -73,7 +73,9 @@ if __name__ == "__main__":
     else:
         mlp.to("np")
         print("Using CPU")
-    X_train, y_train, X_test, y_test = get_mnist_dataset(backend="np" if not USE_CUDA else "cuda")
+    X_train, y_train, X_test, y_test = get_mnist_dataset(
+        backend="np" if not USE_CUDA else "cuda"
+    )
     if MODE == "train":
         print("Training the model")
         start = time.time()

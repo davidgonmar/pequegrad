@@ -3,6 +3,7 @@ from pequegrad.backend import NumpyTensor, CudaTensor
 import numpy as np
 from typing import List, Union
 import pickle
+from pequegrad.context import pequegrad_context
 
 
 class ModuleParam(Tensor):
@@ -17,10 +18,33 @@ def kaiming_init(shape):
 
 class StatefulModule:
     _parameters: List[ModuleParam] = None
+    _training: bool = True
+    _submodules: List["StatefulModule"] = None
 
     @property
     def backend(self):
         return self.parameters()[0].backend if len(self.parameters()) > 0 else None
+
+    def _propagate_training(self):
+        if self._submodules is None:
+            self._search_parameters_and_submodules()
+        for m in self._submodules:
+            m._training = self._training
+            m._propagate_training()
+
+    def train(self):
+        self._training = True
+        self._propagate_training()
+
+    def eval(self):
+        self._training = False
+        self._propagate_training()
+
+    @property
+    def training(self):
+        if pequegrad_context.force_training is not None:
+            return pequegrad_context.force_training
+        return self._training
 
     def save(self, path):
         params = [p.numpy() for p in self.parameters()]
@@ -31,41 +55,46 @@ class StatefulModule:
     def load(self, path):
         with open(path, "rb") as f:
             d = pickle.load(f)
-            loaded_params = []
             orig_backend = self.parameters()[0].backend
             for p, p_loaded in zip(self.parameters(), d["params"]):
+                print(p, p_loaded)
                 p.assign(
                     NumpyTensor(p_loaded)
                     if orig_backend == "np"
                     else CudaTensor(p_loaded)
                 )
-            self._parameters = loaded_params  # force re-creation of the parameters list
 
     def to(self, backend):
         for p in self.parameters():
             p.to_(backend)
         return self
 
-    def _search_parameters(self):
+    def _search_parameters_and_submodules(self):
         params = []
+        submodules = []
         for p in self.__dict__.values():
             if isinstance(p, ModuleParam):
                 params.append(p)
             elif isinstance(p, StatefulModule):
-                params.extend(p._search_parameters())
+                params.extend(p._search_parameters_and_submodules()[0])
+                submodules.append(p)
             elif isinstance(p, (list, tuple)):  # search in lists and tuples
                 for pp in p:
                     if isinstance(pp, StatefulModule):
-                        params.extend(pp._search_parameters())
+                        params.extend(pp._search_parameters_and_submodules()[0])
+                        submodules.append(pp)
                     elif isinstance(pp, ModuleParam):
                         params.append(pp)
 
-        return params
+        self._parameters = params
+        self._submodules = submodules
+
+        return params, submodules
 
     def parameters(self):
         # first call to parameters, we need to retrieve them, then they are cached
         if not self._parameters:
-            self._parameters = self._search_parameters()
+            self._search_parameters_and_submodules()
         return self._parameters
 
     def reset_grad(self):
@@ -154,6 +183,8 @@ class LocalResponseNorm(NonStatefulModule):
 
     def forward(self, input: Tensor) -> Tensor:
         return input.local_response_norm(self.size, self.alpha, self.beta, self.k)
+
+
 class Sequential(StatefulModule):
     def __init__(self, *args: Union[StatefulModule, NonStatefulModule]):
         super().__init__()
@@ -164,3 +195,11 @@ class Sequential(StatefulModule):
             input = module.forward(input)
         return input
 
+
+class Dropout(StatefulModule):
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def forward(self, input: Tensor) -> Tensor:
+        print(self.training)
+        return input.dropout(self.p, self.training)
