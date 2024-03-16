@@ -57,7 +57,6 @@ class StatefulModule:
             d = pickle.load(f)
             orig_backend = self.parameters()[0].backend
             for p, p_loaded in zip(self.parameters(), d["params"]):
-                print(p, p_loaded)
                 p.assign(
                     NumpyTensor(p_loaded)
                     if orig_backend == "np"
@@ -201,5 +200,4 @@ class Dropout(StatefulModule):
         self.p = p
 
     def forward(self, input: Tensor) -> Tensor:
-        print(self.training)
         return input.dropout(self.p, self.training)
