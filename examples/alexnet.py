@@ -1,6 +1,11 @@
 from pequegrad.tensor import Tensor
 import pequegrad.modules as nn
 from pequegrad.optim import SGD
+import argparse
+import torch
+import torchvision
+import datetime
+import numpy as np
 
 
 class AlexNet(nn.StatefulModule):
@@ -63,10 +68,6 @@ class AlexNet(nn.StatefulModule):
 
 # download cifar from torch
 
-import torch
-import torchvision
-import datetime
-import numpy as np
 
 transform = torchvision.transforms.Compose(
     [
@@ -80,18 +81,13 @@ trainset = torchvision.datasets.CIFAR100(
     root="./data", train=True, download=True, transform=transform
 )
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=16, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=28, shuffle=True)
 
 testset = torchvision.datasets.CIFAR100(
     root="./data", train=False, download=True, transform=transform
 )
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False)
-
-
-import argparse
-
-# train the model
+testloader = torch.utils.data.DataLoader(testset, batch_size=28, shuffle=False)
 
 
 # allow to continue training from a checkpoint
@@ -118,6 +114,7 @@ parser.add_argument(
 )
 
 model = AlexNet(num_classes=100).to("cuda")
+
 
 args = parser.parse_args()
 

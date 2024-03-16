@@ -232,9 +232,14 @@ class Tensor:
         return cls(np.random.normal(mean, std, shape), requires_grad=requires_grad)
 
     @classmethod
-    def uniform(cls, shape: _Shape, low=0.0, high=1.0, requires_grad=False) -> "Tensor":
+    def uniform(
+        cls, shape: _Shape, low=0.0, high=1.0, requires_grad=False, dtype="float32"
+    ) -> "Tensor":
         """Returns a tensor of random numbers with the given shape"""
-        return cls(np.random.uniform(low, high, shape), requires_grad=requires_grad)
+        return cls(
+            np.random.uniform(low, high, shape).astype(dtype),
+            requires_grad=requires_grad,
+        )
 
     @classmethod
     def randn(cls, shape: _Shape, requires_grad=False) -> "Tensor":
@@ -263,6 +268,7 @@ class Tensor:
         """
         Returns a tensor with the given dtype
         """
+
         return Tensor(
             self.data.astype(dtype),
             requires_grad=self.requires_grad,
@@ -553,7 +559,7 @@ class Tensor:
             self.dim == 4
         ), "local_response_norm is only supported for tensors with 4 dimensions"
 
-        # input of shape (batch, channels, height, width)
+        # input of shape (batch, in_channels, height, width)
         # we need to normalize accross channels
 
         # first, pad the input so that we can calculate the normalization for the borders
@@ -561,13 +567,13 @@ class Tensor:
         pad = (size - 1) // 2
         padded = self.pad_constant((pad, pad, pad, pad), constant=0)
 
-        # shape self: (batch, channels, height, width) -> (batch, size * size * channels, height, width)
+        # shape self: (batch, in_channels, height, width) -> (batch, size * size * in_channels, height, width)
         unfolded = padded.unfold((size, size), stride=1).reshape(
             (self.shape[0], -1, self.shape[2], self.shape[3])
         )
 
-        # shape unfolded: (batch, size * size * channels, height, width) -> (batch, 1, height, width)
-        norm_factor = (unfolded**2).sum(1, keepdim=True) * alpha / size + k
+        # shape unfolded: (batch, size * size * in_channels, height, width) -> (batch, 1, height, width)
+        norm_factor = (unfolded**2).mean(1, keepdim=True) * alpha + k
 
         return self / norm_factor**beta
 
