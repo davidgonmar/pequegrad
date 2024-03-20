@@ -1,103 +1,62 @@
-from typing import Union
-from pequegrad.tensor import Tensor
-from .function import Function
+from .function import Function, BackendTensor
 
 
 class Pow(Function):
-    def __init__(self, base: Tensor, exponent: Union[float, int, Tensor]):
-        self.base = base
-        if not isinstance(exponent, Tensor):
-            self.exponent = {"data": exponent}
-        self.exponent = exponent
-
-        if isinstance(exponent, Tensor):
-            super().__init__(base, exponent)
-        else:
-            super().__init__(base)
-
-    def forward(self):
-        self.ret = Tensor(
-            self.base.data.power(self.exponent.data),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
+    def forward(self, base: BackendTensor, exponent: BackendTensor):
+        self.base, self.exponent = (
+            (base, exponent) if self.requires_grad else (None, None)
         )
-        return self.ret
+        ret = base.power(exponent)
+        if self.requires_grad:
+            self.ret = ret
+        return ret
 
-    def backward(self):
-        if self.base.requires_grad:
-            self.base._grad += Tensor(
-                self.ret.grad.data
-                * self.exponent.data
-                * self.base.data.power(self.exponent.data - 1),
-                backend=self.backend,
-            )
-        if self.exponent.requires_grad:
-            self.exponent._grad += Tensor(
-                self.ret.grad.data * self.ret.data * self.base.data.log(),
-                backend=self.backend,
-            )
+    def backward(self, grad_output: BackendTensor):
+        base_grad, exponent_grad = None, None
+        if self.needs_input_grad[0]:
+            base_grad = grad_output * self.exponent * self.base.power(self.exponent - 1)
+        if self.needs_input_grad[1]:
+            exponent_grad = grad_output * self.ret * self.base.log()
+
+        return base_grad, exponent_grad
 
 
 class Log(Function):
-    def __init__(self, a: Tensor):
-        super().__init__(a)
-        self.a = a
+    def forward(self, a: BackendTensor):
+        self.a = a if self.requires_grad else None
+        return a.log()
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.log(),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-
-    def backward(self):
-        if self.a.requires_grad:
-            self.a._grad += self.ret.grad / self.a.data
+    def backward(self, grad_output: BackendTensor):
+        if self.requires_grad:
+            return grad_output / self.a
+        return None
 
 
 class Exp(Function):
-    def __init__(self, a: Tensor):
-        super().__init__(a)
-        self.a = a
+    def forward(self, a: BackendTensor):
+        ret = a.exp()
+        if self.requires_grad:
+            self.a = a
+            self.ret = ret
+        return ret
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.exp(),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-
-    def backward(self):
-        if self.a.requires_grad:
-            self.a._grad += self.ret.grad * Tensor(self.ret.data, backend=self.backend)
+    def backward(self, grad_output: BackendTensor):
+        if self.requires_grad:
+            return grad_output * self.ret
+        return None
 
 
 class ReLU(Function):
     """Implements the ReLU activation function: ReLU(x) = max(0, x)"""
 
-    def __init__(self, a: Tensor):
-        super().__init__(a)
-        self.a = a
-        self.ret: Tensor = None
+    def forward(self, a: BackendTensor):
+        if self.requires_grad:
+            self.a = a
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.el_wise_max(0),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-        return self.ret
+        return a.el_wise_max(0)
 
-    def backward(self):
+    def backward(self, grad_output: BackendTensor):
         # grad = 1 if a > 0 else 0
-        if self.a.requires_grad:
-            concrete_class = self.a.data.__class__
-            self.a._grad += (
-                Tensor(
-                    # steal the concrete class from tensor backend
-                    concrete_class.where_static(self.a.data > 0, 1, 0),
-                    requires_grad=False,
-                    backend=self.backend,
-                )
-                * self.ret.grad
-            )
+        if self.requires_grad:
+            concrete_class = self.a.__class__
+            return concrete_class.where_static(self.a > 0, 1, 0) * grad_output

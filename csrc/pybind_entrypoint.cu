@@ -429,7 +429,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            })
       .def(
           "im2col",
-          [](const CudaTensor &arr, shape_t kernel_shape, py::handle _stride,
+          [](const CudaTensor &arr, shape_t kernel_ shape, py::handle _stride,
              py::handle _dilation) {
             shape_t stride;
             shape_t dilation;
@@ -544,19 +544,20 @@ PYBIND11_MODULE(pequegrad_cu, m) {
                throw std::runtime_error("Unsupported data type");
              }
            })
-      .def("dtype",
-           [](const CudaTensor &arr) -> py::dtype {
-             switch (arr.dtype) {
-             case DType::Float32:
-               return py::dtype::of<float>();
-             case DType::Int32:
-               return py::dtype::of<int>();
-             case DType::Float64:
-               return py::dtype::of<double>();
-             default:
-               throw std::runtime_error("Unsupported data type");
-             }
-           })
+      .def_property_readonly("dtype",
+                             [](const CudaTensor &arr) -> std::string {
+                               switch (arr.dtype) {
+                               case DType::Float32:
+                                 return "float32";
+                               case DType::Int32:
+                                 return "int32";
+                               case DType::Float64:
+                                 return "float64";
+                               default:
+                                 throw std::runtime_error(
+                                     "Unsupported data type");
+                               }
+                             })
       .def(
           "slice",
           [](const CudaTensor &arr, const py::tuple slices) {

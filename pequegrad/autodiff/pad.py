@@ -1,17 +1,13 @@
-from pequegrad.tensor import Tensor, _Shape
-from pequegrad.autodiff.function import Function
+from pequegrad.tensor import _Shape
+from pequegrad.autodiff.function import Function, BackendTensor
 
 
 class PadConstant(Function):
-    def __init__(self, x: Tensor, pad: _Shape, constant: int = 0):
-        super().__init__(x)
-        self.x = x
-        self.pad = pad
-        self.constant = constant
-
-    def forward(self):
-        pad = list(self.pad)  # for a 1d pad on last dim, it will be (padleft, padright)
-        new_shape = list(self.x.shape)
+    def forward(
+        self, x: BackendTensor, pad: _Shape, constant: float = 0.0
+    ) -> BackendTensor:
+        pad = list(pad)  # for a 1d pad on last dim, it will be (padleft, padright)
+        new_shape = list(x.shape)
 
         padpairs = list(
             zip(pad[::2], pad[1::2])
@@ -27,11 +23,12 @@ class PadConstant(Function):
         for i, (padleft, padright) in enumerate(padpairs):
             new_shape[i] += padleft + padright
 
-        new_t = Tensor.fill(
+        cls = x.__class__
+
+        new_t = cls.fill(
             new_shape,
-            self.constant,
-            requires_grad=self.requires_grad,
-            backend=self.backend,
+            constant,
+            dtype=x.dtype,
         )
 
         slices = [slice(int(pad[0]), int(-pad[1])) for pad in padpairs]
@@ -41,12 +38,11 @@ class PadConstant(Function):
                 slices[i] = slice(None, None, None)  # same as a[:]
 
         slices = tuple(slices)
-        self.slices = slices  # save for backward
-        new_t[slices] = self.x.data
+        new_t[slices] = x
 
-        self.ret = new_t
-        return self.ret
+        self.slices = slices
+        return new_t
 
-    def backward(self):
-        if self.x.requires_grad:
-            self.x._grad += self.ret.grad[self.slices]
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.requires_grad:
+            return grad_output[self.slices]

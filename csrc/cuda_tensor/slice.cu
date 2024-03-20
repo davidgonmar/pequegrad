@@ -29,11 +29,6 @@ Device_Slice convert_to_slice(const slice_item_t& item) {
 
 CudaTensor _slice_with_array(const CudaTensor &ten, const slice_t &_slices) {
     slice_t slices = _slices;
-    if (!ten.is_contiguous()) {
-        // we need to make the tensor contiguous
-        CudaTensor _ten = ten.as_contiguous();
-        return _slice_with_array(_ten, slices);
-    }
 
     shape_t new_shape;
     for (int i = 0; i < slices.size(); i++) {
@@ -171,11 +166,6 @@ CudaTensor CudaTensor::slice(const slice_t &slices) const {
 CudaTensor _assign_with_array(const CudaTensor &ten, const slice_t &_slices, const CudaTensor &_vals) {
     CudaTensor vals = _vals.astype(ten.dtype);
     slice_t slices = _slices;
-    if (!ten.is_contiguous()) {
-        // we need to make the tensor contiguous
-        CudaTensor _ten = ten.as_contiguous();
-        return _assign_with_array(_ten, slices, vals);
-    }
     // 'pad' the shape with same if the slices are less than the original shape
     if (slices.size() < ten.ndim()) {
         for (int i = slices.size(); i < ten.ndim(); i++) {

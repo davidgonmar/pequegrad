@@ -81,13 +81,13 @@ trainset = torchvision.datasets.CIFAR100(
     root="./data", train=True, download=True, transform=transform
 )
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=28, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=40, shuffle=True)
 
 testset = torchvision.datasets.CIFAR100(
     root="./data", train=False, download=True, transform=transform
 )
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=28, shuffle=False)
+testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False)
 
 
 # allow to continue training from a checkpoint
@@ -132,20 +132,17 @@ if not args.test:
             labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
 
             outputs = model(inputs)
-
             loss = outputs.cross_entropy_loss_indices(labels)
             print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
+            # format day_month_hour_minute
+            model.save(
+                "alexnet_checkpoint_{}.pkl".format(
+                    datetime.datetime.now().strftime("%d_%m_%H_%M")
+                )
+            )
             loss.backward()
             optim.step()
-            if i % 100 == 0:
-                print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
-                # format day_month_hour_minute
-                model.save(
-                    "alexnet_checkpoint_{}.pkl".format(
-                        datetime.datetime.now().strftime("%d_%m_%H_%M")
-                    )
-                )
-            # this seems to be necessary to avoid memory leaks
+
             import gc
 
             gc.collect()

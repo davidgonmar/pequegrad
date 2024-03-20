@@ -1,93 +1,46 @@
-from pequegrad.tensor import Tensor
 from typing import Tuple
-from .function import Function
+from .function import Function, BackendTensor
 import numpy as np
 
 
 class Unsqueeze(Function):
-    def __init__(self, a: Tensor, dim: int):
-        super().__init__(a)
-        self.a = a
+    def forward(self, a: BackendTensor, dim: int) -> BackendTensor:
         self.dim = dim
+        return a.expand_dims(axis=dim)
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.expand_dims(axis=self.dim),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-        return self.ret
-
-    def backward(self):
-        if self.a.requires_grad:
-            self.a._grad += Tensor(
-                self.ret.grad.data.squeeze(axis=self.dim), backend=self.backend
-            )
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.needs_input_grad[0]:
+            return grad_output.squeeze(axis=self.dim)
 
 
 class Squeeze(Function):
-    def __init__(self, a: Tensor, dim: int):
-        super().__init__(a)
-        self.a = a
+    def forward(self, a: BackendTensor, dim: int) -> BackendTensor:
         self.dim = dim
+        return a.squeeze(axis=dim)
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.squeeze(axis=self.dim),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-        return self.ret
-
-    def backward(self):
-        if self.a.requires_grad:
-            self.a._grad += Tensor(
-                self.ret.grad.data.expand_dims(axis=self.dim), backend=self.backend
-            )
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.needs_input_grad[0]:
+            return grad_output.expand_dims(axis=self.dim)
 
 
 class Permute(Function):
-    def __init__(self, a: Tensor, dims: Tuple[int, ...]):
-        super().__init__(a)
-        self.a = a
+    def forward(self, a: BackendTensor, dims: Tuple[int, ...]) -> BackendTensor:
         self.dims = dims
+        return a.permute(*dims)
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.permute(*self.dims),
-            requires_grad=self.requires_grad,
-            backend=self.a.device,
-        )
-
-        return self.ret
-
-    def backward(self):
-        bw_dims = np.argsort(
-            self.dims
-        )  # computes the indices that would sort the dims back
-        if self.a.requires_grad:
-            self.a._grad += Tensor(
-                self.ret.grad.data.permute(*bw_dims), backend=self.backend
-            )
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.needs_input_grad[0]:
+            bw_dims = np.argsort(
+                self.dims
+            )  # computes the indices that would sort the dims back
+            return grad_output.permute(*bw_dims)
 
 
 class Reshape(Function):
-    def __init__(self, input: Tensor, shape: Tuple[int, ...]):
-        super().__init__(input)
-        self.input = input
-        self.output_shape = shape
+    def forward(self, input: BackendTensor, shape: Tuple[int, ...]) -> BackendTensor:
         self.input_shape = input.shape
+        return input.reshape(*shape)
 
-    def forward(self) -> Tensor:
-        self.ret = Tensor(
-            self.input.data.reshape(*self.output_shape),
-            requires_grad=self.requires_grad,
-            backend=self.input.device,
-        )
-        return self.ret
-
-    def backward(self) -> Tensor:
-        if self.input.requires_grad:
-            self.input._grad += Tensor(
-                self.ret.grad.data, backend=self.backend
-            ).reshape(self.input_shape)
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.needs_input_grad[0]:
+            return grad_output.reshape(*self.input_shape)

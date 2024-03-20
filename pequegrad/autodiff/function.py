@@ -1,7 +1,9 @@
 from typing import Set, Tuple, Union
-from pequegrad.tensor import Tensor
+from pequegrad.tensor import Tensor, CudaTensor, NumpyTensor
 
 _Shape = Union[int, Tuple[int, ...]]
+
+BackendTensor = Union[CudaTensor, NumpyTensor]
 
 
 class Function:
@@ -16,7 +18,8 @@ class Function:
             list(filter(lambda t: not isinstance(t, Tensor), tensors))
         )
         self.requires_grad = any(t.requires_grad for t in tensors)
-        self.children = set(t for t in tensors)
+        self.needs_input_grad = [t.requires_grad for t in tensors]
+        self.children = [t for t in tensors if t.requires_grad]
 
     def forward(self):
         raise NotImplementedError
@@ -49,12 +52,13 @@ class Function:
 
         cls.backend = device
 
-        f = cls(*tensors, **kwargs)
-        f.forward()
-        f.ret._ctx = f
+        f = cls(*tensors)
+        ret = f.forward(*[t.data for t in tensors], **kwargs)
+        ret = Tensor(ret, backend=device, requires_grad=f.requires_grad)
+        ret._ctx = f if f.requires_grad else None
 
         assert (
-            f.ret.device == device
-        ), f"function output device {f.ret.device} does not match input device {device}"
+            ret.device == device
+        ), f"function output device {ret.device} does not match input device {device}"
 
-        return f.ret
+        return ret

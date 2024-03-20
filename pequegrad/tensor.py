@@ -15,15 +15,17 @@ class Tensor:
     """
 
     backend: _Backend
+    _data: _Backend
+    requires_grad: bool
+    _grad: Type["Tensor"]
+    _ctx: Optional["Function"]
 
     def contiguous(self):
         return self.data.contiguous()
 
     @property
     def dtype(self):
-        return (
-            self.data.dtype() if isinstance(self.data, CudaTensor) else self.data.dtype
-        )
+        return self.data.dtype
 
     def __init__(self, data: _ArrayLike, requires_grad=False, backend="np"):
         # Internally, we store the data as a numpy array\
@@ -54,8 +56,7 @@ class Tensor:
         # If the tensor was created under a no_grad context, it doesn't require gradients
         self.requires_grad: bool = requires_grad and pequegrad_context.grad_enabled
 
-        self._grad: Type[Tensor] = GradPlaceholder() if self.requires_grad else None
-
+        self._grad: Type[Tensor] = None
         # The context is the function that created this tensor, along with its inputs. The function
         # is responsible for assigning itself to the _ctx attribute of the tensor
         self._ctx: Optional[Function] = None
@@ -89,11 +90,11 @@ class Tensor:
         # if the grad is not initialized, we don't need to move it
         if backend == "np":
             self._data = NumpyTensor(self.data.numpy())
-            if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
+            if self._grad is not None:
                 self._grad.to_(backend)
         elif backend == "cuda":
             self._data = CudaTensor(self.data.numpy())
-            if self._grad is not None and not isinstance(self._grad, GradPlaceholder):
+            if self._grad is not None:
                 self._grad.to_(backend)
 
     @property
@@ -116,7 +117,9 @@ class Tensor:
     def __setitem__(self, key, value):
         self.data[key] = value
 
-    def backward(self, gradient: Type["Tensor"] = None, retain_ctx: bool = False):
+    def backward(
+        self, gradient: Type["Tensor"] = None, retain_ctx: bool = False
+    ) -> None:
         """
         Backpropagate the gradient through the graph.
         If gradient is not provided, the gradient of the output node is assumed to be 1.0
@@ -162,13 +165,30 @@ class Tensor:
 
         for node in reversed(nodes):
             if node._ctx is not None and node.requires_grad:
-                node._ctx.backward()
+                grads = node._ctx.backward(node._grad.data)
+                grads = (
+                    [Tensor(g, backend=self.backend) for g in grads if g is not None]
+                    if isinstance(grads, tuple)
+                    else [Tensor(grads, backend=self.backend)]
+                    if grads is not None
+                    else []
+                )
+                for child, grad in zip(node._ctx.children, grads):
+                    if grad is not None:
+                        if child._grad is None:
+                            child._grad = grad
+                        else:
+                            child._grad += grad
                 assert (
                     node._grad.shape == node.shape
                 ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}, tensor: {node}"
                 if not retain_ctx:
-                    node._ctx = None
-                    node._grad = None
+                    del node._ctx
+                    del node._grad
+
+                    import gc
+
+                    gc.collect()
 
     @property
     def grad(self):
@@ -222,7 +242,7 @@ class Tensor:
             raise RuntimeError(
                 "cannot call reset_grad on a tensor that doesn't require grad"
             )
-        self._grad = GradPlaceholder()
+        self._grad = None
 
     ##### INITIALIZATION METHODS #####
 
@@ -735,28 +755,3 @@ from .autodiff import (  # noqa: E402 avoid circular imports
     Slice,
     PadConstant,
 )
-
-
-class GradPlaceholder(Tensor):
-    """
-    This works the following way. Tensor grads are usually initialized as a tensor of zeros. Why? So that in backpropagation,
-    we can accumulate incoming gradients like x._grad += Tensor(<calculated gradient of operation>)). However, that requires extra
-    memory and allocation (just to initialize it to zeros).
-    By doing this:
-    - We avoid unnecesary memory allocation for those 0 tensors (which means less memory consumption and no need to waste time allocating
-        it, resulting in a SIGNIFICANT speedup)
-    - We avoid the first add. Since (x.grad = Tensor.zeros(shape_like_this)) += Tensor(incoming_grad) is equivalent to doing just
-        x.grad = Tensor(incoming_grad), we also avoid the first 'Add' operation.
-    This is the same as initializing it to None, but then we have to check a lot of stuff, and this is more elegant.
-
-    TLDR: by not allocating a tensor with 0s and doing this, we avoid an initial 0s allocation and the first 'Add' operation.
-    """
-
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __repr__(self):
-        return "GradPlaceholder()"
-
-    def __add__(self, other):
-        return other

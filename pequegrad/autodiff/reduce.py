@@ -1,15 +1,9 @@
 from typing import Optional
 from pequegrad.tensor import Tensor
-from .function import Function
+from .function import Function, BackendTensor
 
 
 class ReduceFunction(Function):
-    def __init__(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
-        super().__init__(a)
-        self.a = a
-        self.dim = dim
-        self.keepdim = keepdim
-
     def _unreduce(self, x):
         # When keepdim is False, we need to insert a dimension of size 1 at the dimension we reduced over
         # so that broadcasting works correctly during the backward pass.
@@ -20,68 +14,56 @@ class ReduceFunction(Function):
 
 
 class Mean(ReduceFunction):
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.mean(axis=self.dim, keepdims=self.keepdim),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-        return self.ret
+    def forward(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
+        if self.requires_grad:
+            self.a = a
+            self.dim = dim
+            self.keepdim = keepdim
+        return a.mean(axis=dim, keepdims=keepdim)
 
-    def backward(self):
-        if self.a.requires_grad:
-            grad_broadcasted = self._unreduce(self.ret.grad.data)
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.needs_input_grad[0]:
+            grad_broadcasted = self._unreduce(grad_output)
             # Divide the gradient by the number of elements WE SUMMED OVER(not all elements)
             total_els = 1
             if self.dim is None:
-                total_els = self.a.data.size
+                total_els = self.a.size
             elif isinstance(self.dim, int):
                 total_els = self.a.shape[self.dim]
             else:
                 total_els = 1
                 for d in self.dim:
                     total_els *= self.a.shape[d]
-            self.a._grad += Tensor(grad_broadcasted, backend=self.backend) / total_els
+            return grad_broadcasted / total_els
 
 
 class Sum(ReduceFunction):
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.sum(axis=self.dim, keepdims=self.keepdim),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-        return self.ret
+    def forward(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
+        if self.requires_grad:
+            self.keepdim = keepdim
+            self.dim = dim
+            self.a = a
+        return a.sum(axis=dim, keepdims=keepdim)
 
-    def backward(
-        self,
-    ):
-        if self.a.requires_grad:
-            grad_broadcasted = self._unreduce(self.ret.grad.data)
-            self.a._grad += Tensor(grad_broadcasted, backend=self.backend)
+    def backward(self, grad_output: BackendTensor):
+        if self.needs_input_grad[0]:
+            return self._unreduce(grad_output)
 
 
 class Max(ReduceFunction):
-    def __init__(self, a: Tensor, dim: Optional[int] = None, keepdim: bool = False):
-        super().__init__(a)
-        self.a = a
-        self.dim = dim
-        self.keepdim = keepdim
+    def forward(
+        self, a: BackendTensor, dim: Optional[int] = None, keepdim: bool = False
+    ) -> BackendTensor:
+        if self.requires_grad:
+            self.a = a
+            self.dim = dim
+            self.keepdim = keepdim
+            self.ret = a.max(axis=dim, keepdims=keepdim)
+        return self.ret if self.requires_grad else a.max(axis=dim, keepdims=keepdim)
 
-    def forward(self):
-        self.ret = Tensor(
-            self.a.data.max(axis=self.dim, keepdims=self.keepdim),
-            requires_grad=self.requires_grad,
-            backend=self.backend,
-        )
-        return self.ret
+    def backward(self, grad_output: BackendTensor) -> BackendTensor:
+        if self.needs_input_grad[0]:
+            grad_broadcasted = self._unreduce(grad_output)
+            ret_broadcasted = self._unreduce(self.ret)
 
-    def backward(self):
-        if self.a.requires_grad:
-            grad_broadcasted = self._unreduce(self.ret.grad.data)
-            ret_broadcasted = self._unreduce(self.ret.data)
-
-            self.a._grad += Tensor(
-                (self.a.data == ret_broadcasted).where(grad_broadcasted, 0),
-                backend=self.backend,
-            )
+            return (self.a == ret_broadcasted).where(grad_broadcasted, 0)

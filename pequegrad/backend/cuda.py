@@ -36,7 +36,7 @@ def make_cuda_tensor(
             data = data.data
         else:
             raise ValueError(
-                f"Data must be a numpy array or CudaTensor, got {type(data)}"
+                f"Data must be a numpy array or CudaTensor, got {data} of type {type(data)}"
             )
     else:
         if isinstance(data, CudaTensor) and data.dtype == dtype:
