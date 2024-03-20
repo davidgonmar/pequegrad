@@ -429,7 +429,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            })
       .def(
           "im2col",
-          [](const CudaTensor &arr, shape_t kernel_ shape, py::handle _stride,
+          [](const CudaTensor &arr, shape_t kernel_shape, py::handle _stride,
              py::handle _dilation) {
             shape_t stride;
             shape_t dilation;

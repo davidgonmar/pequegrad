@@ -186,10 +186,6 @@ class Tensor:
                     del node._ctx
                     del node._grad
 
-                    import gc
-
-                    gc.collect()
-
     @property
     def grad(self):
         return self._grad
