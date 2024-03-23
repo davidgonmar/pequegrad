@@ -51,7 +51,6 @@ def test_model(model, X_test, Y_test):
             batch_X = X_test[i:end_idx]
             batch_Y = Y_test[i:end_idx]
             prediction = model.forward(batch_X)
-            
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
 
         return correct, len(X_test)

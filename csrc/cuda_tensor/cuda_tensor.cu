@@ -10,6 +10,9 @@
 
 
 bool CudaTensor::is_contiguous() const {
+  if (offset != 0) {
+    return false;
+  }
   if (strides.size() != shape.size()) {
     return false;
   }
@@ -45,18 +48,6 @@ CudaTensor CudaTensor::astype(DType new_type) const {
 
 int CudaTensor::ndim() const { return shape.size(); }
 
-
-std::string CudaTensor::to_string() const {
-  /*void *host = malloc(size * dtype_to_size(dtype));
-  CHECK_CUDA(
-      cudaMemcpy(host, get_base_ptr(), size * sizeof(T), cudaMemcpyDeviceToHost));
-  */
-  std::stringstream ss;
-  ss << "CudaTensor<" << dtype_to_string(dtype) << ">(" << size
-     << ") with shape " << vec_to_string(shape) << " and strides "
-     << vec_to_string(strides);
-  return ss.str();
-}
 
 CudaTensor CudaTensor::clone() const {
   CudaTensor out(size, shape, strides, dtype);

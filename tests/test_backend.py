@@ -654,6 +654,21 @@ class _Testbackend:
         x = class_backend(nparr)
         self._compare_with_numpy(x[slices], nparr[slices])
 
+    # test slicing with non-contiguous strides
+    @pytest.mark.parametrize(
+        "data",  # shape, slices
+        [
+            [(4, 4), (slice(0, 2), slice(1, 3))],
+        ],
+    )
+    @pytest.mark.parametrize("class_backend", backends_to_test)
+    def test_slicing_non_contiguous(self, data, class_backend):
+        shape, slices = data
+        nparr = np.random.rand(*shape).astype(self.dtype)
+        x = class_backend(nparr)
+        x = x.permute(1, 0)
+        nparr = nparr.transpose(1, 0)
+        self._compare_with_numpy(x[slices], nparr[slices], test_strides=False)
     # test assign
     @pytest.mark.parametrize(
         "data",  # shape, slices, assign_vals_shape
