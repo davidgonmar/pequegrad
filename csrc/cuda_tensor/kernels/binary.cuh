@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dtype.hpp"
-#include "utils.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 
 #define DEF_BIN_OP_KERNEL(NAME, FN, TYPE) \
 __global__ void NAME(\

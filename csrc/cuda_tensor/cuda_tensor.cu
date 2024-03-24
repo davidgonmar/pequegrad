@@ -3,7 +3,7 @@
 #include "cuda_tensor.cuh"
 #include "dtype.hpp"
 #include "kernels/all.cuh"
-#include "utils.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 #include <cmath>
 #include <iostream>
 #include <string>

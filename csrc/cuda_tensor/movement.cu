@@ -1,5 +1,5 @@
 #include "cuda_tensor.cuh"
-
+#include "shape.hpp"
 
 CudaTensor CudaTensor::reshape(const std::vector<int> &_new_shape) const {
   shape_t new_shape(_new_shape.size());
@@ -145,38 +145,10 @@ CudaTensor CudaTensor::unsqueeze(axis_t axis) const {
 }
 
 
-CudaTensor CudaTensor::broadcast_to(const shape_t _shape) const {
-  const shape_t shape_from = this->shape;
-  const shape_t shape_to = _shape;
-  // determine if we can broadcast
-  const int from_ndim = (const int)shape_from.size();
-  const int to_ndim = (const int)shape_to.size();
-  // cannot broadcast if the number of dimensions of the from array is greater
-  // than the number of dimensions of the to array
-  PG_CHECK_ARG(from_ndim <= to_ndim,
-               "from_ndim must be <= to_ndim, trying to broadcast from ",
-               vec_to_string(shape_from), " to ", vec_to_string(shape_to));
-
-  int new_size = 1;
-  shape_t new_strides(to_ndim, 0);
-  // reverse test if the dim is 1 or they are equal
-  for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
-    py::ssize_t dim_to = shape_to[i];
-    py::ssize_t dim_from =
-        (j >= 0) ? shape_from[j]
-                 : -1; // -1 means we 'ran' out of dimensions for j
-
-    PG_CHECK_ARG(dim_to == dim_from || dim_from == 1 || dim_from == -1,
-                 "got incompatible shapes: ", vec_to_string(shape_from),
-                 " cannot be broadcasted to ", vec_to_string(shape_to),
-                 ". In dimension ", i, " got dim_to=", dim_to,
-                 " and dim_from=", dim_from);
-
-    if (dim_from != 1 && dim_from != -1) {
-      new_strides[i] = strides[j];
-    }
-    new_size *= dim_to;
-  }
+CudaTensor CudaTensor::broadcast_to(const shape_t shape_to) const {
+  shape_t new_strides = get_strides_for_broadcasting(this->shape, this->strides,
+                                                     shape_to);
+  size_t new_size = std::accumulate(shape_to.begin(), shape_to.end(), 1, std::multiplies<size_t>());
   CudaTensor out(new_size, shape_to, new_strides, ptr, dtype);
   return out;
 }

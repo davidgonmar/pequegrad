@@ -2,26 +2,18 @@
 
 #include <iostream>
 #include <vector>
-
-#include "cuda_tensor.cuh"
+#include "shape.hpp"
 #include "kernels/all.cuh"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-
-
+#include "cuda_tensor/cuda_utils.cuh"
+#include "utils.hpp"
 
 #define MAX_THREADS_PER_BLOCK 512
 
 
 namespace py = pybind11;
-
-using shape_t = std::vector<size_t>;
-
-// for example, we might want to pass reduction indices around, and they can be
-// neagitve like array.sum(-1)
-using axis_t = int;
-using axes_t = std::vector<axis_t>;
 
 
 struct SliceFromSSS {

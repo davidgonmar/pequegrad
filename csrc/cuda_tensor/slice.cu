@@ -1,6 +1,6 @@
 #include "cuda_tensor.cuh"
 #include "kernels/slice.cuh"
-#include "utils.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 
 Device_Slice convert_to_slice(const slice_item_t& item) {
     Device_Slice slice;

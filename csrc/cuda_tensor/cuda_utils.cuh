@@ -35,7 +35,13 @@ __device__ int get_idx_from_strides(const size_t *shape, const size_t *strides,
   return idx / sizeof(T); // strides are in bytes
 }
 
-__device__ int get_max_idx(const size_t *shape, const size_t num_dims);
+static inline __device__ int get_max_idx(const size_t *shape, const size_t num_dims) {
+  int accum = 1;
+  for (int d = 0; d < num_dims; d++) {
+    accum *= shape[d];
+  }
+  return accum;
+}
 
 template <typename T> using cuda_unique_ptr = std::unique_ptr<T, void (*)(T *)>;
 
@@ -50,23 +56,6 @@ cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
                             [](T *ptr) { CHECK_CUDA(cudaFree(ptr)); });
 }
 
-template <typename T, typename... Args>
-void PG_CHECK_ARG(T cond, Args... args) {
-  if (!cond) {
-    std::ostringstream stream;
-    (stream << ... << args);
-    throw std::invalid_argument(stream.str());
-  }
-}
-
-template <typename T, typename... Args>
-void PG_CHECK_RUNTIME(T cond, Args... args) {
-  if (!cond) {
-    std::ostringstream stream;
-    (stream << ... << args);
-    throw std::runtime_error(stream.str());
-  }
-}
 
 #define PG_CUDA_KERNEL_END                                                     \
   do {                                                                         \
@@ -74,16 +63,3 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
     CHECK_CUDA(cudaGetLastError());                                            \
                                                                                \
   } while (0)
-
-template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
-  std::stringstream ss;
-  ss << "[";
-  for (size_t i = 0; i < vec.size(); ++i) {
-    ss << vec[i];
-    if (i < vec.size() - 1) {
-      ss << ", ";
-    }
-  }
-  ss << "]";
-  return ss.str();
-}

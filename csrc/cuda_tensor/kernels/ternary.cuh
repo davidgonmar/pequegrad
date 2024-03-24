@@ -1,6 +1,6 @@
 #pragma once
 #include "dtype.hpp"
-#include "utils.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 
 #define KERNEL_PARAMS_TER(T)                                                   \
   const size_t *first_strides, const size_t *second_strides,                   \

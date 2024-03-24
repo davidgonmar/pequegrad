@@ -1,7 +1,7 @@
 #pragma once
 
 #include "dtype.hpp"
-#include "utils.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 
 #define KERNEL_PARAMS_UNARY(T)                                                    \
   const size_t *in_strides, const size_t *shape, const size_t num_dims,        \

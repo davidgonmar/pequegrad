@@ -1,6 +1,6 @@
 #include "binary.cuh"
 #include "dtype.hpp"
-#include "utils.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 #include <cmath>
 
 DEF_BIN_OP_KERNEL(add_kernel, x + y, float)

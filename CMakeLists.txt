@@ -23,6 +23,7 @@ include_directories(csrc)
 
 file(GLOB CUDA_SOURCES 
     csrc/dtype.cpp
+    csrc/shape.cpp
     csrc/pybind_utils.cu
     csrc/utils.cu
     csrc/cuda_tensor/*.cu 
@@ -69,6 +70,7 @@ endif()
 
 file(GLOB CPU_SOURCES 
     csrc/dtype.cpp
+    csrc/shape.cpp
     csrc/pybind_utils.cu
     csrc/utils.cu
     csrc/cpu_tensor/*.cpp 

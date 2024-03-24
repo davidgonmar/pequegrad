@@ -103,11 +103,16 @@ class Tensor:
 
     @property
     def device(self) -> str:
-        return "cuda" if isinstance(self.data, CudaTensor) else "np"
+        return self.backend
 
+    __di = {
+        CudaTensor: "cuda",
+        NumpyTensor: "np",
+        CpuTensor: "cpu",
+    }
     @property
     def backend(self) -> str:
-        return "cuda" if isinstance(self.data, CudaTensor) else "np"
+        return self.__di[self.data.__class__]
 
     def __iter__(self):
         return iter(self.data)
