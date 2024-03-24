@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(pequegrad LANGUAGES CXX CUDA)
+project(pequegrad LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,33 +14,7 @@ execute_process(COMMAND python -m pybind11 --cmakedir
   OUTPUT_VARIABLE __pybind_path
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 find_package(pybind11 PATHS ${__pybind_path})
-
-# find cuda
-find_package(CUDA REQUIRED)
-
-include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 include_directories(csrc)
-
-file(GLOB CUDA_SOURCES 
-    csrc/dtype.cpp
-    csrc/shape.cpp
-    csrc/pybind_utils.cu
-    csrc/utils.cu
-    csrc/cuda_tensor/*.cu 
-    csrc/cuda_tensor/*.cpp 
-    csrc/cuda_tensor/**/*.cu  
-    csrc/entrypoints/pybind_entrypoint.cu
-)
-
-# add library from /csrc
-pybind11_add_module(pequegrad_cu ${CUDA_SOURCES})
-
-# Set the relocatable device code flag for nvcc
-set_property(TARGET pequegrad_cu PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-
-set_target_properties(pequegrad_cu PROPERTIES OUTPUT_NAME "pequegrad_cu")
-
-
 
 
 # ========================== CPU version ==========================
@@ -71,10 +45,7 @@ endif()
 file(GLOB CPU_SOURCES 
     csrc/dtype.cpp
     csrc/shape.cpp
-    csrc/pybind_utils.cu
-    csrc/utils.cu
     csrc/cpu_tensor/*.cpp 
-    csrc/cpu_tensor/**/*.cu 
     csrc/entrypoints/pybind_entrypoint.cpp
 )
 # Add an executable target
@@ -83,8 +54,51 @@ pybind11_add_module(pequegrad_cpu ${CPU_SOURCES})
 
 target_link_libraries(pequegrad_cpu PRIVATE ${BLAS_LIB})
 
-
 # Set C++ standard
 set_property(TARGET pequegrad_cpu PROPERTY CXX_STANDARD 17)
 
 set_target_properties(pequegrad_cpu PROPERTIES OUTPUT_NAME "pequegrad_cpu") 
+
+include(CheckCXXCompilerFlag)
+
+# use AVX2 if available
+if (MSVC)
+    target_compile_options(pequegrad_cpu PRIVATE "/arch:AVX2")
+else()
+    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+    if(COMPILER_SUPPORTS_AVX2)
+        target_compile_options(pequegrad_cpu PRIVATE "-mavx2")
+    endif()
+endif()
+
+
+# ========================== CUDA version ==========================
+
+if(1)
+    enable_language(CUDA)
+
+    find_package(CUDA REQUIRED)
+
+    include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
+    include_directories(csrc)
+
+    file(GLOB CUDA_SOURCES 
+        csrc/dtype.cpp
+        csrc/shape.cpp
+        csrc/pybind_utils.cu
+        csrc/utils.cu
+        csrc/cuda_tensor/*.cu 
+        csrc/cuda_tensor/*.cpp 
+        csrc/cuda_tensor/**/*.cu  
+        csrc/entrypoints/pybind_entrypoint.cu
+    )
+
+    # add library from /csrc
+    pybind11_add_module(pequegrad_cu ${CUDA_SOURCES})
+
+    # Set the relocatable device code flag for nvcc
+    set_property(TARGET pequegrad_cu PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+
+    set_target_properties(pequegrad_cu PROPERTIES OUTPUT_NAME "pequegrad_cu")
+
+endif()

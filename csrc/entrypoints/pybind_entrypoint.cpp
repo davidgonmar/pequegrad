@@ -67,6 +67,12 @@ py::class_<CpuTensor>(m, "CpuTensor").def("from_numpy",
            }).def_property_readonly("nbytes",
            [](const CpuTensor &arr) {
              return arr.nbytes;
+           }).def("log",
+           [](const CpuTensor &arr) {
+             return arr.log();
+           }).def("exp",
+           [](const CpuTensor &arr) {
+             return arr.exp();
            });
 
 

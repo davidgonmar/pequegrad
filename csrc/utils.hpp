@@ -25,7 +25,6 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
   }
 }
 
-
 template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
   std::stringstream ss;
   ss << "[";

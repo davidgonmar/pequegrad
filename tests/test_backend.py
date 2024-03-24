@@ -1,4 +1,4 @@
-from pequegrad.backend import NumpyTensor, CudaTensor, CUDA_AVAILABLE
+from pequegrad.backend import NumpyTensor, CudaTensor, CUDA_AVAILABLE, CpuTensor
 import pytest
 import torch
 import numpy as np
@@ -17,9 +17,9 @@ class _Testbackend:
     dtype: any
 
     def _compare_with_numpy(self, x: any, y: np.ndarray, test_strides=True, tol=1e-5):
-        assert x.shape == y.shape
+        assert list(x.shape) == list(y.shape)
         if test_strides:
-            assert x.strides == y.strides
+            assert list(x.strides) == list(y.strides)
         print(x.numpy(), "\n<========================>\n", y)
         # assert x.dtype == y.dtype
         np.testing.assert_allclose(x.numpy(), y, rtol=tol)
@@ -175,7 +175,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     @pytest.mark.parametrize(
         "lambdaop",  # tensor, np
         [

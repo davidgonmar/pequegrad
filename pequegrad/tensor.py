@@ -110,6 +110,7 @@ class Tensor:
         NumpyTensor: "np",
         CpuTensor: "cpu",
     }
+
     @property
     def backend(self) -> str:
         return self.__di[self.data.__class__]

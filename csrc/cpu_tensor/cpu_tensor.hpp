@@ -18,6 +18,7 @@ class CpuTensor {
 
 private:
   size_t compute_nbytes(const shape_t &shape, DType dtype) const;
+
 public:
   bool is_contiguous() const;
   std::shared_ptr<void> ptr;
@@ -63,4 +64,7 @@ public:
   }
 
   CpuTensor add(const CpuTensor &other) const;
+
+  CpuTensor exp() const;
+  CpuTensor log() const;
 };

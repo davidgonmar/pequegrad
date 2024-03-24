@@ -1,8 +1,9 @@
 #include "shape.hpp"
 #include "utils.hpp"
 
-shape_t get_strides_for_broadcasting(const shape_t shape_from, const shape_t strides_from,
-                                          const shape_t shape_to) {
+shape_t get_strides_for_broadcasting(const shape_t shape_from,
+                                     const shape_t strides_from,
+                                     const shape_t shape_to) {
 
   const size_t from_ndim = shape_from.size();
   const size_t to_ndim = shape_to.size();
@@ -17,9 +18,9 @@ shape_t get_strides_for_broadcasting(const shape_t shape_from, const shape_t str
   // reverse test if the dim is 1 or they are equal
   for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
     size_t dim_to = shape_to[i];
-    size_t dim_from =
-        (j >= 0) ? shape_from[j]
-                 : -1; // -1 means we 'ran' out of dimensions for j
+    size_t dim_from = (j >= 0)
+                          ? shape_from[j]
+                          : -1; // -1 means we 'ran' out of dimensions for j
 
     PG_CHECK_ARG(dim_to == dim_from || dim_from == 1 || dim_from == -1,
                  "got incompatible shapes: ", vec_to_string(shape_from),
@@ -32,6 +33,6 @@ shape_t get_strides_for_broadcasting(const shape_t shape_from, const shape_t str
     }
     new_size *= dim_to;
   }
-  
-return new_strides;
+
+  return new_strides;
 }
