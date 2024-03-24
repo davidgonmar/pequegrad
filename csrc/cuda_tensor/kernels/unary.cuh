@@ -1,9 +1,9 @@
 #pragma once
 
-#include "dtype.hpp"
 #include "cuda_tensor/cuda_utils.cuh"
+#include "dtype.hpp"
 
-#define KERNEL_PARAMS_UNARY(T)                                                    \
+#define KERNEL_PARAMS_UNARY(T)                                                 \
   const size_t *in_strides, const size_t *shape, const size_t num_dims,        \
       const T *in, T *out
 
@@ -17,9 +17,8 @@ __global__ void log_kernel(KERNEL_PARAMS_UNARY(float));
 __global__ void log_kernel(KERNEL_PARAMS_UNARY(double));
 __global__ void log_kernel(KERNEL_PARAMS_UNARY(int));
 
-
 #define DEF_UNARY_OP_KERNEL(KERNEL_NAME, FN, T)                                \
-  __global__ void KERNEL_NAME(KERNEL_PARAMS_UNARY(T)) {                          \
+  __global__ void KERNEL_NAME(KERNEL_PARAMS_UNARY(T)) {                        \
     const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
     if (get_max_idx(shape, num_dims) <= idx)                                   \
       return;                                                                  \
@@ -33,7 +32,6 @@ enum class UnaryKernelType {
   EXP,
   LOG,
 };
-
 
 template <typename T>
 __global__ void
@@ -54,8 +52,9 @@ copy_with_out_strides_kernel(const size_t *in_strides, const size_t *in_shape,
 template <typename InT, typename OutT>
 __global__ void astype_kernel(const size_t *in_strides, const size_t *in_shape,
                               const size_t num_dims, const InT *in, OutT *out) {
-  
-  // 'out' is assumed to be contiguous in memory, and have the same shape as 'in'
+
+  // 'out' is assumed to be contiguous in memory, and have the same shape as
+  // 'in'
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (get_max_idx(in_shape, num_dims) <= idx)
     return;
@@ -66,8 +65,8 @@ __global__ void astype_kernel(const size_t *in_strides, const size_t *in_shape,
 
 template <typename T>
 void launch_unary_kernel_helper(UnaryKernelType type, dim3 blocks, dim3 threads,
-                           const size_t *in_strides, const size_t *shape,
-                           const size_t num_dims, const T *in, T *out) {
+                                const size_t *in_strides, const size_t *shape,
+                                const size_t num_dims, const T *in, T *out) {
   switch (type) {
   case UnaryKernelType::COPY:
     copy_kernel<<<blocks, threads>>>(in_strides, shape, num_dims, in, out);
@@ -83,7 +82,6 @@ void launch_unary_kernel_helper(UnaryKernelType type, dim3 blocks, dim3 threads,
   }
 }
 
-
 template <typename T>
 void launch_copy_with_out_strides_kernel_helper(
     dim3 blocks, dim3 threads, const size_t *in_strides, const size_t *in_shape,
@@ -95,9 +93,10 @@ void launch_copy_with_out_strides_kernel_helper(
 }
 
 template <typename InT, typename OutT>
-void launch_astype_kernel_helper(dim3 blocks, dim3 threads, const size_t *in_strides,
-                            const size_t *in_shape, const size_t num_dims,
-                            const InT *in, OutT *out) {
+void launch_astype_kernel_helper(dim3 blocks, dim3 threads,
+                                 const size_t *in_strides,
+                                 const size_t *in_shape, const size_t num_dims,
+                                 const InT *in, OutT *out) {
   astype_kernel<InT, OutT>
       <<<blocks, threads>>>(in_strides, in_shape, num_dims, in, out);
 }

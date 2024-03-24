@@ -1,13 +1,12 @@
 #pragma once
 
 #include "cuda_tensor.cuh"
+#include "cuda_tensor/cuda_utils.cuh"
 #include "dtype.hpp"
 #include "kernels/all.cuh"
-#include "cuda_tensor/cuda_utils.cuh"
 #include <cmath>
 #include <iostream>
 #include <string>
-
 
 bool CudaTensor::is_contiguous() const {
   if (offset != 0) {
@@ -40,7 +39,8 @@ CudaTensor CudaTensor::astype(DType new_type) const {
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
   auto &in_shape = cuda_unique_ptr_from_host(shape.size(), this->shape.data());
   launch_astype_kernel(dtype, new_type, grid_size, block_size, in_strides.get(),
-                       in_shape.get(), ndim(), get_base_ptr(), out.get_base_ptr());
+                       in_shape.get(), ndim(), get_base_ptr(),
+                       out.get_base_ptr());
   PG_CUDA_KERNEL_END;
 
   return out;
@@ -48,16 +48,13 @@ CudaTensor CudaTensor::astype(DType new_type) const {
 
 int CudaTensor::ndim() const { return shape.size(); }
 
-
 CudaTensor CudaTensor::clone() const {
   CudaTensor out(size, shape, strides, dtype);
-  CHECK_CUDA(cudaMemcpy(out.get_base_ptr(), get_base_ptr(), size * dtype_to_size(dtype),
-                        cudaMemcpyDeviceToDevice));
+  CHECK_CUDA(cudaMemcpy(out.get_base_ptr(), get_base_ptr(),
+                        size * dtype_to_size(dtype), cudaMemcpyDeviceToDevice));
   return out;
 }
-
 
 CudaTensor CudaTensor::as_contiguous() const {
   return is_contiguous() ? *this : elwiseop(UnaryKernelType::COPY);
 }
-

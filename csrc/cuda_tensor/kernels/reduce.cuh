@@ -102,10 +102,11 @@ __global__ void max_kernel(const T *in, T *out, const size_t *in_strides,
 enum class ReduceKernelType { SUM, MAX };
 
 template <typename T>
-void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks, dim3 threads,
-                            const T *in, T *out, const size_t *in_strides,
-                            const size_t *in_shape, const size_t n_dims,
-                            const size_t red_axis) {
+void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
+                                 dim3 threads, const T *in, T *out,
+                                 const size_t *in_strides,
+                                 const size_t *in_shape, const size_t n_dims,
+                                 const size_t red_axis) {
   if (type == ReduceKernelType::SUM) {
     sum_kernel<T>
         <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);

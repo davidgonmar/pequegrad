@@ -18,16 +18,18 @@ void launch_unary_kernel(UnaryKernelType type, DType dtype, dim3 blocks,
   switch (dtype) {
   case DType::Float32:
     launch_unary_kernel_helper<float>(type, blocks, threads, in_strides, shape,
-                                 num_dims, static_cast<const float *>(_in), static_cast<float *>(_out));
+                                      num_dims, static_cast<const float *>(_in),
+                                      static_cast<float *>(_out));
     break;
   case DType::Float64:
-    launch_unary_kernel_helper<double>(type, blocks, threads, in_strides, shape,
-                                  num_dims, static_cast<const double *>(_in),
-                                  static_cast<double *>(_out));
+    launch_unary_kernel_helper<double>(
+        type, blocks, threads, in_strides, shape, num_dims,
+        static_cast<const double *>(_in), static_cast<double *>(_out));
     break;
   case DType::Int32:
     launch_unary_kernel_helper<int>(type, blocks, threads, in_strides, shape,
-                               num_dims, static_cast<const int *>(_in), static_cast<int *>(_out));
+                                    num_dims, static_cast<const int *>(_in),
+                                    static_cast<int *>(_out));
     break;
   }
 }
@@ -41,17 +43,20 @@ void launch_copy_with_out_strides_kernel(
   case DType::Float32:
     launch_copy_with_out_strides_kernel_helper<float>(
         blocks, threads, in_strides, in_shape, out_strides, out_shape,
-        in_num_dims, out_num_dims, static_cast<const float *>(in), static_cast<float *>(out));
+        in_num_dims, out_num_dims, static_cast<const float *>(in),
+        static_cast<float *>(out));
     break;
   case DType::Float64:
     launch_copy_with_out_strides_kernel_helper<double>(
         blocks, threads, in_strides, in_shape, out_strides, out_shape,
-        in_num_dims, out_num_dims, static_cast<const double *>(in), static_cast<double *>(out));
+        in_num_dims, out_num_dims, static_cast<const double *>(in),
+        static_cast<double *>(out));
     break;
   case DType::Int32:
     launch_copy_with_out_strides_kernel_helper<int>(
         blocks, threads, in_strides, in_shape, out_strides, out_shape,
-        in_num_dims, out_num_dims, static_cast<const int *>(in), static_cast<int *>(out));
+        in_num_dims, out_num_dims, static_cast<const int *>(in),
+        static_cast<int *>(out));
     break;
   }
 }
@@ -64,56 +69,57 @@ void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks,
   case DType::Float32:
     switch (out_dtype) {
     case DType::Float32:
-      launch_astype_kernel_helper<float, float>(blocks, threads, in_strides,
-                                           in_shape, num_dims,
-                                           static_cast<const float *>(in), static_cast<float *>(out));
+      launch_astype_kernel_helper<float, float>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const float *>(in), static_cast<float *>(out));
       break;
     case DType::Float64:
-      launch_astype_kernel_helper<float, double>(blocks, threads, in_strides,
-                                            in_shape, num_dims,
-                                            static_cast<const float *>(in), static_cast<double *>(out));
+      launch_astype_kernel_helper<float, double>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const float *>(in), static_cast<double *>(out));
       break;
     case DType::Int32:
-      launch_astype_kernel_helper<float, int>(blocks, threads, in_strides, in_shape,
-                                         num_dims, static_cast<const float *>(in),
-                                         static_cast<int *>(out));
+      launch_astype_kernel_helper<float, int>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const float *>(in), static_cast<int *>(out));
       break;
     }
     break;
   case DType::Float64:
     switch (out_dtype) {
     case DType::Float32:
-      launch_astype_kernel_helper<double, float>(blocks, threads, in_strides,
-                                            in_shape, num_dims,
-                                            static_cast<const double *>(in), static_cast<float *>(out));
+      launch_astype_kernel_helper<double, float>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const double *>(in), static_cast<float *>(out));
       break;
     case DType::Float64:
-      launch_astype_kernel_helper<double, double>(blocks, threads, in_strides,
-                                             in_shape, num_dims,
-                                             static_cast<const double *>(in), static_cast<double *>(out));
+      launch_astype_kernel_helper<double, double>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const double *>(in), static_cast<double *>(out));
       break;
     case DType::Int32:
-      launch_astype_kernel_helper<double, int>(blocks, threads, in_strides, in_shape,
-                                          num_dims, static_cast<const double *>(in),
-                                          static_cast<int *>(out));
+      launch_astype_kernel_helper<double, int>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const double *>(in), static_cast<int *>(out));
       break;
     }
     break;
   case DType::Int32:
     switch (out_dtype) {
     case DType::Float32:
-      launch_astype_kernel_helper<int, float>(blocks, threads, in_strides, in_shape,
-                                         num_dims, static_cast<const int *>(in),
-                                         static_cast<float *>(out));
+      launch_astype_kernel_helper<int, float>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const int *>(in), static_cast<float *>(out));
       break;
     case DType::Float64:
-      launch_astype_kernel_helper<int, double>(blocks, threads, in_strides, in_shape,
-                                          num_dims, static_cast<const int *>(in),
-                                          static_cast<double *>(out));
+      launch_astype_kernel_helper<int, double>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const int *>(in), static_cast<double *>(out));
       break;
     case DType::Int32:
-      launch_astype_kernel_helper<int, int>(blocks, threads, in_strides, in_shape,
-                                       num_dims, static_cast<const int *>(in), static_cast<int *>(out));
+      launch_astype_kernel_helper<int, int>(
+          blocks, threads, in_strides, in_shape, num_dims,
+          static_cast<const int *>(in), static_cast<int *>(out));
       break;
     }
     break;

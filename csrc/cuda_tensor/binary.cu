@@ -1,8 +1,7 @@
 #include "cuda_tensor.cuh"
 
-
 CudaTensor CudaTensor::binop_same_dtype(const CudaTensor &other,
-                                      BinaryKernelType kt) const {
+                                        BinaryKernelType kt) const {
   if (shape != other.shape) {
     // try to broadcast, from smaller to larger
     if (shape.size() < other.shape.size()) {
@@ -40,13 +39,15 @@ CudaTensor CudaTensor::binop_same_dtype(const CudaTensor &other,
       cuda_unique_ptr_from_host(n_dims, shape.data());
 
   launch_binary_kernel(kt, dtype, grid_size, block_size, d_strides.get(),
-                       d_other_strides.get(), d_shape.get(), n_dims, get_base_ptr(),
-                       other.get_base_ptr(), out.get_base_ptr());
+                       d_other_strides.get(), d_shape.get(), n_dims,
+                       get_base_ptr(), other.get_base_ptr(),
+                       out.get_base_ptr());
   PG_CUDA_KERNEL_END;
   return out;
 }
 
-CudaTensor CudaTensor::binop(const CudaTensor &other, BinaryKernelType kt) const {
+CudaTensor CudaTensor::binop(const CudaTensor &other,
+                             BinaryKernelType kt) const {
   // we need to decide on the casting, always biggest type
   return binop_same_dtype(other.astype(this->dtype), kt);
 }

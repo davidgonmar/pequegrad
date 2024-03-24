@@ -1,14 +1,17 @@
 #include "cuda_tensor.cuh"
 
+CudaTensor::CudaTensor(size_t size, const shape_t &shape,
+                       const shape_t &strides, const std::shared_ptr<void> &ptr,
+                       DType dtype)
+    : size(size), shape(shape), strides(strides), ptr(ptr), dtype(dtype),
+      offset(0) {}
 
-CudaTensor::CudaTensor(size_t size, const shape_t &shape, const shape_t &strides,
-                     const std::shared_ptr<void> &ptr, DType dtype)
-    : size(size), shape(shape), strides(strides), ptr(ptr), dtype(dtype), offset(0) {}
+CudaTensor::CudaTensor(size_t size, const shape_t &shape,
+                       const shape_t &strides, const std::shared_ptr<void> &ptr,
+                       DType dtype, int offset)
+    : size(size), shape(shape), strides(strides), ptr(ptr), dtype(dtype),
+      offset(offset) {}
 
-CudaTensor::CudaTensor(size_t size, const shape_t &shape, const shape_t &strides,
-                     const std::shared_ptr<void> &ptr, DType dtype, int offset)
-    : size(size), shape(shape), strides(strides), ptr(ptr), dtype(dtype), offset(offset) {}
-    
 CudaTensor::CudaTensor(size_t size, shape_t shape, shape_t strides, DType dtype)
     : size(size), shape(shape), strides(strides), dtype(dtype), offset(0) {
   void *raw_ptr;
@@ -16,7 +19,6 @@ CudaTensor::CudaTensor(size_t size, shape_t shape, shape_t strides, DType dtype)
   ptr =
       std::shared_ptr<void>(raw_ptr, [](void *p) { CHECK_CUDA(cudaFree(p)); });
 }
-
 
 CudaTensor::CudaTensor(size_t size, shape_t shape, DType dtype)
     : size(size), shape(shape), dtype(dtype), offset(0) {

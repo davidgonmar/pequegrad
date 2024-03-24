@@ -1,6 +1,6 @@
 #pragma once
-#include "dtype.hpp"
 #include "cuda_tensor/cuda_utils.cuh"
+#include "dtype.hpp"
 
 #define KERNEL_PARAMS_TER(T)                                                   \
   const size_t *first_strides, const size_t *second_strides,                   \
@@ -16,9 +16,9 @@ __global__ void where_kernel(KERNEL_PARAMS_TER(int));
       const size_t *first_strides,  /* in bytes */                             \
       const size_t *second_strides, /* in bytes */                             \
       const size_t *third_strides,  /* in bytes */                             \
-      const size_t *shape,   /* all inputs should have equal shape, we   \
-                             don't handle broadcasting here */                \
-      const size_t num_dims, /* equals len of strides and len of shape */             \
+      const size_t *shape,          /* all inputs should have equal shape, we  \
+                                    don't handle broadcasting here */          \
+      const size_t num_dims, /* equals len of strides and len of shape */      \
       const T *first, const T *second, const T *third, T *out) {               \
     int idx = blockDim.x * blockIdx.x + threadIdx.x;                           \
     if (get_max_idx(shape, num_dims) <= idx)                                   \
@@ -37,11 +37,12 @@ enum class TernaryKernelType { WHERE };
 
 template <typename T>
 void launch_ternary_kernel_helper(TernaryKernelType kernel_type, dim3 grid_size,
-                             dim3 block_size, const size_t *first_strides,
-                             const size_t *second_strides,
-                             const size_t *third_strides, const size_t *shape,
-                             const size_t num_dims, const T *first,
-                             const T *second, const T *third, T *out) {
+                                  dim3 block_size, const size_t *first_strides,
+                                  const size_t *second_strides,
+                                  const size_t *third_strides,
+                                  const size_t *shape, const size_t num_dims,
+                                  const T *first, const T *second,
+                                  const T *third, T *out) {
   switch (kernel_type) {
   case TernaryKernelType::WHERE:
     where_kernel<<<grid_size, block_size>>>(first_strides, second_strides,

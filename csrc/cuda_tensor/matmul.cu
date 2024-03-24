@@ -1,7 +1,6 @@
 #include "cuda_tensor.cuh"
 #include "dtype.hpp"
 
-
 CudaTensor CudaTensor::mat_mul(const CudaTensor &other) const {
   // if a is a vector and the other is a matrix, add a dimension to a
   if (dtype != other.dtype) {
@@ -12,14 +11,14 @@ CudaTensor CudaTensor::mat_mul(const CudaTensor &other) const {
   bool added_a_dim = false;
   bool added_b_dim = false;
   CudaTensor a = (this->ndim() == 1 && other.ndim() != 1)
-                    ? this->unsqueeze(0)
-                    : this->as_contiguous();
+                     ? this->unsqueeze(0)
+                     : this->as_contiguous();
   if (this->ndim() == 1 && other.ndim() != 1) {
     added_a_dim = true;
   }
   CudaTensor b = (other.ndim() == 1 && this->ndim() != 1)
-                    ? other.unsqueeze(1)
-                    : other.as_contiguous();
+                     ? other.unsqueeze(1)
+                     : other.as_contiguous();
   if (other.ndim() == 1 && this->ndim() != 1) {
     added_b_dim = true;
   }
@@ -96,8 +95,8 @@ CudaTensor CudaTensor::mat_mul(const CudaTensor &other) const {
     cuda_unique_ptr<size_t> rhs_shape =
         cuda_unique_ptr_from_host(b.ndim(), b.shape.data());
     launch_batched_matmul_kernel(gridSize, block_size, dtype, a.get_base_ptr(),
-                                 b.get_base_ptr(), out.get_base_ptr(), lhs_shape.get(),
-                                 rhs_shape.get(), a.ndim());
+                                 b.get_base_ptr(), out.get_base_ptr(),
+                                 lhs_shape.get(), rhs_shape.get(), a.ndim());
     PG_CUDA_KERNEL_END;
     return out;
   }
@@ -112,8 +111,8 @@ CudaTensor CudaTensor::outer_product(const CudaTensor &other) const {
   shape_t new_shape = {size, other.size};
   CudaTensor out(total_idxs, new_shape, dtype);
   launch_vector_outer_product_kernel(grid_size, DEFAULT_BLOCK_SIZE, dtype,
-                                     get_base_ptr(), other.get_base_ptr(), out.get_base_ptr(),
-                                     size, other.size);
+                                     get_base_ptr(), other.get_base_ptr(),
+                                     out.get_base_ptr(), size, other.size);
   PG_CUDA_KERNEL_END;
   return out;
 }

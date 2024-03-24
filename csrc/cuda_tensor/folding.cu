@@ -1,7 +1,7 @@
 #include "cuda_tensor.cuh"
 
 CudaTensor CudaTensor::im2col(shape_t kernel_shape, int stride_y, int stride_x,
-                            int dilation_y, int dilation_x) const {
+                              int dilation_y, int dilation_x) const {
   if (!is_contiguous()) {
     return as_contiguous().im2col(kernel_shape, stride_y, stride_x, dilation_y,
                                   dilation_x);
@@ -36,16 +36,17 @@ CudaTensor CudaTensor::im2col(shape_t kernel_shape, int stride_y, int stride_x,
   int block_size = DEFAULT_BLOCK_SIZE;
   int grid_size = ceil(total_iters / (float)block_size);
 
-  launch_im2col_kernel(dtype, grid_size, block_size, get_base_ptr(), out.get_base_ptr(),
-                       k_h, k_w, x_h, x_w, stride_x, stride_y, batch_size,
-                       in_channels, dilation_x, dilation_y);
+  launch_im2col_kernel(dtype, grid_size, block_size, get_base_ptr(),
+                       out.get_base_ptr(), k_h, k_w, x_h, x_w, stride_x,
+                       stride_y, batch_size, in_channels, dilation_x,
+                       dilation_y);
   PG_CUDA_KERNEL_END;
   return out;
 }
 
 CudaTensor CudaTensor::col2im(shape_t kernel_shape, shape_t out_shape,
-                            int stride_y, int stride_x, int dilation_y,
-                            int dilation_x) const {
+                              int stride_y, int stride_x, int dilation_y,
+                              int dilation_x) const {
   if (!is_contiguous()) {
     return as_contiguous().col2im(kernel_shape, out_shape, stride_y, stride_x,
                                   dilation_y, dilation_x);
@@ -73,16 +74,22 @@ CudaTensor CudaTensor::col2im(shape_t kernel_shape, shape_t out_shape,
   size_t out_size = std::accumulate(_out_shape.begin(), _out_shape.end(), 1,
                                     std::multiplies<size_t>());
   CudaTensor out(out_size, _out_shape, dtype);
-  CHECK_CUDA(cudaMemset(out.get_base_ptr(), 0, out_size * dtype_to_size(dtype)));
+  CHECK_CUDA(
+      cudaMemset(out.get_base_ptr(), 0, out_size * dtype_to_size(dtype)));
 
   dim3 block_size(DEFAULT_BLOCK_SIZE);
-  // batch size and out_channels are parallelized
+  /*int col = idx % in_w;
+  int channel = (idx / in_w) % out_channels;
+  int batch = idx / in_w / out_channels % batch_size;
+  int ky = (idx / in_w / out_channels / batch_size) % k_h;
+  int kx = (idx / in_w / out_channels / batch_size / k_h) % k_w;
+*/
   dim3 grid_size(
-      ceil(out_batch_size * out_channels / (float)DEFAULT_BLOCK_SIZE));
-  launch_col2im_kernel(dtype, grid_size, block_size, get_base_ptr(), out.get_base_ptr(),
-                       out_channels, k_h, k_w, in_h, in_w, out_batch_size,
-                       out_h, out_w, stride_x, stride_y, dilation_x,
-                       dilation_y);
+      ceil(10000000 / (float)block_size.x)); // 1000000 is a random number
+  launch_col2im_kernel(dtype, grid_size, block_size, get_base_ptr(),
+                       out.get_base_ptr(), out_channels, k_h, k_w, in_h, in_w,
+                       out_batch_size, out_h, out_w, stride_x, stride_y,
+                       dilation_x, dilation_y);
   PG_CUDA_KERNEL_END;
   return out;
 }

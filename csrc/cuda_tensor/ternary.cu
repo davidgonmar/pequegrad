@@ -1,8 +1,8 @@
 #include "cuda_tensor.cuh"
 
-
-CudaTensor CudaTensor::ternaryop(const CudaTensor &second, const CudaTensor &third,
-                               TernaryKernelType ker) const {
+CudaTensor CudaTensor::ternaryop(const CudaTensor &second,
+                                 const CudaTensor &third,
+                                 TernaryKernelType ker) const {
   if (second.shape != third.shape || shape != second.shape ||
       shape != third.shape) {
     size_t biggest_size =
@@ -20,7 +20,6 @@ CudaTensor CudaTensor::ternaryop(const CudaTensor &second, const CudaTensor &thi
       }
     }
 
-  
     return broadcast_to(target_shape)
         .ternaryop(second.broadcast_to(target_shape),
                    third.broadcast_to(target_shape), ker);
@@ -59,8 +58,9 @@ CudaTensor CudaTensor::ternaryop(const CudaTensor &second, const CudaTensor &thi
       cuda_unique_ptr_from_host(n_dims, shape.data());
   launch_ternary_kernel(ker, dtype, grid_size, block_size,
                         d_first_strides.get(), d_second_strides.get(),
-                        d_third_strides.get(), d_shape.get(), n_dims, get_base_ptr(),
-                        second.get_base_ptr(), third.get_base_ptr(), out.get_base_ptr());
+                        d_third_strides.get(), d_shape.get(), n_dims,
+                        get_base_ptr(), second.get_base_ptr(),
+                        third.get_base_ptr(), out.get_base_ptr());
   PG_CUDA_KERNEL_END;
   return out;
 }

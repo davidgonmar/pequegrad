@@ -1,6 +1,5 @@
 #include "cuda_tensor.cuh"
 
-
 CudaTensor CudaTensor::elwiseop(UnaryKernelType ker) const {
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
@@ -12,7 +11,8 @@ CudaTensor CudaTensor::elwiseop(UnaryKernelType ker) const {
   CudaTensor out(size, shape, dtype);
 
   launch_unary_kernel(ker, dtype, grid_size, block_size, d_strides.get(),
-                      d_shape.get(), n_dims, get_base_ptr(), out.get_base_ptr());
+                      d_shape.get(), n_dims, get_base_ptr(),
+                      out.get_base_ptr());
   PG_CUDA_KERNEL_END;
   return out;
 }

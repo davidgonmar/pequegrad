@@ -1,26 +1,25 @@
 #pragma once
 
-#include <iostream>
-#include <vector>
-#include "shape.hpp"
+#include "cuda_tensor/cuda_utils.cuh"
 #include "kernels/all.cuh"
+#include "shape.hpp"
+#include "utils.hpp"
+#include <iostream>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "cuda_tensor/cuda_utils.cuh"
-#include "utils.hpp"
+#include <vector>
 
 #define MAX_THREADS_PER_BLOCK 512
 
-
 namespace py = pybind11;
-
 
 struct SliceFromSSS {
   int start;
   int stop;
   int step;
-  SliceFromSSS(int start, int stop, int step) : start(start), stop(stop), step(step) {}
+  SliceFromSSS(int start, int stop, int step)
+      : start(start), stop(stop), step(step) {}
 };
 
 struct SliceFromIdxArray {
@@ -38,26 +37,25 @@ struct SliceKeepDim {
 };
 
 enum class Device_SliceType {
-    SliceFromSSS,
-    SliceFromIdxArray,
-    SliceFromSingleIdx,
-    SliceKeepDim
+  SliceFromSSS,
+  SliceFromIdxArray,
+  SliceFromSingleIdx,
+  SliceKeepDim
 };
 struct Device_Slice {
-    Device_SliceType type;
-    int start;
-    int stop;
-    int step;
-    // this is a device pointer
-    int* indices;
-    int indexSize;
-    int index;
+  Device_SliceType type;
+  int start;
+  int stop;
+  int step;
+  // this is a device pointer
+  int *indices;
+  int indexSize;
+  int index;
 };
 
-
-
 // single item, start:stop, or [idx1, idx2, idx3, ...]
-using slice_item_t = std::variant<SliceFromSSS, SliceFromIdxArray, SliceFromSingleIdx, SliceKeepDim>;
+using slice_item_t = std::variant<SliceFromSSS, SliceFromIdxArray,
+                                  SliceFromSingleIdx, SliceKeepDim>;
 using slice_t = std::vector<slice_item_t>;
 
 class CudaTensor {
@@ -71,13 +69,11 @@ public:
   DType dtype;
 
   // returns the base pointer of the array, offsetted by the offset
-  void *get_base_ptr() const {
-    return static_cast<char *>(ptr.get()) + offset;
-  }
+  void *get_base_ptr() const { return static_cast<char *>(ptr.get()) + offset; }
   CudaTensor(size_t size, const shape_t &shape, const shape_t &strides,
-            const std::shared_ptr<void> &shared_ptr, DType dtype);
+             const std::shared_ptr<void> &shared_ptr, DType dtype);
   CudaTensor(size_t size, const shape_t &shape, const shape_t &strides,
-            const std::shared_ptr<void> &shared_ptr, DType dtype, int offset);
+             const std::shared_ptr<void> &shared_ptr, DType dtype, int offset);
   CudaTensor(size_t size, shape_t shape, shape_t strides, DType dtype);
   CudaTensor(size_t size, shape_t shape, DType dtype);
 
@@ -99,31 +95,32 @@ public:
   CudaTensor binop(const T other, BinaryKernelType kt) const;
 
   CudaTensor ternaryop(const CudaTensor &second, const CudaTensor &third,
-                      TernaryKernelType ker) const;
+                       TernaryKernelType ker) const;
 
   template <typename T>
-  CudaTensor ternaryop(const py::array_t<T> &second, const py::array_t<T> &third,
-                      TernaryKernelType ker) const;
+  CudaTensor ternaryop(const py::array_t<T> &second,
+                       const py::array_t<T> &third,
+                       TernaryKernelType ker) const;
   template <typename T>
   CudaTensor ternaryop(const CudaTensor &second, const py::array_t<T> &third,
-                      TernaryKernelType ker) const;
+                       TernaryKernelType ker) const;
 
   template <typename T>
   CudaTensor ternaryop(const py::array_t<T> &second, const CudaTensor &third,
-                      TernaryKernelType ker) const;
-  
+                       TernaryKernelType ker) const;
+
   template <typename T>
   CudaTensor ternaryop(const T second, const T third,
-                      TernaryKernelType ker) const;
+                       TernaryKernelType ker) const;
 
   template <typename T>
   CudaTensor ternaryop(const CudaTensor &second, const T third,
-                      TernaryKernelType ker) const;
-  
+                       TernaryKernelType ker) const;
+
   template <typename T>
   CudaTensor ternaryop(const T second, const CudaTensor &third,
-                      TernaryKernelType ker) const;
-            
+                       TernaryKernelType ker) const;
+
   CudaTensor elwiseop(UnaryKernelType kt) const;
 
   template <typename T> T getitem(shape_t index) const;
@@ -151,9 +148,9 @@ public:
   CudaTensor reshape(const std::vector<int> &new_shape) const;
 
   CudaTensor im2col(shape_t kernel_shape, int stride_y, int stride_x,
-                   int dilation_y, int dilation_x) const;
+                    int dilation_y, int dilation_x) const;
   CudaTensor col2im(shape_t kernel_shape, shape_t out_shape, int stride_y,
-                   int stride_x, int dilation_y, int dilation_x) const;
+                    int stride_x, int dilation_y, int dilation_x) const;
 
   template <typename T> static CudaTensor from_numpy(py::array_t<T> np_array);
 
@@ -167,18 +164,20 @@ public:
 
   CudaTensor slice(const slice_t &slices) const;
   CudaTensor assign(const slice_t &slices, const CudaTensor &vals);
+
 private:
   CudaTensor reduce(ReduceKernelType ker, axes_t axes, bool keepdims) const;
   CudaTensor reduce(ReduceKernelType ker, axis_t axis, bool keepdims) const;
   CudaTensor reduce(ReduceKernelType ker, bool keepdims) const;
 
-  CudaTensor binop_same_dtype(const CudaTensor &other, BinaryKernelType kt) const;
+  CudaTensor binop_same_dtype(const CudaTensor &other,
+                              BinaryKernelType kt) const;
 };
 
 // TEMPLATE IMPLEMENTATIONS
 template <typename T>
 CudaTensor CudaTensor::binop(const py::array_t<T> &np_array,
-                           BinaryKernelType kt) const {
+                             BinaryKernelType kt) const {
   CudaTensor other = CudaTensor::from_numpy(np_array);
   return binop(other, kt);
 }
@@ -191,8 +190,8 @@ CudaTensor CudaTensor::binop(const T scalar, BinaryKernelType kt) const {
 
 template <typename T>
 CudaTensor CudaTensor::ternaryop(const py::array_t<T> &second,
-                               const py::array_t<T> &third,
-                               TernaryKernelType ker) const {
+                                 const py::array_t<T> &third,
+                                 TernaryKernelType ker) const {
   CudaTensor second_arr = CudaTensor::from_numpy(second);
   CudaTensor third_arr = CudaTensor::from_numpy(third);
   return ternaryop(second_arr, third_arr, ker);
@@ -200,23 +199,23 @@ CudaTensor CudaTensor::ternaryop(const py::array_t<T> &second,
 
 template <typename T>
 CudaTensor CudaTensor::ternaryop(const CudaTensor &second,
-                               const py::array_t<T> &third,
-                               TernaryKernelType ker) const {
+                                 const py::array_t<T> &third,
+                                 TernaryKernelType ker) const {
   CudaTensor third_arr = CudaTensor::from_numpy(third);
   return ternaryop(second, third_arr, ker);
 }
 
 template <typename T>
 CudaTensor CudaTensor::ternaryop(const py::array_t<T> &second,
-                               const CudaTensor &third,
-                               TernaryKernelType ker) const {
+                                 const CudaTensor &third,
+                                 TernaryKernelType ker) const {
   CudaTensor second_arr = CudaTensor::from_numpy(second);
   return ternaryop(second_arr, third, ker);
 }
 
 template <typename T>
 CudaTensor CudaTensor::ternaryop(const T second, const T third,
-                               TernaryKernelType ker) const {
+                                 TernaryKernelType ker) const {
   CudaTensor second_arr = CudaTensor::fill({}, second);
   CudaTensor third_arr = CudaTensor::fill({}, third);
   return ternaryop(second_arr, third_arr, ker);
@@ -224,18 +223,17 @@ CudaTensor CudaTensor::ternaryop(const T second, const T third,
 
 template <typename T>
 CudaTensor CudaTensor::ternaryop(const CudaTensor &second, const T third,
-                               TernaryKernelType ker) const {
+                                 TernaryKernelType ker) const {
   CudaTensor third_arr = CudaTensor::fill({}, third);
   return ternaryop(second, third_arr, ker);
 }
 
 template <typename T>
 CudaTensor CudaTensor::ternaryop(const T second, const CudaTensor &third,
-                               TernaryKernelType ker) const {
+                                 TernaryKernelType ker) const {
   CudaTensor second_arr = CudaTensor::fill({}, second);
   return ternaryop(second_arr, third, ker);
 }
-
 
 template <typename T> T CudaTensor::getitem(shape_t index) const {
   PG_CHECK_ARG(index.size() == shape.size(),
@@ -254,12 +252,14 @@ template <typename T> T CudaTensor::getitem(shape_t index) const {
                       // get the correct offset
 
   T value;
-  CHECK_CUDA(cudaMemcpy(&value, static_cast<char *>(this->get_base_ptr()) + offset,
+  CHECK_CUDA(cudaMemcpy(&value,
+                        static_cast<char *>(this->get_base_ptr()) + offset,
                         elemsize, cudaMemcpyDeviceToHost));
   return value;
 }
 
-template <typename T> CudaTensor CudaTensor::from_numpy(py::array_t<T> np_array) {
+template <typename T>
+CudaTensor CudaTensor::from_numpy(py::array_t<T> np_array) {
   py::buffer_info buffer_info = np_array.request();
   auto size = buffer_info.size;
   shape_t shape;
@@ -292,8 +292,8 @@ template <typename T> py::array_t<T> CudaTensor::to_numpy() const {
                dtype_to_string(dtype), " but got ",
                dtype_to_string(dtype_from_pytype<T>()));
   py::array_t<T> result(shape, strides);
-  CHECK_CUDA(cudaMemcpy(result.mutable_data(), this->get_base_ptr(), size * dtype_to_size(dtype),
-                        cudaMemcpyDeviceToHost));
+  CHECK_CUDA(cudaMemcpy(result.mutable_data(), this->get_base_ptr(),
+                        size * dtype_to_size(dtype), cudaMemcpyDeviceToHost));
   return result;
 }
 

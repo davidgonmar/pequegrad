@@ -35,7 +35,8 @@ __device__ int get_idx_from_strides(const size_t *shape, const size_t *strides,
   return idx / sizeof(T); // strides are in bytes
 }
 
-static inline __device__ int get_max_idx(const size_t *shape, const size_t num_dims) {
+static inline __device__ int get_max_idx(const size_t *shape,
+                                         const size_t num_dims) {
   int accum = 1;
   for (int d = 0; d < num_dims; d++) {
     accum *= shape[d];
@@ -55,7 +56,6 @@ cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
   return cuda_unique_ptr<T>(device_ptr,
                             [](T *ptr) { CHECK_CUDA(cudaFree(ptr)); });
 }
-
 
 #define PG_CUDA_KERNEL_END                                                     \
   do {                                                                         \

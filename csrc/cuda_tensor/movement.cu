@@ -57,8 +57,6 @@ CudaTensor CudaTensor::reshape(const std::vector<int> &_new_shape) const {
   return out;
 }
 
-
-
 CudaTensor CudaTensor::squeeze(axis_t axis) const {
   if (axis < 0) {
     axis = shape.size() + axis;
@@ -144,15 +142,14 @@ CudaTensor CudaTensor::unsqueeze(axis_t axis) const {
   return out;
 }
 
-
 CudaTensor CudaTensor::broadcast_to(const shape_t shape_to) const {
-  shape_t new_strides = get_strides_for_broadcasting(this->shape, this->strides,
-                                                     shape_to);
-  size_t new_size = std::accumulate(shape_to.begin(), shape_to.end(), 1, std::multiplies<size_t>());
+  shape_t new_strides =
+      get_strides_for_broadcasting(this->shape, this->strides, shape_to);
+  size_t new_size = std::accumulate(shape_to.begin(), shape_to.end(), 1,
+                                    std::multiplies<size_t>());
   CudaTensor out(new_size, shape_to, new_strides, ptr, dtype);
   return out;
 }
-
 
 CudaTensor CudaTensor::permute(shape_t axes) const {
   PG_CHECK_ARG(axes.size() == shape.size(),

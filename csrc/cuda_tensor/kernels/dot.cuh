@@ -37,8 +37,8 @@ __global__ void vector_dot_product_accum_kernel(const T *a, const T *b, T *out,
 }
 
 template <typename T>
-__global__ void vector_outer_product_kernel(T *lhs, T *rhs, T *out, size_t lhs_size,
-                                            size_t rhs_size) {
+__global__ void vector_outer_product_kernel(T *lhs, T *rhs, T *out,
+                                            size_t lhs_size, size_t rhs_size) {
   // vector 'lhs' -> size 'lhs_size'
   // vector 'rhs' -> size 'rhs_size'
   // matrix 'out' -> shape (lhs_size, rhs_size)
@@ -54,10 +54,9 @@ __global__ void vector_outer_product_kernel(T *lhs, T *rhs, T *out, size_t lhs_s
 }
 
 template <typename T>
-__global__ void batched_matmul_kernel(
-    const T *a, const T *b, T *out, const size_t *a_shape,
-    const size_t *b_shape,
-    const size_t n_dims) {
+__global__ void
+batched_matmul_kernel(const T *a, const T *b, T *out, const size_t *a_shape,
+                      const size_t *b_shape, const size_t n_dims) {
   // this kernel assumes correctness of the inputs + contiguous memory
   // a and b are, at minimum, 2D matrices. Both have the same number of
   // dimensions. Extra dimensions are treated as 'batch' dimensions. The kernel
@@ -77,11 +76,9 @@ __global__ void batched_matmul_kernel(
   const int sizemid = a_shape[n_dims - 1];
   const int size2 = b_shape[n_dims - 1];
 
-
   // First, we compute current the row and column of the output matrix.
   const int row = (idx / size2) % size1;
   const int col = idx % size2;
-
 
   // Then, we compute a 'batch offset' for each input matrix and the output
   // matrix
@@ -118,8 +115,7 @@ __global__ void batched_matmul_kernel(
   T accum = 0;
   for (int i = 0; i < sizemid; i++) {
     accum += a[batch_offset_a + row * sizemid + i] *
-             b[batch_offset_b + col +
-               size2 * i];
+             b[batch_offset_b + col + size2 * i];
   }
   out[batch_offset_out + row * size2 + col] = accum;
 }
@@ -129,12 +125,10 @@ void launch_batched_matmul_kernel(dim3 grid_size, dim3 block_size, DType dtype,
                                   const size_t *a_shape, const size_t *b_shape,
                                   const size_t n_dims);
 
-
 void launch_vector_dot_product_accum_kernel(dim3 grid_size, dim3 block_size,
                                             size_t smem_size, DType dtype,
                                             const void *a, const void *b,
                                             void *out, size_t size);
-
 
 void launch_vector_outer_product_kernel(dim3 grid_size, dim3 block_size,
                                         DType dtype, void *a, void *b,

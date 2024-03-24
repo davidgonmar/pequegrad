@@ -1,6 +1,6 @@
 #include "binary.cuh"
-#include "dtype.hpp"
 #include "cuda_tensor/cuda_utils.cuh"
+#include "dtype.hpp"
 #include <cmath>
 
 DEF_BIN_OP_KERNEL(add_kernel, x + y, float)
@@ -49,17 +49,20 @@ void launch_binary_kernel(BinaryKernelType kernel_type, DType dtype,
   case DType::Float32:
     launch_binary_kernel_casted_helper(
         kernel_type, grid_size, block_size, lhs_strides, rhs_strides, shape,
-        num_dims, static_cast<const float *>(lhs), static_cast<const float *>(rhs), static_cast<float *>(out));
+        num_dims, static_cast<const float *>(lhs),
+        static_cast<const float *>(rhs), static_cast<float *>(out));
     break;
   case DType::Float64:
     launch_binary_kernel_casted_helper(
         kernel_type, grid_size, block_size, lhs_strides, rhs_strides, shape,
-        num_dims, static_cast<const double *>(lhs), static_cast<const double *>(rhs), static_cast<double *>(out));
+        num_dims, static_cast<const double *>(lhs),
+        static_cast<const double *>(rhs), static_cast<double *>(out));
     break;
   case DType::Int32:
-    launch_binary_kernel_casted_helper(kernel_type, grid_size, block_size, lhs_strides,
-                                rhs_strides, shape, num_dims, static_cast<const int *>(lhs),
-                                static_cast<const int *>(rhs), static_cast<int *>(out));
+    launch_binary_kernel_casted_helper(
+        kernel_type, grid_size, block_size, lhs_strides, rhs_strides, shape,
+        num_dims, static_cast<const int *>(lhs), static_cast<const int *>(rhs),
+        static_cast<int *>(out));
     break;
   }
 }

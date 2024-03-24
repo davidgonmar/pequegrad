@@ -96,9 +96,14 @@ if(1)
     # add library from /csrc
     pybind11_add_module(pequegrad_cu ${CUDA_SOURCES})
 
+    set_property(TARGET pequegrad_cu PROPERTY CUDA_ARCHITECTURES native)
+
+
+  
     # Set the relocatable device code flag for nvcc
     set_property(TARGET pequegrad_cu PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
     set_target_properties(pequegrad_cu PROPERTIES OUTPUT_NAME "pequegrad_cu")
 
 endif()
+

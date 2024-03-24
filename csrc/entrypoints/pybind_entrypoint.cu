@@ -1,6 +1,6 @@
 #include "cuda_tensor/cuda_tensor.cuh"
-#include "pybind_utils.cuh"
 #include "cuda_tensor/cuda_utils.cuh"
+#include "pybind_utils.cuh"
 #include <cuda_runtime.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -263,8 +263,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
       .def("from_numpy",
            [](py::array_t<double> np_array) {
              return CudaTensor::from_numpy(np_array);
-           })
- REGISTER_BINARY_OP_ALL("add",
+           }) REGISTER_BINARY_OP_ALL("add",
                                      ADD) REGISTER_BINARY_OP_ALL("__add__", ADD)
           REGISTER_BINARY_OP_ALL("__radd__", ADD) REGISTER_BINARY_OP_ALL(
               "sub",

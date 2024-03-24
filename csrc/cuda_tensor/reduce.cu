@@ -1,7 +1,7 @@
 #include "cuda_tensor.cuh"
 
 CudaTensor CudaTensor::reduce(ReduceKernelType ker, axis_t axis,
-                            bool keepdims) const {
+                              bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().reduce(ker, axis, keepdims);
   }
@@ -23,8 +23,8 @@ CudaTensor CudaTensor::reduce(ReduceKernelType ker, axis_t axis,
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(new_size / (float)DEFAULT_BLOCK_SIZE));
   launch_reduce_kernel(ker, dtype, grid_size, block_size, get_base_ptr(),
-                       out.get_base_ptr(), d_strides.get(), d_shape.get(), n_dims,
-                       axis);
+                       out.get_base_ptr(), d_strides.get(), d_shape.get(),
+                       n_dims, axis);
   PG_CUDA_KERNEL_END;
   if (keepdims) {
     return out;
@@ -32,10 +32,8 @@ CudaTensor CudaTensor::reduce(ReduceKernelType ker, axis_t axis,
   return out.squeeze(axis);
 }
 
-
-
 CudaTensor CudaTensor::reduce(ReduceKernelType ker, axes_t axes,
-                            bool keepdims) const {
+                              bool keepdims) const {
   CudaTensor out = *this;
   for (size_t axis : axes) {
     out = out.reduce(ker, axis, true);
@@ -58,7 +56,8 @@ CudaTensor CudaTensor::reduce(ReduceKernelType ker, bool keepdims) const {
 }
 
 CudaTensor CudaTensor::mean(bool keepdims) const {
-  int total_elements = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  int total_elements =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
   return sum(keepdims).binop(total_elements, BinaryKernelType::DIV);
 }
 
