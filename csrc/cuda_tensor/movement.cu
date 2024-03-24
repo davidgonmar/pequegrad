@@ -177,9 +177,7 @@ CudaTensor CudaTensor::broadcast_to(const shape_t _shape) const {
     }
     new_size *= dim_to;
   }
-  CudaTensor out(new_size, shape_to, new_strides, dtype);
-  CHECK_CUDA(cudaMemcpy(out.get_base_ptr(), get_base_ptr(), size * dtype_to_size(dtype),
-                        cudaMemcpyDeviceToDevice));
+  CudaTensor out(new_size, shape_to, new_strides, ptr, dtype);
   return out;
 }
 
