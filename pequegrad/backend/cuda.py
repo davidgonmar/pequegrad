@@ -3,6 +3,7 @@ import sys
 import warnings
 from typing import Union
 import numpy as np
+from .utils import bind_method, bind_method_property
 
 
 def make_cuda_tensor(
@@ -83,12 +84,6 @@ try:
             sys.path.append(build_path)
 
         from pequegrad_cu import CudaTensor
-
-        def bind_method(cls, existing, new):
-            setattr(cls, existing, new)
-
-        def bind_method_property(cls, existing, new):
-            setattr(cls, existing, property(new))
 
         def mock_init(self, *args, **kwargs):
             pass

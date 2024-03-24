@@ -1,12 +1,12 @@
 from typing import List, Union, Type, Tuple, Optional
 import numpy as np
 from .context import pequegrad_context
-from .backend import NumpyTensor, CudaTensor, CUDA_AVAILABLE  # noqa: F401
+from .backend import NumpyTensor, CudaTensor, CpuTensor, CUDA_AVAILABLE  # noqa: F401
 
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
-_Backend = Union[NumpyTensor, CudaTensor]
+_Backend = Union[NumpyTensor, CudaTensor, CpuTensor]
 
 
 class Tensor:
@@ -38,7 +38,9 @@ class Tensor:
                 data = data.data
             elif data.backend == "cuda" and backend == "np":
                 data = data.numpy()
-        elif isinstance(data, (CudaTensor, NumpyTensor)):
+            elif data.backend == "cpu" and backend == "cpu":
+                data = data.data
+        elif isinstance(data, (CudaTensor, NumpyTensor, CpuTensor)):
             data = data.numpy() if backend == "np" else data
         elif isinstance(data, (int, float)):
             data = np.array(data)
@@ -50,8 +52,10 @@ class Tensor:
             self._data: NumpyTensor = NumpyTensor(data)
         elif backend == "cuda":
             self._data: CudaTensor = CudaTensor(data)
+        elif backend == "cpu":
+            self._data: CpuTensor = CpuTensor(data)
         else:
-            raise ValueError("backend must be 'np' or 'cuda'")
+            raise ValueError("backend must be 'np', 'cuda' or 'cpu'")
 
         # If the tensor was created under a no_grad context, it doesn't require gradients
         self.requires_grad: bool = requires_grad and pequegrad_context.grad_enabled

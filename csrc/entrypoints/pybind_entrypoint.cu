@@ -264,10 +264,7 @@ PYBIND11_MODULE(pequegrad_cu, m) {
            [](py::array_t<double> np_array) {
              return CudaTensor::from_numpy(np_array);
            })
-      .def("__repr__",
-           [](const CudaTensor &arr) {
-             return arr.to_string();
-           }) REGISTER_BINARY_OP_ALL("add",
+ REGISTER_BINARY_OP_ALL("add",
                                      ADD) REGISTER_BINARY_OP_ALL("__add__", ADD)
           REGISTER_BINARY_OP_ALL("__radd__", ADD) REGISTER_BINARY_OP_ALL(
               "sub",

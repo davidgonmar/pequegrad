@@ -669,6 +669,7 @@ class _Testbackend:
         x = x.permute(1, 0)
         nparr = nparr.transpose(1, 0)
         self._compare_with_numpy(x[slices], nparr[slices], test_strides=False)
+
     # test assign
     @pytest.mark.parametrize(
         "data",  # shape, slices, assign_vals_shape
