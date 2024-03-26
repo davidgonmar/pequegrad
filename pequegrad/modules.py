@@ -128,11 +128,13 @@ class Conv2d(StatefulModule):
             (out_channels, in_channels, kernel_size, kernel_size)
         )
         self.bias = ModuleParam.zeros(out_channels, requires_grad=True)
+
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
 
     def forward(self, input: Tensor) -> Tensor:
+
         return input.conv2d(
             self.kernel,
             self.bias,

@@ -56,21 +56,21 @@ def get_mnist_dataset(
     ) as f:
         X_train = (
             np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28) / 255.0
-        )
+        ).astype(np.float32)
     with gzip.open(
         os.path.join(DATA_PATH, "MNIST", "train-labels-idx1-ubyte.gz"), "rb"
     ) as f:
-        y_train = np.frombuffer(f.read(), np.uint8, offset=8)
+        y_train = np.frombuffer(f.read(), np.uint8, offset=8).astype(np.int32)
     with gzip.open(
         os.path.join(DATA_PATH, "MNIST", "t10k-images-idx3-ubyte.gz"), "rb"
     ) as f:
         X_test = (
             np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28) / 255.0
-        )
+        ).astype(np.float32)
     with gzip.open(
         os.path.join(DATA_PATH, "MNIST", "t10k-labels-idx1-ubyte.gz"), "rb"
     ) as f:
-        y_test = np.frombuffer(f.read(), np.uint8, offset=8)
+        y_test = np.frombuffer(f.read(), np.uint8, offset=8).astype(np.int32)
 
     return (
         Tensor(X_train, backend=backend),
