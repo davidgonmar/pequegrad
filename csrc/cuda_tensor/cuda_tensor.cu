@@ -9,6 +9,10 @@
 #include <string>
 
 bool CudaTensor::is_contiguous() const {
+  // if it is not dense, also not contiguous (todo -- handle this case)
+  if (!is_dense()) {
+    return false;
+  }
   if (offset != 0) {
     return false;
   }
@@ -34,8 +38,9 @@ bool CudaTensor::is_dense() const {
   // there are no holes in the array
   // that is, the total number of elements is equal to
   // the size of the underlying storage
-
-  return false;
+  size_t total_in_storage = nbytes;
+  size_t total_size_in_bytes = size() * dtype_to_size(dtype);
+  return total_in_storage == total_size_in_bytes;
 }
 
 CudaTensor CudaTensor::astype(DType new_type) const {

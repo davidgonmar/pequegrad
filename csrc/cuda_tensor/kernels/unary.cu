@@ -11,6 +11,13 @@ DEF_UNARY_OP_KERNEL(log_kernel, log((float)x), float)
 DEF_UNARY_OP_KERNEL(log_kernel, log((double)x), double)
 DEF_UNARY_OP_KERNEL(log_kernel, log((float)x), int)
 
+DEF_UNARY_OP_KERNEL_DENSE(exp_kernel_dense, exp((float)x), float)
+DEF_UNARY_OP_KERNEL_DENSE(exp_kernel_dense, exp((double)x), double)
+DEF_UNARY_OP_KERNEL_DENSE(exp_kernel_dense, exp((float)x), int)
+DEF_UNARY_OP_KERNEL_DENSE(log_kernel_dense, log((float)x), float)
+DEF_UNARY_OP_KERNEL_DENSE(log_kernel_dense, log((double)x), double)
+DEF_UNARY_OP_KERNEL_DENSE(log_kernel_dense, log((float)x), int)
+
 void launch_unary_kernel(UnaryKernelType type, DType dtype, dim3 blocks,
                          dim3 threads, const size_t *in_strides,
                          const size_t *shape, const size_t num_dims,
@@ -34,6 +41,27 @@ void launch_unary_kernel(UnaryKernelType type, DType dtype, dim3 blocks,
   }
 }
 
+void launch_unary_kernel_dense(UnaryKernelType type, DType dtype, dim3 blocks,
+                               dim3 threads, const size_t max_size,
+                               const void *_in, void *_out) {
+  switch (dtype) {
+  case DType::Float32:
+    launch_unary_kernel_dense_helper<float>(type, blocks, threads, max_size,
+                                            static_cast<const float *>(_in),
+                                            static_cast<float *>(_out));
+    break;
+  case DType::Float64:
+    launch_unary_kernel_dense_helper<double>(type, blocks, threads, max_size,
+                                             static_cast<const double *>(_in),
+                                             static_cast<double *>(_out));
+    break;
+  case DType::Int32:
+    launch_unary_kernel_dense_helper<int>(type, blocks, threads, max_size,
+                                          static_cast<const int *>(_in),
+                                          static_cast<int *>(_out));
+    break;
+  }
+}
 void launch_copy_with_out_strides_kernel(
     DType dtype, dim3 blocks, dim3 threads, const size_t *in_strides,
     const size_t *in_shape, const size_t *out_strides, const size_t *out_shape,

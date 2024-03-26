@@ -75,7 +75,7 @@ CudaTensor CudaTensor::col2im(shape_t kernel_shape, shape_t out_shape,
                                     std::multiplies<size_t>());
   CudaTensor out(_out_shape, dtype);
   CHECK_CUDA(
-      cudaMemset(out.get_base_ptr(), 0, out_size * dtype_to_size(dtype)));
+      cudaMemset(out.get_base_ptr(), 0, out.nbytes)); // set output to zero
 
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   /*int col = idx % in_w;

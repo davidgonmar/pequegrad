@@ -111,7 +111,8 @@ class Linear(StatefulModule):
         self.bias = ModuleParam.zeros(out_features, requires_grad=True)
 
     def forward(self, input):
-        return (input @ self.weights) + self.bias
+        a = (input @ self.weights) + self.bias
+        return a
 
     def backward(self, output_grad: Tensor):
         self.weights.backward(output_grad)

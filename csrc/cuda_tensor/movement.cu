@@ -145,9 +145,7 @@ CudaTensor CudaTensor::unsqueeze(axis_t axis) const {
 CudaTensor CudaTensor::broadcast_to(const shape_t shape_to) const {
   shape_t new_strides =
       get_strides_for_broadcasting(this->shape, this->strides, shape_to);
-  size_t new_size = std::accumulate(shape_to.begin(), shape_to.end(), 1,
-                                    std::multiplies<size_t>());
-  CudaTensor out(new_size, shape_to, new_strides, ptr, dtype);
+  CudaTensor out(nbytes, shape_to, new_strides, ptr, dtype);
   return out;
 }
 

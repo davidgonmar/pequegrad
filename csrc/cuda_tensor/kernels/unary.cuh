@@ -27,6 +27,31 @@ __global__ void log_kernel(KERNEL_PARAMS_UNARY(int));
     out[idx] = FN;                                                             \
   }
 
+#define KERNEL_PARAMS_UNARY_DENSE(T)                                           \
+  const size_t total_size, const T *in, T *out
+
+// In this case, we are guaranteed that both 'in' and 'out' are dense tensors,
+// that is, they might not be contiguous but all memory from the start of *in
+// and *out to *in + total_size and *out + total_size belongs to in and out
+// respectively. They must also have the same memory layout (strides and shape)
+// In this case, we can use a simpler kernel that doesn't need to compute the
+// index from the strides
+#define DEF_UNARY_OP_KERNEL_DENSE(KERNEL_NAME, FN, T)                          \
+  __global__ void KERNEL_NAME(KERNEL_PARAMS_UNARY_DENSE(T)) {                  \
+    const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
+    if (total_size <= idx)                                                     \
+      return;                                                                  \
+    T x = in[idx];                                                             \
+    out[idx] = FN;                                                             \
+  }
+
+__global__ void exp_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(float));
+__global__ void exp_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(double));
+__global__ void exp_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(int));
+__global__ void log_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(float));
+__global__ void log_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(double));
+__global__ void log_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(int));
+
 enum class UnaryKernelType {
   COPY,
   EXP,
@@ -81,6 +106,26 @@ void launch_unary_kernel_helper(UnaryKernelType type, dim3 blocks, dim3 threads,
     throw std::runtime_error("Invalid UnaryKernelType");
   }
 }
+
+template <typename T>
+void launch_unary_kernel_dense_helper(UnaryKernelType type, dim3 blocks,
+                                      dim3 threads, const size_t total_size,
+                                      const T *in, T *out) {
+  switch (type) {
+  case UnaryKernelType::EXP:
+    exp_kernel_dense<<<blocks, threads>>>(total_size, in, out);
+    break;
+  case UnaryKernelType::LOG:
+    log_kernel_dense<<<blocks, threads>>>(total_size, in, out);
+    break;
+  default:
+    throw std::runtime_error("Invalid UnaryKernelType");
+  }
+}
+
+void launch_unary_kernel_dense(UnaryKernelType type, DType dtype, dim3 blocks,
+                               dim3 threads, const size_t total_size,
+                               const void *in, void *out);
 
 template <typename T>
 void launch_copy_with_out_strides_kernel_helper(

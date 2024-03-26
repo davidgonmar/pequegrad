@@ -287,8 +287,8 @@ CudaTensor CudaTensor::from_numpy(py::array_t<T> np_array) {
   auto *_ptr = static_cast<T *>(buffer_info.ptr);
   size_t nbytes = size * sizeof(T);
   CudaTensor arr(shape, strides, dtype_from_pytype<T>());
-  CHECK_CUDA(cudaMemcpy(arr.get_base_ptr(), _ptr, (size_t)size * sizeof(T),
-                        cudaMemcpyHostToDevice));
+  CHECK_CUDA(
+      cudaMemcpy(arr.get_base_ptr(), _ptr, nbytes, cudaMemcpyHostToDevice));
   return arr;
 }
 
