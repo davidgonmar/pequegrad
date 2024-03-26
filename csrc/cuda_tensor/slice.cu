@@ -68,7 +68,7 @@ CudaTensor _slice_with_array(const CudaTensor &ten, const slice_t &_slices) {
                                    std::multiplies<int>());
 
   auto d_shape = cuda_unique_ptr_from_host(ten.ndim(), ten.shape.data());
-  CudaTensor out(total_size, new_shape, ten.dtype);
+  CudaTensor out(new_shape, ten.dtype);
   auto out_d_shape = cuda_unique_ptr_from_host(out.ndim(), out.shape.data());
   auto src_strides = cuda_unique_ptr_from_host(ten.ndim(), ten.strides.data());
   int block_size = DEFAULT_BLOCK_SIZE;
@@ -170,10 +170,8 @@ CudaTensor CudaTensor::slice(const slice_t &slices) const {
       new_strides.push_back(strides[i]);
     }
   }
-
-  size_t size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                std::multiplies<size_t>());
-  CudaTensor out(size, new_shape, new_strides, ptr, dtype, _offset);
+  // nbytes is the original one, not computed
+  CudaTensor out(nbytes, new_shape, new_strides, ptr, dtype, _offset);
 
   return out;
 }
@@ -267,7 +265,7 @@ CudaTensor CudaTensor::assign(const slice_t &slices, const CudaTensor &vals) {
                                .broadcast_to(_sliced.shape)
                                .astype(_sliced.dtype);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
-  dim3 grid_size(ceil(_vals.size / (float)DEFAULT_BLOCK_SIZE));
+  dim3 grid_size(ceil(_vals.size() / (float)DEFAULT_BLOCK_SIZE));
   auto &sliced_strides =
       cuda_unique_ptr_from_host(_sliced.shape.size(), _sliced.strides.data());
   auto &sliced_shape =

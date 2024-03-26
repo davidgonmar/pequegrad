@@ -29,13 +29,22 @@ bool CudaTensor::is_contiguous() const {
   return true;
 }
 
+bool CudaTensor::is_dense() const {
+  // dense means that it might not be contiguous, but
+  // there are no holes in the array
+  // that is, the total number of elements is equal to
+  // the size of the underlying storage
+
+  return false;
+}
+
 CudaTensor CudaTensor::astype(DType new_type) const {
   if (dtype == new_type) {
     return *this;
   }
-  CudaTensor out(size, shape, new_type);
+  CudaTensor out(shape, new_type);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
-  dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
+  dim3 grid_size(ceil(size() / (float)DEFAULT_BLOCK_SIZE));
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
   auto &in_shape = cuda_unique_ptr_from_host(shape.size(), this->shape.data());
   launch_astype_kernel(dtype, new_type, grid_size, block_size, in_strides.get(),
@@ -49,9 +58,10 @@ CudaTensor CudaTensor::astype(DType new_type) const {
 int CudaTensor::ndim() const { return shape.size(); }
 
 CudaTensor CudaTensor::clone() const {
-  CudaTensor out(size, shape, strides, dtype);
+  CudaTensor out(shape, strides, dtype);
   CHECK_CUDA(cudaMemcpy(out.get_base_ptr(), get_base_ptr(),
-                        size * dtype_to_size(dtype), cudaMemcpyDeviceToDevice));
+                        size() * dtype_to_size(dtype),
+                        cudaMemcpyDeviceToDevice));
   return out;
 }
 

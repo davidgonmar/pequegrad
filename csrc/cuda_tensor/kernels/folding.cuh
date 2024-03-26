@@ -67,6 +67,7 @@ __global__ void col2im_kernel(T *in, T *out, size_t out_channels, size_t k_h,
 
   int out_x_offset = col % n_horizontal_slides * stride_x;
   int out_y_offset = col / n_horizontal_slides * stride_y;
+  int in_row = ky * k_w + kx + channel * k_w * k_h;
 
   atomicAdd(&out[batch * out_channels * out_h * out_w +
                  channel * out_h * out_w + out_y_offset * out_w +

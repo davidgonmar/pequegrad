@@ -61,21 +61,30 @@ using slice_t = std::vector<slice_item_t>;
 class CudaTensor {
 public:
   bool is_contiguous() const;
+  bool is_dense() const; // dense means that it might not be contiguous, but
+                         // there are no holes in the array
+                         // that is, the total number of elements is equal to
+                         // the size of the underlying storage
   std::shared_ptr<void> ptr;
-  size_t size;
   shape_t shape;
   shape_t strides;
   size_t offset;
   DType dtype;
+  size_t nbytes; // doesnt care about offset, strides or anything, just the
+                 // number of bytes that were originally allocated
 
+  size_t size() const {
+    return std::accumulate(shape.begin(), shape.end(), 1,
+                           std::multiplies<size_t>());
+  }
   // returns the base pointer of the array, offsetted by the offset
   void *get_base_ptr() const { return static_cast<char *>(ptr.get()) + offset; }
   CudaTensor(size_t size, const shape_t &shape, const shape_t &strides,
              const std::shared_ptr<void> &shared_ptr, DType dtype);
-  CudaTensor(size_t size, const shape_t &shape, const shape_t &strides,
+  CudaTensor(const size_t nbytes, const shape_t &shape, const shape_t &strides,
              const std::shared_ptr<void> &shared_ptr, DType dtype, int offset);
-  CudaTensor(size_t size, shape_t shape, shape_t strides, DType dtype);
-  CudaTensor(size_t size, shape_t shape, DType dtype);
+  CudaTensor(shape_t shape, shape_t strides, DType dtype);
+  CudaTensor(shape_t shape, DType dtype);
 
   ~CudaTensor();
   CudaTensor(const CudaTensor &other);
@@ -276,7 +285,8 @@ CudaTensor CudaTensor::from_numpy(py::array_t<T> np_array) {
   }
 
   auto *_ptr = static_cast<T *>(buffer_info.ptr);
-  CudaTensor arr((size_t)size, shape, strides, dtype_from_pytype<T>());
+  size_t nbytes = size * sizeof(T);
+  CudaTensor arr(shape, strides, dtype_from_pytype<T>());
   CHECK_CUDA(cudaMemcpy(arr.get_base_ptr(), _ptr, (size_t)size * sizeof(T),
                         cudaMemcpyHostToDevice));
   return arr;
@@ -292,19 +302,18 @@ template <typename T> py::array_t<T> CudaTensor::to_numpy() const {
                dtype_to_string(dtype), " but got ",
                dtype_to_string(dtype_from_pytype<T>()));
   py::array_t<T> result(shape, strides);
-  CHECK_CUDA(cudaMemcpy(result.mutable_data(), this->get_base_ptr(),
-                        size * dtype_to_size(dtype), cudaMemcpyDeviceToHost));
+  CHECK_CUDA(cudaMemcpy(result.mutable_data(), this->get_base_ptr(), nbytes,
+                        cudaMemcpyDeviceToHost));
   return result;
 }
 
 template <typename T> CudaTensor CudaTensor::fill(shape_t shape, T value) {
   // calculate correct dtype
   DType _dtype = dtype_from_cpptype<T>();
-  CudaTensor out(
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>()),
-      shape, _dtype);
-  fill_kernel<<<ceil(out.size / (float)DEFAULT_BLOCK_SIZE),
-                DEFAULT_BLOCK_SIZE>>>((T *)out.get_base_ptr(), out.size, value);
+  CudaTensor out(shape, _dtype);
+  fill_kernel<<<ceil(out.size() / (float)DEFAULT_BLOCK_SIZE),
+                DEFAULT_BLOCK_SIZE>>>((T *)out.get_base_ptr(), out.size(),
+                                      value);
   PG_CUDA_KERNEL_END;
   return out;
 };

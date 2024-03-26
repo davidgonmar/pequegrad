@@ -13,9 +13,9 @@ CudaTensor CudaTensor::reduce(ReduceKernelType ker, axis_t axis,
                " for shape ", vec_to_string(shape));
   shape_t new_shape = shape;
   new_shape[axis] = 1;
-  size_t new_size = size / shape[axis];
+  size_t new_size = size() / shape[axis];
   size_t n_dims = shape.size();
-  CudaTensor out(new_size, new_shape, dtype);
+  CudaTensor out(new_shape, dtype);
   cuda_unique_ptr<size_t> d_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());
   cuda_unique_ptr<size_t> d_shape =

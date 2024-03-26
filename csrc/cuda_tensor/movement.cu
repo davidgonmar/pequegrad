@@ -36,9 +36,9 @@ CudaTensor CudaTensor::reshape(const std::vector<int> &_new_shape) const {
                            ? dtype_to_size(dtype)
                            : new_strides[i + 1] * new_shape[i + 1];
     }
-    return CudaTensor(total_new, new_shape, new_strides, ptr, dtype);
+    return CudaTensor(nbytes, new_shape, new_strides, ptr, dtype);
   }
-  CudaTensor out(total_new, new_shape, dtype);
+  CudaTensor out(new_shape, dtype);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
   dim3 grid_size(ceil(total_new / (float)DEFAULT_BLOCK_SIZE));
   auto &in_strides = cuda_unique_ptr_from_host(shape.size(), strides.data());
@@ -163,6 +163,6 @@ CudaTensor CudaTensor::permute(shape_t axes) const {
     new_strides[i] = strides[axes[i]];
   }
 
-  CudaTensor out(size, new_shape, new_strides, ptr, dtype);
+  CudaTensor out(nbytes, new_shape, new_strides, ptr, dtype);
   return out;
 }

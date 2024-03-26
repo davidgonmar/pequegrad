@@ -26,9 +26,9 @@ CudaTensor CudaTensor::binop_same_dtype(const CudaTensor &other,
   }
   assert(shape == other.shape);
   dim3 block_size(DEFAULT_BLOCK_SIZE);
-  dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
+  dim3 grid_size(ceil(size() / (float)DEFAULT_BLOCK_SIZE));
   // Default stride calculation
-  CudaTensor out(size, shape, dtype);
+  CudaTensor out(shape, dtype);
   size_t n_dims = shape.size();
 
   cuda_unique_ptr<size_t> d_strides =

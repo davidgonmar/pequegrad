@@ -25,7 +25,7 @@ CudaTensor CudaTensor::ternaryop(const CudaTensor &second,
                    third.broadcast_to(target_shape), ker);
   }
   dim3 block_size(DEFAULT_BLOCK_SIZE);
-  dim3 grid_size(ceil(size / (float)DEFAULT_BLOCK_SIZE));
+  dim3 grid_size(ceil(size() / (float)DEFAULT_BLOCK_SIZE));
   DType biggest_dtype;
   // prefer float64 over float32, and float32 over int32
   if (dtype == DType::Float64 || second.dtype == DType::Float64 ||
@@ -46,7 +46,7 @@ CudaTensor CudaTensor::ternaryop(const CudaTensor &second,
   }
 
   // Default stride calculation
-  CudaTensor out(size, shape, dtype);
+  CudaTensor out(shape, dtype);
   size_t n_dims = shape.size();
   cuda_unique_ptr<size_t> d_first_strides =
       cuda_unique_ptr_from_host(n_dims, strides.data());
