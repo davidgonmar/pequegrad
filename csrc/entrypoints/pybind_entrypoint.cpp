@@ -93,5 +93,9 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
       .BIND_BINARY_OP(ge)
       .BIND_BINARY_OP(le)
       .BIND_BINARY_OP(pow)
-      .BIND_BINARY_OP(el_wise_max);
+      .BIND_BINARY_OP(el_wise_max)
+      .def("broadcast_to",
+           [](const CpuTensor &arr, const std::vector<size_t> &new_shape) {
+             return arr.broadcast_to(new_shape);
+           });
 }

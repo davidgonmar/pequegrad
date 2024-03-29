@@ -36,14 +36,20 @@ void binary_op_ker(const T *lhs, const T *rhs, T *result,
   }
 #pragma omp parallel for
   for (int index = 0; index < total_elements; index++) {
-    size_t offset = 0;
+    size_t offset_lhs = 0;
+    size_t offset_rhs = 0;
+    size_t offset_result = 0;
     size_t index_copy = index;
     for (int dim_idx = shape.size() - 1; dim_idx >= 0; dim_idx--) {
-      offset +=
+      offset_lhs +=
           (index_copy % shape[dim_idx]) * lhs_strides[dim_idx] / sizeof(T);
+      offset_rhs +=
+          (index_copy % shape[dim_idx]) * rhs_strides[dim_idx] / sizeof(T);
+      offset_result +=
+          (index_copy % shape[dim_idx]) * result_strides[dim_idx] / sizeof(T);
       index_copy /= shape[dim_idx];
     }
-    result[offset] = op(lhs[offset], rhs[offset]);
+    result[offset_result] = op(lhs[offset_lhs], rhs[offset_rhs]);
   }
 }
 

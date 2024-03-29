@@ -1,17 +1,5 @@
 #include "cuda_tensor.cuh"
-
-shape_t compute_natural_strides(const shape_t &shape, const DType dtype) {
-  if (shape.size() == 0) {
-    return shape_t(); // if scalar, return empty strides
-  }
-  shape_t strides(shape.size());
-  size_t dtype_size = dtype_to_size(dtype);
-  strides[shape.size() - 1] = dtype_size;
-  for (int i = shape.size() - 2; i >= 0; --i) {
-    strides[i] = strides[i + 1] * shape[i + 1];
-  }
-  return strides;
-}
+#include "shape.hpp"
 
 CudaTensor::CudaTensor(size_t nbytes, const shape_t &shape,
                        const shape_t &strides, const std::shared_ptr<void> &ptr,

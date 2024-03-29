@@ -79,7 +79,7 @@ class _Testbackend:
             [(1, 3, 1), (2, 1, 3, 4)],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_broadcast_to(self, shape, class_backend):
         from_shape, to_shape = shape
         nparr = np.random.rand(*from_shape).astype(self.dtype)
@@ -100,7 +100,7 @@ class _Testbackend:
             [(1, 3, 1), (2, 1, 3, 4)],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     @pytest.mark.parametrize(
         "lambdaop",
         [

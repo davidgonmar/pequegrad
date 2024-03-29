@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dtype.hpp"
 #include <vector>
 
 using shape_t = std::vector<size_t>;
@@ -20,3 +21,5 @@ using axes_t = std::vector<axis_t>;
 shape_t get_strides_for_broadcasting(const shape_t shape_from,
                                      const shape_t strides_from,
                                      const shape_t shape_to);
+
+shape_t compute_natural_strides(const shape_t &shape, const DType dtype);

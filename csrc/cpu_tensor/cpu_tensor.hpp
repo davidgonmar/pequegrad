@@ -1,4 +1,5 @@
 #include "dtype.hpp"
+#include "shape.hpp"
 #include "utils.hpp"
 #include <memory>
 #include <pybind11/numpy.h>
@@ -7,11 +8,6 @@
 #include <vector>
 
 namespace py = pybind11;
-
-using shape_t = std::vector<size_t>;
-
-using axis_t = int;
-using axes_t = std::vector<axis_t>;
 
 class CpuTensor {
 
@@ -56,10 +52,12 @@ public:
 
   template <typename T> py::array_t<T> to_numpy() const {
     // TODO -- Convert to contiguous array
-    py::array_t<T> np_array(shape);
+    py::array_t<T> np_array(shape, strides);
     std::memcpy(np_array.mutable_data(), ptr.get(), nbytes);
     return np_array;
   }
+
+  CpuTensor broadcast_to(const shape_t &new_shape) const;
 
   CpuTensor add(const CpuTensor &other) const;
   CpuTensor sub(const CpuTensor &other) const;

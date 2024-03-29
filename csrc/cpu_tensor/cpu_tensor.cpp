@@ -1,10 +1,10 @@
 #include "cpu_tensor.hpp"
 #include "binary_helpers.hpp"
 #include "immintrin.h"
+#include "shape.hpp"
 #include "unary_vectorized.hpp"
 #include "utils.hpp"
 #include <cblas.h>
-
 size_t CpuTensor::compute_nbytes(const shape_t &shape, DType dtype) const {
   size_t size = 1;
   for (size_t i = 0; i < shape.size(); i++) {
@@ -12,19 +12,45 @@ size_t CpuTensor::compute_nbytes(const shape_t &shape, DType dtype) const {
   }
   return size * dtype_to_size(dtype);
 }
+// Returns a view of the tensor with the given shape
+CpuTensor CpuTensor::broadcast_to(const shape_t &new_shape) const {
+  if (shape == new_shape) {
+    return *this;
+  }
+  shape_t new_strides =
+      get_strides_for_broadcasting(this->shape, this->strides, new_shape);
+
+  return CpuTensor(new_shape, new_strides, ptr, dtype);
+}
 
 CpuTensor binary_op(const CpuTensor &lhs, const CpuTensor &rhs,
                     bh::BinaryOpType op) {
+  // we need to broadcast
   if (lhs.shape != rhs.shape) {
-    throw std::runtime_error("Shapes do not match");
+    // broadcast rhs -> lhs
+    if (lhs.shape.size() > rhs.shape.size()) {
+      return binary_op(lhs, rhs.broadcast_to(lhs.shape), op);
+    } else if (lhs.shape.size() < rhs.shape.size()) {
+      return binary_op(lhs.broadcast_to(rhs.shape), rhs, op);
+    } else {
+      // we need to try both, improve this logic
+      try {
+        return binary_op(lhs, rhs.broadcast_to(lhs.shape), op);
+      } catch (...) {
+        return binary_op(lhs.broadcast_to(rhs.shape), rhs, op);
+      }
+    }
   }
   if (lhs.dtype != rhs.dtype) { // Only float32 supported
     throw std::runtime_error("Data types do not match");
   }
 
-  void *result = (void *)new char[lhs.nbytes];
+  void *result =
+      (void *)new char[std::accumulate(lhs.shape.begin(), lhs.shape.end(), 1,
+                                       std::multiplies<size_t>()) *
+                       dtype_to_size(lhs.dtype)];
   auto res_tens = CpuTensor(
-      lhs.shape, rhs.strides,
+      lhs.shape, compute_natural_strides(lhs.shape, lhs.dtype),
       std::shared_ptr<void>(result, [](void *p) { delete[] p; }), lhs.dtype);
   bh::dispatch_binary_op(lhs.shape, lhs.strides, rhs.strides, res_tens.strides,
                          lhs.ptr.get(), rhs.ptr.get(), res_tens.ptr.get(),
