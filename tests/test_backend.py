@@ -27,7 +27,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1), tuple()]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     @pytest.mark.parametrize(
         "lambdaop",
         [

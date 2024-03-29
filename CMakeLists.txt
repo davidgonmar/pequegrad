@@ -71,7 +71,20 @@ else()
     endif()
 endif()
 
+# use OpenMP if available
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found")
+    target_link_libraries(pequegrad_cpu PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
+# add max optimization
+if (MSVC)
+    target_compile_options(pequegrad_cpu PRIVATE "/Ox")
+else()
+    target_compile_options(pequegrad_cpu PRIVATE "-O
+    3")
+endif()
 # ========================== CUDA version ==========================
 
 if(1)

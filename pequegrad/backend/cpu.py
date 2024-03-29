@@ -83,6 +83,18 @@ try:
 
     bind_method(CpuTensor, "__repr__", lambda self: f"CpuTensor({self.to_numpy()})")
     bind_method(CpuTensor, "__add__", lambda self, other: self.add(other))
+    bind_method(CpuTensor, "__sub__", lambda self, other: self.sub(other))
+    bind_method(CpuTensor, "__mul__", lambda self, other: self.mul(other))
+    bind_method(CpuTensor, "__truediv__", lambda self, other: self.div(other))
+    bind_method(CpuTensor, "__neg__", lambda self: self.neg())
+    bind_method(CpuTensor, "__eq__", lambda self, other: self.eq(other))
+    bind_method(CpuTensor, "__ne__", lambda self, other: self.ne(other))
+    bind_method(CpuTensor, "__lt__", lambda self, other: self.lt(other))
+    bind_method(CpuTensor, "__gt__", lambda self, other: self.gt(other))
+    bind_method(CpuTensor, "__le__", lambda self, other: self.le(other))
+    bind_method(CpuTensor, "__ge__", lambda self, other: self.ge(other))
+    bind_method(CpuTensor, "__pow__", lambda self, other: self.pow(other))
+
     bind_method(
         CpuTensor,
         "__new__",

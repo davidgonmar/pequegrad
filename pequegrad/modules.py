@@ -134,7 +134,6 @@ class Conv2d(StatefulModule):
         self.dilation = dilation
 
     def forward(self, input: Tensor) -> Tensor:
-
         return input.conv2d(
             self.kernel,
             self.bias,

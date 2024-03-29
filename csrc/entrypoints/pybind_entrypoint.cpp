@@ -13,6 +13,9 @@ using ItemVariant = std::variant<float, int, double>;
 using NpArrayVariant =
     std::variant<py::array_t<float>, py::array_t<int>, py::array_t<double>>;
 
+#define BIND_BINARY_OP(op)                                                     \
+  def(#op, [](const CpuTensor &a, const CpuTensor &b) { return a.op(b); })
+
 PYBIND11_MODULE(pequegrad_cpu, m) {
   namespace py = pybind11;
 
@@ -60,11 +63,35 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
                                }
                              })
       .def_property_readonly("shape",
-                             [](const CpuTensor &arr) { return arr.shape; })
+                             [](const CpuTensor &arr) {
+                               py::tuple t(arr.shape.size());
+                               for (size_t i = 0; i < arr.shape.size(); i++) {
+                                 t[i] = arr.shape[i];
+                               }
+                               return t;
+                             })
+
       .def_property_readonly("strides",
-                             [](const CpuTensor &arr) { return arr.strides; })
+                             [](const CpuTensor &arr) {
+                               py::tuple t(arr.strides.size());
+                               for (size_t i = 0; i < arr.strides.size(); i++) {
+                                 t[i] = arr.strides[i];
+                               }
+                               return t;
+                             })
       .def_property_readonly("nbytes",
                              [](const CpuTensor &arr) { return arr.nbytes; })
       .def("log", [](const CpuTensor &arr) { return arr.log(); })
-      .def("exp", [](const CpuTensor &arr) { return arr.exp(); });
+      .def("exp", [](const CpuTensor &arr) { return arr.exp(); })
+      .BIND_BINARY_OP(sub)
+      .BIND_BINARY_OP(mul)
+      .BIND_BINARY_OP(div)
+      .BIND_BINARY_OP(gt)
+      .BIND_BINARY_OP(lt)
+      .BIND_BINARY_OP(eq)
+      .BIND_BINARY_OP(ne)
+      .BIND_BINARY_OP(ge)
+      .BIND_BINARY_OP(le)
+      .BIND_BINARY_OP(pow)
+      .BIND_BINARY_OP(el_wise_max);
 }

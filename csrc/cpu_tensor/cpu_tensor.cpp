@@ -1,6 +1,8 @@
 #include "cpu_tensor.hpp"
+#include "binary_helpers.hpp"
 #include "immintrin.h"
 #include "unary_vectorized.hpp"
+#include "utils.hpp"
 #include <cblas.h>
 
 size_t CpuTensor::compute_nbytes(const shape_t &shape, DType dtype) const {
@@ -11,46 +13,72 @@ size_t CpuTensor::compute_nbytes(const shape_t &shape, DType dtype) const {
   return size * dtype_to_size(dtype);
 }
 
-void add_vectorized(float *ptr1, float *ptr2, float *result, int strx, int stry,
-                    int size) {
-  cblas_scopy(size, ptr1, strx, result, stry);
-  cblas_saxpy(size, 1.0, ptr2, strx, result, stry);
+CpuTensor binary_op(const CpuTensor &lhs, const CpuTensor &rhs,
+                    bh::BinaryOpType op) {
+  if (lhs.shape != rhs.shape) {
+    throw std::runtime_error("Shapes do not match");
+  }
+  if (lhs.dtype != rhs.dtype) { // Only float32 supported
+    throw std::runtime_error("Data types do not match");
+  }
+
+  void *result = (void *)new char[lhs.nbytes];
+  auto res_tens = CpuTensor(
+      lhs.shape, rhs.strides,
+      std::shared_ptr<void>(result, [](void *p) { delete[] p; }), lhs.dtype);
+  bh::dispatch_binary_op(lhs.shape, lhs.strides, rhs.strides, res_tens.strides,
+                         lhs.ptr.get(), rhs.ptr.get(), res_tens.ptr.get(),
+                         lhs.dtype, op);
+
+  return res_tens;
 }
 
 CpuTensor CpuTensor::add(const CpuTensor &other) const {
-  if (shape != other.shape) {
-    throw std::runtime_error("Shapes do not match");
-  }
-  if (dtype != other.dtype) {
-    throw std::runtime_error("Data types do not match");
-  }
-  float *ptr1 = static_cast<float *>(ptr.get());
-  float *ptr2 = static_cast<float *>(other.ptr.get());
+  return binary_op(*this, other, bh::BinaryOpType::Add);
+}
 
-  // The strategy is: an n-dim tensor is an (n-1)-dim tensor of vectors
-  // So, for each vector, we can use a vectorized operation
-  float *result = new float[nbytes / sizeof(float)];
+CpuTensor CpuTensor::sub(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Sub);
+}
 
-  // Vector + Vector case
-  if (shape.size() == 1) {
-    add_vectorized(ptr1, ptr2, result, strides[0] / sizeof(float),
-                   other.strides[0] / sizeof(float), shape[0]);
-  } else {
-    // We need to iterate over the vectors (last dimension)
-    int vecsize = shape[shape.size() - 1];
-    int total_vectors = nbytes / (vecsize * sizeof(float));
+CpuTensor CpuTensor::mul(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Mul);
+}
 
-    for (int i = 0; i < total_vectors; i++) {
-      add_vectorized(ptr1 + i * vecsize, ptr2 + i * vecsize,
-                     result + i * vecsize,
-                     strides[shape.size() - 1] / sizeof(float),
-                     other.strides[shape.size() - 1] / sizeof(float), vecsize);
-    }
-  }
+CpuTensor CpuTensor::div(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Div);
+}
 
-  return CpuTensor(shape, strides,
-                   std::shared_ptr<void>(result, [](float *p) { delete[] p; }),
-                   dtype);
+CpuTensor CpuTensor::gt(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Gt);
+}
+
+CpuTensor CpuTensor::lt(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Lt);
+}
+
+CpuTensor CpuTensor::eq(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Eq);
+}
+
+CpuTensor CpuTensor::ne(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Neq);
+}
+
+CpuTensor CpuTensor::ge(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Ge);
+}
+
+CpuTensor CpuTensor::le(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Le);
+}
+
+CpuTensor CpuTensor::pow(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Pow);
+}
+
+CpuTensor CpuTensor::el_wise_max(const CpuTensor &other) const {
+  return binary_op(*this, other, bh::BinaryOpType::Max);
 }
 
 CpuTensor prepare_for_unary_op(const CpuTensor &a) {
