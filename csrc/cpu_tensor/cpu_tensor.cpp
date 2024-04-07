@@ -1,13 +1,13 @@
 #include "cpu_tensor.hpp"
 #include "./copy.hpp"
 #include "./matmul.hpp"
+#include "./reducers.hpp"
 #include "binary_helpers.hpp"
 #include "immintrin.h"
 #include "shape.hpp"
 #include "unary_vectorized.hpp"
 #include "utils.hpp"
 #include <cblas.h>
-#include "./reducers.hpp"
 
 bool CpuTensor::is_contiguous() const {
   // if it is not dense, also not contiguous (todo -- handle this case)
@@ -261,9 +261,7 @@ CpuTensor CpuTensor::matmul(const CpuTensor &other) const {
   }
 }
 
-
-CpuTensor CpuTensor::reduce(ReduceOp ker, axis_t axis,
-                              bool keepdims) const {
+CpuTensor CpuTensor::reduce(ReduceOp ker, axis_t axis, bool keepdims) const {
   if (!is_contiguous()) {
     return as_contiguous().reduce(ker, axis, keepdims);
   }
@@ -285,8 +283,7 @@ CpuTensor CpuTensor::reduce(ReduceOp ker, axis_t axis,
   return out.squeeze(axis);
 }
 
-CpuTensor CpuTensor::reduce(ReduceOp ker, axes_t axes,
-                              bool keepdims) const {
+CpuTensor CpuTensor::reduce(ReduceOp ker, axes_t axes, bool keepdims) const {
   CpuTensor out = *this;
   for (size_t axis : axes) {
     out = out.reduce(ker, axis, true);
@@ -335,4 +332,34 @@ CpuTensor CpuTensor::mean(axes_t axes, bool keepdims) const {
 }
 CpuTensor CpuTensor::mean(bool keepdims) const {
   return reduce(ReduceOp::Mean, keepdims);
+}
+
+CpuTensor CpuTensor::ternary_op(const CpuTensor &other1,
+                                const CpuTensor &other2,
+                                th::TernaryOpType op) const {
+  if (dtype != other1.dtype || dtype != other2.dtype) {
+    throw std::runtime_error("Data types do not match");
+  }
+  if (shape != other1.shape || shape != other2.shape) {
+    throw std::runtime_error("Shapes do not match");
+  }
+  void *result = (void *)new char[std::accumulate(shape.begin(), shape.end(), 1,
+                                                  std::multiplies<size_t>()) *
+                                  dtype_to_size(dtype)];
+  auto res_tens = CpuTensor(
+      std::accumulate(shape.begin(), shape.end(), 1,
+                      std::multiplies<size_t>()) *
+          dtype_to_size(dtype),
+      shape, compute_natural_strides(shape, dtype),
+      std::shared_ptr<void>(result, [](void *p) { delete[] p; }), dtype);
+  th::dispatch_ternary_op(shape, strides, other1.strides, other2.strides,
+                          res_tens.strides, ptr.get(), other1.ptr.get(),
+                          other2.ptr.get(), res_tens.ptr.get(), dtype, op);
+
+  return res_tens;
+}
+
+CpuTensor CpuTensor::where(const CpuTensor &other1,
+                           const CpuTensor &other2) const {
+  return ternary_op(other1, other2, th::TernaryOpType::Where);
 }

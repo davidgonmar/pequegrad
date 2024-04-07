@@ -1,14 +1,15 @@
 #pragma once
 
 #include "dtype.hpp"
+#include "reducers.hpp"
 #include "shape.hpp"
+#include "ternary_helpers.hpp"
 #include "utils.hpp"
 #include <memory>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <vector>
-#include "reducers.hpp"
 
 namespace py = pybind11;
 
@@ -42,8 +43,7 @@ public:
                   compute_natural_strides(shape, dtype),
                   std::shared_ptr<void>(new char[compute_nbytes(shape, dtype)],
                                         [](void *p) { delete[] p; }),
-                  dtype) {
-  }
+                  dtype) {}
 
   template <typename T> static CpuTensor from_numpy(py::array_t<T> np_array) {
     py::buffer_info buffer_info = np_array.request();
@@ -102,7 +102,7 @@ public:
   CpuTensor reduce(ReduceOp ker, axis_t axis, bool keepdims) const;
   CpuTensor reduce(ReduceOp ker, axes_t axes, bool keepdims) const;
   CpuTensor reduce(ReduceOp ker, bool keepdims) const;
-  
+
   CpuTensor sum(axis_t axis, bool keepdims) const;
   CpuTensor sum(axes_t axes, bool keepdims) const;
   CpuTensor sum(bool keepdims) const;
@@ -113,44 +113,45 @@ public:
   CpuTensor mean(axes_t axes, bool keepdims) const;
   CpuTensor mean(bool keepdims) const;
 
-
+  CpuTensor ternary_op(const CpuTensor &other1, const CpuTensor &other2,
+                       th::TernaryOpType op) const;
+  CpuTensor where(const CpuTensor &other1, const CpuTensor &other2) const;
 
   CpuTensor matmul(const CpuTensor &other) const;
 
-
   // Copy and move constructors
-CpuTensor::CpuTensor(const CpuTensor &other)
-    : nbytes(other.nbytes), shape(other.shape), strides(other.strides),
-      ptr(other.ptr), dtype(other.dtype), offset(other.offset) {}
+  CpuTensor::CpuTensor(const CpuTensor &other)
+      : nbytes(other.nbytes), shape(other.shape), strides(other.strides),
+        ptr(other.ptr), dtype(other.dtype), offset(other.offset) {}
 
-CpuTensor &CpuTensor::operator=(const CpuTensor &other) {
-  if (this != &other) {
-    nbytes = other.nbytes;
-    shape = other.shape;
-    strides = other.strides;
-    ptr = other.ptr;
-    dtype = other.dtype;
-    offset = other.offset;
+  CpuTensor &CpuTensor::operator=(const CpuTensor &other) {
+    if (this != &other) {
+      nbytes = other.nbytes;
+      shape = other.shape;
+      strides = other.strides;
+      ptr = other.ptr;
+      dtype = other.dtype;
+      offset = other.offset;
+    }
+    return *this;
   }
-  return *this;
-}
 
-CpuTensor::CpuTensor(CpuTensor &&other)
-    : nbytes(other.nbytes), shape(std::move(other.shape)),
-      strides(std::move(other.strides)), ptr(std::move(other.ptr)),
-      dtype(other.dtype), offset(other.offset) {}
+  CpuTensor::CpuTensor(CpuTensor &&other)
+      : nbytes(other.nbytes), shape(std::move(other.shape)),
+        strides(std::move(other.strides)), ptr(std::move(other.ptr)),
+        dtype(other.dtype), offset(other.offset) {}
 
-CpuTensor &CpuTensor::operator=(CpuTensor &&other) {
-  if (this != &other) {
-    nbytes = other.nbytes;
-    shape = std::move(other.shape);
-    strides = std::move(other.strides);
-    ptr = std::move(other.ptr);
-    dtype = other.dtype;
-    offset = other.offset;
+  CpuTensor &CpuTensor::operator=(CpuTensor &&other) {
+    if (this != &other) {
+      nbytes = other.nbytes;
+      shape = std::move(other.shape);
+      strides = std::move(other.strides);
+      ptr = std::move(other.ptr);
+      dtype = other.dtype;
+      offset = other.offset;
+    }
+    return *this;
   }
-  return *this;
-}
 
   CpuTensor exp() const;
   CpuTensor log() const;

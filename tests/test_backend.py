@@ -300,7 +300,7 @@ class _Testbackend:
             (1, 1, 1),
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     @pytest.mark.parametrize(
         "lambdaop",
         [

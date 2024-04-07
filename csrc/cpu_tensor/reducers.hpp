@@ -5,14 +5,15 @@
 
 template <typename Op, typename T>
 void reduce_base_fn(const T *in, T *out, const std::vector<size_t> &in_strides,
-                    const std::vector<size_t> &in_shape, const size_t red_axis) {
+                    const std::vector<size_t> &in_shape,
+                    const size_t red_axis) {
   Op op;
   size_t red_axis_stride = in_strides[red_axis];
   size_t n_dims = in_shape.size();
 
   size_t red_axis_size = in_shape[red_axis];
   size_t red_axis_stride_size = in_strides[red_axis] / sizeof(T);
-  
+
   size_t total_out_elements = 1;
   for (size_t i = 0; i < in_shape.size(); i++) {
     if (i != red_axis) {
@@ -23,28 +24,29 @@ void reduce_base_fn(const T *in, T *out, const std::vector<size_t> &in_strides,
   for (size_t i = 0; i < total_out_elements; i++) {
     int idx = i;
 
-  int red_elements = in_shape[red_axis];
+    int red_elements = in_shape[red_axis];
 
-  T accum = op.initial_value();
+    T accum = op.initial_value();
 
-  for (int i = 0; i < red_elements; i++) {
-    int reduced_idx = idx;
-    int in_idx = 0;
-    for (int j = n_dims - 1; j >= 0; j--) {
-      if (j == red_axis) {
-        in_idx +=
-            i * in_strides[j] / sizeof(T); // simply advance by 'i * stride'
-      } else { // do the general algorithm to go from idx -> actual displacement
-        int current_dim_idx = reduced_idx % in_shape[j];
-        in_idx += current_dim_idx * in_strides[j] / sizeof(T);
-        reduced_idx /= in_shape[j];
+    for (int i = 0; i < red_elements; i++) {
+      int reduced_idx = idx;
+      int in_idx = 0;
+      for (int j = n_dims - 1; j >= 0; j--) {
+        if (j == red_axis) {
+          in_idx +=
+              i * in_strides[j] / sizeof(T); // simply advance by 'i * stride'
+        } else { // do the general algorithm to go from idx -> actual
+                 // displacement
+          int current_dim_idx = reduced_idx % in_shape[j];
+          in_idx += current_dim_idx * in_strides[j] / sizeof(T);
+          reduced_idx /= in_shape[j];
+        }
       }
+      T el = in[in_idx];
+      accum = op.apply(accum, el);
     }
-    T el = in[in_idx];
-    accum = op.apply(accum, el);
-  }
 
-  out[idx] = op.after_reduce(accum, red_elements);
+    out[idx] = op.after_reduce(accum, red_elements);
   }
 
   return;
@@ -81,11 +83,12 @@ template <typename T> struct MeanOp {
 
 enum class ReduceOp { Sum, Max, Mean };
 
-
 template <typename T>
-static inline void dispatch_reduce_helper(const T *in, T *out, const std::vector<size_t> &in_strides,
-                            const std::vector<size_t> &in_shape,
-                            const size_t red_axis, const ReduceOp op) {
+static inline void dispatch_reduce_helper(const T *in, T *out,
+                                          const std::vector<size_t> &in_strides,
+                                          const std::vector<size_t> &in_shape,
+                                          const size_t red_axis,
+                                          const ReduceOp op) {
   switch (op) {
   case ReduceOp::Sum:
     reduce_base_fn<SumOp<T>>(in, out, in_strides, in_shape, red_axis);
@@ -101,14 +104,16 @@ static inline void dispatch_reduce_helper(const T *in, T *out, const std::vector
   }
 }
 
-static inline void dispatch_reduce(const void *in, void *out, const std::vector<size_t> &in_strides,
-                     const std::vector<size_t> &in_shape,
-                     const size_t red_axis, const DType dtype, const ReduceOp op) {
+static inline void dispatch_reduce(const void *in, void *out,
+                                   const std::vector<size_t> &in_strides,
+                                   const std::vector<size_t> &in_shape,
+                                   const size_t red_axis, const DType dtype,
+                                   const ReduceOp op) {
   switch (dtype) {
   case DType::Float32:
     dispatch_reduce_helper<float>(static_cast<const float *>(in),
-                                  static_cast<float *>(out), in_strides, in_shape,
-                                red_axis, op);
+                                  static_cast<float *>(out), in_strides,
+                                  in_shape, red_axis, op);
     break;
   case DType::Int32:
     dispatch_reduce_helper<int>(static_cast<const int *>(in),
