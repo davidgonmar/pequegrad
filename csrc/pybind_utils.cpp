@@ -1,6 +1,6 @@
-#include "cuda_tensor/cuda_tensor.cuh"
-#include "cuda_tensor/cuda_utils.cuh"
-#include "pybind_utils.cuh"
+
+#include "pybind_utils.hpp"
+#include "utils.hpp"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

@@ -647,7 +647,7 @@ class _Testbackend:
             [(1, 3, 1), (0, slice(None), slice(None))],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_slicing(self, data, class_backend):
         shape, slices = data
         nparr = np.random.rand(*shape).astype(self.dtype)
@@ -661,7 +661,7 @@ class _Testbackend:
             [(4, 4), (slice(0, 2), slice(1, 3))],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_slicing_non_contiguous(self, data, class_backend):
         shape, slices = data
         nparr = np.random.rand(*shape).astype(self.dtype)
@@ -691,7 +691,7 @@ class _Testbackend:
             [(1,), (0,), ()],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_assign(self, data, class_backend):
         shape, slices, assign_vals_shape = data
         nparr = np.array(np.random.rand(*shape)).astype(self.dtype)

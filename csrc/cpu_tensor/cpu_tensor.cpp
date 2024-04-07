@@ -39,8 +39,8 @@ CpuTensor CpuTensor::as_contiguous() const {
     return *this;
   } else {
     CpuTensor out(shape, dtype);
-    copy::dispatch_copy(shape, strides, out.strides, ptr.get(), out.ptr.get(),
-                        dtype);
+    copy::dispatch_copy(shape, strides, out.strides, get_base_ptr(),
+                        out.get_base_ptr(), dtype);
     return out;
   }
 }
@@ -105,8 +105,8 @@ CpuTensor binary_op(const CpuTensor &lhs, const CpuTensor &rhs,
       lhs.shape, compute_natural_strides(lhs.shape, lhs.dtype),
       std::shared_ptr<void>(result, [](void *p) { delete[] p; }), lhs.dtype);
   bh::dispatch_binary_op(lhs.shape, lhs.strides, rhs.strides, res_tens.strides,
-                         lhs.ptr.get(), rhs.ptr.get(), res_tens.ptr.get(),
-                         lhs.dtype, op);
+                         lhs.get_base_ptr(), rhs.get_base_ptr(),
+                         res_tens.get_base_ptr(), lhs.dtype, op);
 
   return res_tens;
 }
@@ -160,7 +160,7 @@ CpuTensor CpuTensor::el_wise_max(const CpuTensor &other) const {
 }
 
 CpuTensor prepare_for_unary_op(const CpuTensor &a) {
-  void *ptr1 = a.ptr.get();
+  void *ptr1 = a.get_base_ptr();
   void *ptr2 = malloc(a.nbytes);
 
   return CpuTensor(a.nbytes, a.shape, a.strides,
@@ -169,14 +169,14 @@ CpuTensor prepare_for_unary_op(const CpuTensor &a) {
 }
 CpuTensor CpuTensor::exp() const {
   CpuTensor result = prepare_for_unary_op(*this);
-  dispatch_unary_op(dtype, UnaryOp::Exp, ptr.get(), result.ptr.get(),
+  dispatch_unary_op(dtype, UnaryOp::Exp, get_base_ptr(), result.get_base_ptr(),
                     nbytes / dtype_to_size(dtype));
   return result;
 }
 
 CpuTensor CpuTensor::log() const {
   CpuTensor result = prepare_for_unary_op(*this);
-  dispatch_unary_op(dtype, UnaryOp::Log, ptr.get(), result.ptr.get(),
+  dispatch_unary_op(dtype, UnaryOp::Log, get_base_ptr(), result.get_base_ptr(),
                     nbytes / dtype_to_size(dtype));
   return result;
 }
@@ -205,8 +205,8 @@ CpuTensor CpuTensor::matmul(const CpuTensor &other) const {
   size_t size1, midsize, size2;
   if (a.ndim() == 1 && b.ndim() == 1) {
     CpuTensor out({1}, dtype);
-    dispatch_contiguous_dot_ker(a.ptr.get(), b.ptr.get(), out.ptr.get(),
-                                a.shape[0], dtype);
+    dispatch_contiguous_dot_ker(a.get_base_ptr(), b.get_base_ptr(),
+                                out.get_base_ptr(), a.shape[0], dtype);
     return out.squeeze();
   } else {
     int a_prod = std::accumulate(a.shape.begin(), a.shape.end() - 2, 1,
@@ -255,8 +255,8 @@ CpuTensor CpuTensor::matmul(const CpuTensor &other) const {
     size_t N = size2;
     size_t K = midsize;
     size_t B = new_size / (M * N); // batch size
-    dispatch_contiguous_matmul_ker(a.ptr.get(), b.ptr.get(), out.ptr.get(), M,
-                                   N, K, B, dtype);
+    dispatch_contiguous_matmul_ker(a.get_base_ptr(), b.get_base_ptr(),
+                                   out.get_base_ptr(), M, N, K, B, dtype);
     return out;
   }
 }
@@ -276,7 +276,8 @@ CpuTensor CpuTensor::reduce(ReduceOp ker, axis_t axis, bool keepdims) const {
   size_t new_size = size() / shape[axis];
   size_t n_dims = shape.size();
   CpuTensor out(new_shape, dtype);
-  dispatch_reduce(ptr.get(), out.ptr.get(), strides, shape, axis, dtype, ker);
+  dispatch_reduce(get_base_ptr(), out.get_base_ptr(), strides, shape, axis,
+                  dtype, ker);
   if (keepdims) {
     return out;
   }
@@ -353,8 +354,9 @@ CpuTensor CpuTensor::ternary_op(const CpuTensor &other1,
       shape, compute_natural_strides(shape, dtype),
       std::shared_ptr<void>(result, [](void *p) { delete[] p; }), dtype);
   th::dispatch_ternary_op(shape, strides, other1.strides, other2.strides,
-                          res_tens.strides, ptr.get(), other1.ptr.get(),
-                          other2.ptr.get(), res_tens.ptr.get(), dtype, op);
+                          res_tens.strides, get_base_ptr(),
+                          other1.get_base_ptr(), other2.get_base_ptr(),
+                          res_tens.get_base_ptr(), dtype, op);
 
   return res_tens;
 }

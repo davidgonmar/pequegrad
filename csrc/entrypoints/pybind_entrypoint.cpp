@@ -1,4 +1,5 @@
 #include "cpu_tensor/cpu_tensor.hpp"
+#include "pybind_utils.hpp"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -224,5 +225,36 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
           py::arg("axis"), py::arg("keepdims") = false)
       .def("where",
            [](const CpuTensor &arr, const CpuTensor &other1,
-              const CpuTensor &other2) { return arr.where(other1, other2); });
+              const CpuTensor &other2) { return arr.where(other1, other2); })
+      .def(
+          "slice",
+          [](const CpuTensor &arr, const py::tuple slices) {
+            slice_t parsed =
+                pybind_utils::parse_pybind_slices(slices, arr.shape);
+            return arr.slice(parsed);
+          },
+          py::arg("slices").noconvert())
+      .def(
+          "slice",
+          [](const CpuTensor &arr, const pybind_utils::pybind_slice_item_t sl) {
+            auto _tuple = py::make_tuple(sl);
+            slice_t parsed =
+                pybind_utils::parse_pybind_slices(_tuple, arr.shape);
+            return arr.slice(parsed);
+          },
+          py::arg("item"))
+      .def("assign",
+           [](CpuTensor &arr, const py::tuple slices, CpuTensor vals) {
+             slice_t parsed =
+                 pybind_utils::parse_pybind_slices(slices, arr.shape);
+
+             return arr.assign(parsed, vals);
+           })
+      .def("assign", [](CpuTensor &arr,
+                        const pybind_utils::pybind_slice_item_t item,
+                        CpuTensor vals) {
+        auto _tuple = py::make_tuple(item);
+        slice_t parsed = pybind_utils::parse_pybind_slices(_tuple, arr.shape);
+        return arr.assign(parsed, vals);
+      });
 }

@@ -94,6 +94,8 @@ try:
     bind_method(CpuTensor, "__le__", lambda self, other: self.le(other))
     bind_method(CpuTensor, "__ge__", lambda self, other: self.ge(other))
     bind_method(CpuTensor, "__pow__", lambda self, other: self.pow(other))
+    bind_method(CpuTensor, "__getitem__", CpuTensor.slice)
+    bind_method(CpuTensor, "__setitem__", CpuTensor.assign)
 
     def T(self):
         axis = list(range(self.ndim))

@@ -47,6 +47,7 @@ file(GLOB CPU_SOURCES
     csrc/shape.cpp
     csrc/cpu_tensor/*.cpp 
     csrc/entrypoints/pybind_entrypoint.cpp
+    csrc/pybind_utils.cpp
 )
 # Add an executable target
 pybind11_add_module(pequegrad_cpu ${CPU_SOURCES})
@@ -98,7 +99,7 @@ if(1)
     file(GLOB CUDA_SOURCES 
         csrc/dtype.cpp
         csrc/shape.cpp
-        csrc/pybind_utils.cu
+        csrc/pybind_utils.cpp
         csrc/utils.cu
         csrc/cuda_tensor/*.cu 
         csrc/cuda_tensor/*.cpp 

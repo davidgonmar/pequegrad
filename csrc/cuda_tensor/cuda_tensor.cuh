@@ -3,6 +3,7 @@
 #include "cuda_tensor/cuda_utils.cuh"
 #include "kernels/all.cuh"
 #include "shape.hpp"
+#include "slicing.hpp"
 #include "utils.hpp"
 #include <iostream>
 #include <pybind11/numpy.h>
@@ -13,29 +14,6 @@
 #define MAX_THREADS_PER_BLOCK 512
 
 namespace py = pybind11;
-
-struct SliceFromSSS {
-  int start;
-  int stop;
-  int step;
-  SliceFromSSS(int start, int stop, int step)
-      : start(start), stop(stop), step(step) {}
-};
-
-struct SliceFromIdxArray {
-  std::vector<int> indices;
-  SliceFromIdxArray(const std::vector<int> &indices) : indices(indices) {}
-};
-
-struct SliceFromSingleIdx {
-  int index;
-  SliceFromSingleIdx(int index) : index(index) {}
-};
-
-struct SliceKeepDim {
-  SliceKeepDim() {}
-};
-
 enum class Device_SliceType {
   SliceFromSSS,
   SliceFromIdxArray,
@@ -52,11 +30,6 @@ struct Device_Slice {
   int indexSize;
   int index;
 };
-
-// single item, start:stop, or [idx1, idx2, idx3, ...]
-using slice_item_t = std::variant<SliceFromSSS, SliceFromIdxArray,
-                                  SliceFromSingleIdx, SliceKeepDim>;
-using slice_t = std::vector<slice_item_t>;
 
 class CudaTensor {
 public:

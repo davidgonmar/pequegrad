@@ -3,6 +3,7 @@
 #include "dtype.hpp"
 #include "reducers.hpp"
 #include "shape.hpp"
+#include "slicing.hpp"
 #include "ternary_helpers.hpp"
 #include "utils.hpp"
 #include <memory>
@@ -33,10 +34,16 @@ public:
   size_t offset;
   DType dtype;
 
+  void *get_base_ptr() const { return static_cast<char *>(ptr.get()) + offset; }
   CpuTensor(const size_t nbytes, const shape_t &shape, const shape_t &strides,
             const std::shared_ptr<void> &ptr, DType dtype)
       : nbytes(nbytes), shape(shape), strides(strides), ptr(ptr), offset(0),
         dtype(dtype) {}
+
+  CpuTensor(const size_t nbytes, const shape_t &shape, const shape_t &strides,
+            const std::shared_ptr<void> &ptr, DType dtype, size_t offset)
+      : nbytes(nbytes), shape(shape), strides(strides), ptr(ptr),
+        offset(offset), dtype(dtype) {}
 
   CpuTensor(const shape_t &shape, DType dtype)
       : CpuTensor(compute_nbytes(shape, dtype), shape,
@@ -69,9 +76,11 @@ public:
   }
 
   template <typename T> py::array_t<T> to_numpy() const {
-    // TODO -- Convert to contiguous array
+    if (!is_dense()) {
+      return as_contiguous().to_numpy<T>();
+    }
     py::array_t<T> np_array(shape, strides);
-    std::memcpy(np_array.mutable_data(), ptr.get(), nbytes);
+    std::memcpy(np_array.mutable_data(), get_base_ptr(), nbytes);
     return np_array;
   }
 
@@ -119,6 +128,8 @@ public:
 
   CpuTensor matmul(const CpuTensor &other) const;
 
+  CpuTensor slice(const slice_t &slices) const;
+  CpuTensor assign(const slice_t &slices, const CpuTensor &other);
   // Copy and move constructors
   CpuTensor::CpuTensor(const CpuTensor &other)
       : nbytes(other.nbytes), shape(other.shape), strides(other.strides),
