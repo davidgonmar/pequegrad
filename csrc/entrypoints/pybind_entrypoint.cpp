@@ -250,11 +250,58 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
 
              return arr.assign(parsed, vals);
            })
-      .def("assign", [](CpuTensor &arr,
-                        const pybind_utils::pybind_slice_item_t item,
-                        CpuTensor vals) {
-        auto _tuple = py::make_tuple(item);
-        slice_t parsed = pybind_utils::parse_pybind_slices(_tuple, arr.shape);
-        return arr.assign(parsed, vals);
-      });
+      .def("assign",
+           [](CpuTensor &arr, const pybind_utils::pybind_slice_item_t item,
+              CpuTensor vals) {
+             auto _tuple = py::make_tuple(item);
+             slice_t parsed =
+                 pybind_utils::parse_pybind_slices(_tuple, arr.shape);
+             return arr.assign(parsed, vals);
+           })
+      .def_static(
+          "fill",
+          [](std::variant<shape_t, size_t> sh, py::handle value,
+             std::string dtype) {
+            shape_t shape;
+            if (std::holds_alternative<shape_t>(sh)) {
+              shape = std::get<shape_t>(sh);
+            } else {
+              shape = {std::get<size_t>(sh)};
+            }
+            if (dtype == "float32") {
+              if (py::isinstance<py::int_>(value)) {
+                return CpuTensor::fill<float>(
+                    shape, static_cast<float>(value.cast<int>()));
+              } else if (py::isinstance<py::float_>(value)) {
+                return CpuTensor::fill<float>(shape, value.cast<float>());
+              } else {
+                throw std::runtime_error(
+                    "Unsupported value type for dtype float32");
+              }
+            } else if (dtype == "int32") {
+              if (py::isinstance<py::float_>(value)) {
+                return CpuTensor::fill<int>(
+                    shape, static_cast<int>(value.cast<float>()));
+              } else if (py::isinstance<py::int_>(value)) {
+                return CpuTensor::fill<int>(shape, value.cast<int>());
+              } else {
+                throw std::runtime_error(
+                    "Unsupported value type for dtype int32");
+              }
+            } else if (dtype == "float64") {
+              if (py::isinstance<py::int_>(value)) {
+                return CpuTensor::fill<double>(
+                    shape, static_cast<double>(value.cast<int>()));
+              } else if (py::isinstance<py::float_>(value)) {
+                return CpuTensor::fill<double>(
+                    shape, static_cast<double>(value.cast<float>()));
+              } else {
+                throw std::runtime_error(
+                    "Unsupported value type for dtype float64");
+              }
+            } else {
+              throw std::runtime_error("Unsupported data type");
+            }
+          },
+          py::arg("shape"), py::arg("value"), py::arg("dtype") = "float32");
 }

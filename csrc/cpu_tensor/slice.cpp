@@ -260,11 +260,9 @@ CpuTensor CpuTensor::assign(const slice_t &slices, const CpuTensor &vals) {
       squeeze_dims.push_back(i);
     }
   }
-  const CpuTensor _vals =
-      vals.squeeze(squeeze_dims).broadcast_to(_sliced.shape);
+  const CpuTensor _vals = vals.squeeze(squeeze_dims).broadcast_to(_sliced.shape);
 
-  copy::dispatch_copy(_sliced.shape, _vals.strides, _sliced.strides,
-                      _vals.get_base_ptr(), _sliced.get_base_ptr(), dtype);
+  copy::dispatch_copy(_sliced.shape, _vals.strides, _sliced.strides, _vals.get_base_ptr(), _sliced.get_base_ptr(), dtype);
 
   return *this;
 }

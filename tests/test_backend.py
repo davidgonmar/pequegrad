@@ -619,7 +619,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     @pytest.mark.parametrize("value", [0.0, 1.0, 2.0, 3.0, 4.0])
     def test_fill(self, shape, class_backend, value):
         x = class_backend.fill(shape, value, dtype=self.dtype)
