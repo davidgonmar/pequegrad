@@ -1,4 +1,5 @@
 #include "dtype.hpp"
+#include <functional>
 #include <vector>
 
 namespace th {

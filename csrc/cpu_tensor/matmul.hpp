@@ -1,11 +1,11 @@
 #include "dtype.hpp"
+#include <cblas.h>
 #include <vector>
 
 // Assumes contiguous tensors
 template <typename T>
 void matmul_ker(const T *lhs, const T *rhs, T *result, size_t M, size_t N,
                 size_t K, size_t B) {
-  // B is the batch size
   for (size_t b = 0; b < B; b++) {
     for (size_t i = 0; i < M; i++) {
       for (size_t j = 0; j < N; j++) {
@@ -19,6 +19,28 @@ void matmul_ker(const T *lhs, const T *rhs, T *result, size_t M, size_t N,
   }
 }
 
+template <>
+void matmul_ker<float>(const float *lhs, const float *rhs, float *result,
+                       size_t M, size_t N, size_t K, size_t B) {
+#pragma omp parallel for
+  for (int b = 0; b < B; b++) {
+    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K, 1.0,
+                lhs + b * M * K, K, rhs + b * K * N, N, 0.0, result + b * M * N,
+                N);
+  }
+}
+
+template <>
+void matmul_ker<double>(const double *lhs, const double *rhs, double *result,
+                        size_t M, size_t N, size_t K, size_t B) {
+#pragma omp parallel for
+  for (int b = 0; b < B; b++) {
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K, 1.0,
+                lhs + b * M * K, K, rhs + b * K * N, N, 0.0, result + b * M * N,
+                N);
+  }
+}
+
 template <typename T>
 void dot_ker(const T *lhs, const T *rhs, T *result, size_t S) {
   T sum = 0;
@@ -26,6 +48,18 @@ void dot_ker(const T *lhs, const T *rhs, T *result, size_t S) {
     sum += lhs[i] * rhs[i];
   }
   *result = sum;
+}
+
+template <>
+void dot_ker<float>(const float *lhs, const float *rhs, float *result,
+                    size_t S) {
+  *result = cblas_sdot(S, lhs, 1, rhs, 1);
+}
+
+template <>
+void dot_ker<double>(const double *lhs, const double *rhs, double *result,
+                     size_t S) {
+  *result = cblas_ddot(S, lhs, 1, rhs, 1);
 }
 
 void dispatch_contiguous_matmul_ker(const void *lhs, const void *rhs,
