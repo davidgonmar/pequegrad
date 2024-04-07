@@ -214,7 +214,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_size(self, shape, class_backend):
         nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_backend(nparr)
@@ -230,7 +230,7 @@ class _Testbackend:
             [(1, 3, 1), (0, 2)],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_swapaxes(self, shape_and_axistoswap, class_backend):
         shape, axis_to_swap = shape_and_axistoswap
         nparr = np.random.rand(*shape).astype(self.dtype)
@@ -277,7 +277,7 @@ class _Testbackend:
             [(5, 3), (2, 2, 3, 5)],
         ],
     )  # (from, to)
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_matmul(self, shapes, class_backend):
         from_shape, to_shape = shapes
         nparr = np.random.rand(*from_shape).astype(self.dtype)

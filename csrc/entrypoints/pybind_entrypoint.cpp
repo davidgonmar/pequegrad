@@ -135,5 +135,29 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
       .def("contiguous",
            [](const CpuTensor &arr) { return arr.as_contiguous(); })
       .def("is_contiguous",
-           [](const CpuTensor &arr) { return arr.is_contiguous(); });
+           [](const CpuTensor &arr) { return arr.is_contiguous(); })
+      .def(
+          "swapaxes",
+          [](const CpuTensor &arr, int axis1, int axis2) {
+            // we need to allow for negative indexing, but permute will be
+            // passed the actual axis
+            shape_t axes(arr.ndim());
+            for (int i = 0; i < arr.ndim(); i++) {
+              axes[i] = i;
+            }
+            // negative indexing is allowed
+            if (axis1 < 0) {
+              axis1 = arr.ndim() + axis1;
+            }
+            if (axis2 < 0) {
+              axis2 = arr.ndim() + axis2;
+            }
+            std::swap(axes[axis1], axes[axis2]);
+            return arr.permute(axes);
+          },
+          py::arg("axis1"), py::arg("axis2"))
+      .def_property_readonly("size",
+                             [](const CpuTensor &arr) { return arr.size(); })
+      .def("matmul",
+           [](const CpuTensor &a, const CpuTensor &b) { return a.matmul(b); });
 }

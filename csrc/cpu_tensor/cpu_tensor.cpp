@@ -1,5 +1,6 @@
 #include "cpu_tensor.hpp"
 #include "./copy.hpp"
+#include "./matmul.hpp"
 #include "binary_helpers.hpp"
 #include "immintrin.h"
 #include "shape.hpp"
@@ -177,4 +178,84 @@ CpuTensor CpuTensor::log() const {
   dispatch_unary_op(dtype, UnaryOp::Log, ptr.get(), result.ptr.get(),
                     nbytes / dtype_to_size(dtype));
   return result;
+}
+
+CpuTensor CpuTensor::matmul(const CpuTensor &other) const {
+
+  if (dtype != other.dtype) {
+    throw std::runtime_error("Data types do not match");
+  }
+  bool added_a_dim = false;
+  bool added_b_dim = false;
+  // if a is a vector and the other is a matrix, add a dimension to a
+  CpuTensor a = (this->ndim() == 1 && other.ndim() != 1)
+                    ? this->unsqueeze(0)
+                    : this->as_contiguous();
+  if (this->ndim() == 1 && other.ndim() != 1) {
+    added_a_dim = true;
+  }
+  CpuTensor b = (other.ndim() == 1 && this->ndim() != 1)
+                    ? other.unsqueeze(1)
+                    : other.as_contiguous();
+  if (other.ndim() == 1 && this->ndim() != 1) {
+    added_b_dim = true;
+  }
+  shape_t new_shape;
+  size_t size1, midsize, size2;
+  if (a.ndim() == 1 && b.ndim() == 1) {
+    CpuTensor out({1}, dtype);
+    dispatch_contiguous_dot_ker(a.ptr.get(), b.ptr.get(), out.ptr.get(),
+                                a.shape[0], dtype);
+    return out.squeeze();
+  } else {
+    int a_prod = std::accumulate(a.shape.begin(), a.shape.end() - 2, 1,
+                                 std::multiplies<int>());
+    int b_prod = std::accumulate(b.shape.begin(), b.shape.end() - 2, 1,
+                                 std::multiplies<int>());
+    if (a.ndim() > b.ndim()) { // we will try to broadcast, but keep
+                               // last to dims
+      shape_t b_new = shape_t(a.shape);
+      b_new[b_new.size() - 1] = b.shape[b.shape.size() - 1];
+      b_new[b_new.size() - 2] = b.shape[b.shape.size() - 2];
+      b = b.broadcast_to(b_new).as_contiguous();
+    } else if (a.ndim() < b.ndim()) {
+      shape_t a_new = shape_t(b.shape);
+      a_new[a_new.size() - 1] = a.shape[a.shape.size() - 1];
+      a_new[a_new.size() - 2] = a.shape[a.shape.size() - 2];
+      a = a.broadcast_to(a_new).as_contiguous();
+      // if ndim are equal, we will broadcast the one with the smallest product
+    } else if (a_prod >= b_prod) {
+      shape_t b_new = shape_t(a.shape);
+      b_new[b_new.size() - 1] = b.shape[b.shape.size() - 1];
+      b_new[b_new.size() - 2] = b.shape[b.shape.size() - 2];
+      b = b.broadcast_to(b_new).as_contiguous();
+    } else if (a_prod < b_prod) {
+      shape_t a_new = shape_t(b.shape);
+      a_new[a_new.size() - 1] = a.shape[a.shape.size() - 1];
+      a_new[a_new.size() - 2] = a.shape[a.shape.size() - 2];
+      a = a.broadcast_to(a_new).as_contiguous();
+    }
+    size1 = a.shape.at(a.ndim() - 2);
+    midsize = a.shape.at(a.ndim() - 1);
+    size2 = b.shape.at(b.ndim() - 1);
+    new_shape = a.shape;
+    new_shape[new_shape.size() - 1] = size2;
+    if (added_a_dim) {
+      new_shape.erase(new_shape.begin());
+    }
+    if (added_b_dim) {
+      new_shape.erase(new_shape.end() - 1);
+    }
+    int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                   std::multiplies<int>());
+
+    CpuTensor out(new_shape, dtype);
+    size_t M = size1;
+    size_t N = size2;
+    size_t K = midsize;
+    size_t B = new_size / (M * N); // batch size
+    dispatch_contiguous_matmul_ker(a.ptr.get(), b.ptr.get(), out.ptr.get(), M,
+                                   N, K, B, dtype);
+    return out;
+  }
 }

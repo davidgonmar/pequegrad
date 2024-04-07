@@ -102,6 +102,8 @@ public:
   CpuTensor permute(const shape_t &axes) const;
   CpuTensor as_contiguous() const;
 
+  CpuTensor matmul(const CpuTensor &other) const;
+
   CpuTensor exp() const;
   CpuTensor log() const;
 };
