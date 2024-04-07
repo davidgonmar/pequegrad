@@ -1,4 +1,5 @@
 #include "cpu_tensor.hpp"
+#include "./copy.hpp"
 #include "binary_helpers.hpp"
 #include "immintrin.h"
 #include "shape.hpp"
@@ -31,6 +32,16 @@ bool CpuTensor::is_contiguous() const {
   return true;
 }
 
+CpuTensor CpuTensor::as_contiguous() const {
+  if (is_contiguous()) {
+    return *this;
+  } else {
+    CpuTensor out(shape, dtype);
+    copy::dispatch_copy(shape, strides, out.strides, ptr.get(), out.ptr.get(),
+                        dtype);
+    return out;
+  }
+}
 bool CpuTensor::is_dense() const {
   // dense means that it might not be contiguous, but
   // there are no holes in the array

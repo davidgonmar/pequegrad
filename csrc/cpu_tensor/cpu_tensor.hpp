@@ -41,7 +41,12 @@ public:
                   compute_natural_strides(shape, dtype),
                   std::shared_ptr<void>(new char[compute_nbytes(shape, dtype)],
                                         [](void *p) { delete[] p; }),
-                  dtype) {}
+                  dtype) {
+    std::cout << "CpuTensor constructor called" << std::endl;
+    std::cout << "shape: " << vec_to_string(shape) << std::endl;
+    std::cout << "dtype: " << dtype_to_string(dtype) << std::endl;
+    std::cout << "nbytes: " << nbytes << std::endl;
+  }
 
   template <typename T> static CpuTensor from_numpy(py::array_t<T> np_array) {
     py::buffer_info buffer_info = np_array.request();
@@ -95,6 +100,7 @@ public:
   CpuTensor reshape(const std::vector<int> &new_shape) const;
   CpuTensor broadcast_to(const shape_t &shape_to) const;
   CpuTensor permute(const shape_t &axes) const;
+  CpuTensor as_contiguous() const;
 
   CpuTensor exp() const;
   CpuTensor log() const;

@@ -148,7 +148,7 @@ class _Testbackend:
         "data",
         [[(3, 4), (1, 0)], [(5,), (0,)], [(1, 2, 3), (2, 0, 1)]],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_transpose_and_contiguous(self, data, class_backend):
         shape, new_order = data
         nparr = np.random.rand(*shape).astype(self.dtype)

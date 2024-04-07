@@ -122,13 +122,18 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
              shape_t axes_vec = axes.cast<shape_t>();
              return arr.permute(axes_vec);
            })
-      .def("transpose", [](const CpuTensor &arr) {
-        if (arr.ndim() < 2) {
-          return arr;
-        }
-        shape_t axes(arr.ndim());
-        std::iota(axes.begin(), axes.end(), 0);
-        std::swap(axes[0], axes[1]);
-        return arr.permute(axes);
-      });
+      .def("transpose",
+           [](const CpuTensor &arr) {
+             if (arr.ndim() < 2) {
+               return arr;
+             }
+             shape_t axes(arr.ndim());
+             std::iota(axes.begin(), axes.end(), 0);
+             std::swap(axes[0], axes[1]);
+             return arr.permute(axes);
+           })
+      .def("contiguous",
+           [](const CpuTensor &arr) { return arr.as_contiguous(); })
+      .def("is_contiguous",
+           [](const CpuTensor &arr) { return arr.is_contiguous(); });
 }
