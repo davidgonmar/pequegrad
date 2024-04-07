@@ -5,6 +5,42 @@
 #include "unary_vectorized.hpp"
 #include "utils.hpp"
 #include <cblas.h>
+
+bool CpuTensor::is_contiguous() const {
+  // if it is not dense, also not contiguous (todo -- handle this case)
+  if (!is_dense()) {
+    return false;
+  }
+  if (offset != 0) {
+    return false;
+  }
+  if (strides.size() != shape.size()) {
+    return false;
+  }
+  if (strides.size() == 0) { // scalar
+    return true;
+  }
+  shape_t expected_strides(shape.size());
+  expected_strides[shape.size() - 1] = dtype_to_size(dtype);
+  for (int i = shape.size() - 2; i >= 0; --i) {
+    expected_strides[i] = expected_strides[i + 1] * shape[i + 1];
+  }
+  if (expected_strides != strides) {
+    return false;
+  }
+  return true;
+}
+
+bool CpuTensor::is_dense() const {
+  // dense means that it might not be contiguous, but
+  // there are no holes in the array
+  // that is, the total number of elements is equal to
+  // the size of the underlying storage
+  size_t total_in_storage = nbytes;
+  size_t total_size_in_bytes = size() * dtype_to_size(dtype);
+  return total_in_storage == total_size_in_bytes;
+}
+
 size_t CpuTensor::compute_nbytes(const shape_t &shape, DType dtype) const {
   size_t size = 1;
   for (size_t i = 0; i < shape.size(); i++) {
@@ -20,7 +56,7 @@ CpuTensor CpuTensor::broadcast_to(const shape_t &new_shape) const {
   shape_t new_strides =
       get_strides_for_broadcasting(this->shape, this->strides, new_shape);
 
-  return CpuTensor(new_shape, new_strides, ptr, dtype);
+  return CpuTensor(nbytes, new_shape, new_strides, ptr, dtype);
 }
 
 CpuTensor binary_op(const CpuTensor &lhs, const CpuTensor &rhs,
@@ -50,6 +86,9 @@ CpuTensor binary_op(const CpuTensor &lhs, const CpuTensor &rhs,
                                        std::multiplies<size_t>()) *
                        dtype_to_size(lhs.dtype)];
   auto res_tens = CpuTensor(
+      std::accumulate(lhs.shape.begin(), lhs.shape.end(), 1,
+                      std::multiplies<size_t>()) *
+          dtype_to_size(lhs.dtype),
       lhs.shape, compute_natural_strides(lhs.shape, lhs.dtype),
       std::shared_ptr<void>(result, [](void *p) { delete[] p; }), lhs.dtype);
   bh::dispatch_binary_op(lhs.shape, lhs.strides, rhs.strides, res_tens.strides,
@@ -111,7 +150,7 @@ CpuTensor prepare_for_unary_op(const CpuTensor &a) {
   void *ptr1 = a.ptr.get();
   void *ptr2 = malloc(a.nbytes);
 
-  return CpuTensor(a.shape, a.strides,
+  return CpuTensor(a.nbytes, a.shape, a.strides,
                    std::shared_ptr<void>(ptr2, [](void *p) { free(p); }),
                    a.dtype);
 }

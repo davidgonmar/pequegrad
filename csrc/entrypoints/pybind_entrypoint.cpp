@@ -70,7 +70,8 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
                                }
                                return t;
                              })
-
+      .def_property_readonly(
+          "ndim", [](const CpuTensor &arr) { return arr.shape.size(); })
       .def_property_readonly("strides",
                              [](const CpuTensor &arr) {
                                py::tuple t(arr.strides.size());
@@ -97,5 +98,37 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
       .def("broadcast_to",
            [](const CpuTensor &arr, const std::vector<size_t> &new_shape) {
              return arr.broadcast_to(new_shape);
-           });
+           })
+      .def(
+          "squeeze",
+          [](const CpuTensor &arr, axis_t axis) { return arr.squeeze(axis); },
+          py::arg("axis"))
+      .def(
+          "squeeze",
+          [](const CpuTensor &arr, axes_t axes) { return arr.squeeze(axes); },
+          py::arg("axes"))
+      .def("squeeze", [](const CpuTensor &arr) { return arr.squeeze(); })
+      .def("unsqueeze", [](const CpuTensor &arr,
+                           axis_t axis) { return arr.unsqueeze(axis); })
+      .def("unsqueeze", [](const CpuTensor &arr,
+                           axes_t axes) { return arr.unsqueeze(axes); })
+      .def("reshape",
+           [](const CpuTensor &arr, py::args new_shape) {
+             std::vector<int> shape_vec = new_shape.cast<std::vector<int>>();
+             return arr.reshape(shape_vec);
+           })
+      .def("permute",
+           [](const CpuTensor &arr, py::args axes) {
+             shape_t axes_vec = axes.cast<shape_t>();
+             return arr.permute(axes_vec);
+           })
+      .def("transpose", [](const CpuTensor &arr) {
+        if (arr.ndim() < 2) {
+          return arr;
+        }
+        shape_t axes(arr.ndim());
+        std::iota(axes.begin(), axes.end(), 0);
+        std::swap(axes[0], axes[1]);
+        return arr.permute(axes);
+      });
 }

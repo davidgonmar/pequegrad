@@ -196,7 +196,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_T(self, shape, class_backend):
         nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_backend(nparr)
@@ -205,7 +205,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [(3, 4), (5,), (1, 2, 3), (3, 1), (1,), (1, 3, 1)]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_ndim(self, shape, class_backend):
         nparr = np.random.rand(*shape).astype(self.dtype)
         x = class_backend(nparr)
@@ -480,7 +480,7 @@ class _Testbackend:
             [(2, 4, 8), (-1, 2, 4, 8)],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_reshape(self, shape, class_backend):
         from_shape, to_shape = shape
         nparr = np.random.rand(*from_shape).astype(self.dtype)

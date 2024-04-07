@@ -1,4 +1,4 @@
-.PHONY: format lint pretty test test_nocuda testall
+.PHONY: format lint pretty test test_nocuda testall testbe
 
 
 C_SOURCES = $(wildcard csrc/*.cu csrc/*.cpp csrc/*.c csrc/*.h csrc/*.cuh csrc/*.hpp csrc/**/*.cu csrc/**/*.cpp csrc/**/*.c csrc/**/*.h csrc/**/*.cuh csrc/**/*.hpp csrc/**/**/*.cu csrc/**/**/*.cpp csrc/**/**/*.c csrc/**/**/*.h csrc/**/**/*.cuh csrc/**/**/*.hpp)
@@ -26,3 +26,6 @@ else
 endif
 
 testall: test test_nocuda
+
+testbe:
+	python -m pytest tests/test_backend.py

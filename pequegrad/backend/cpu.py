@@ -79,7 +79,7 @@ try:
 
     from pequegrad_cpu import CpuTensor  # noqa
 
-    from .utils import bind_method
+    from .utils import bind_method, bind_method_property
 
     bind_method(CpuTensor, "__repr__", lambda self: f"CpuTensor({self.to_numpy()})")
     bind_method(CpuTensor, "__add__", lambda self, other: self.add(other))
@@ -95,6 +95,12 @@ try:
     bind_method(CpuTensor, "__ge__", lambda self, other: self.ge(other))
     bind_method(CpuTensor, "__pow__", lambda self, other: self.pow(other))
 
+    def T(self):
+        axis = list(range(self.ndim))
+        reversed_axis = axis[::-1]
+        return self.permute(*reversed_axis)
+
+    bind_method_property(CpuTensor, "T", T)
     bind_method(
         CpuTensor,
         "__new__",
