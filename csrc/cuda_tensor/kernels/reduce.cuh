@@ -60,13 +60,14 @@ __device__ void reduce_base_fn(const T *in, T *out, const size_t *in_strides,
     T el = in[in_idx];
     accum = op.apply(accum, el);
   }
-
+  accum = op.post_reduce(accum, red_elements);
   out[idx] = accum;
 }
 
 template <typename T> struct SumOp {
   __device__ T apply(T a, T b) { return a + b; }
   __device__ T initial_value() { return (T)0; }
+  __device__ T post_reduce(T a, size_t n) { return a; }
 };
 
 template <typename T> struct MaxOp {
@@ -83,6 +84,13 @@ template <typename T> struct MaxOp {
       return 0;
     }
   }
+  __device__ T post_reduce(T a, size_t n) { return a; }
+};
+
+template <typename T> struct MeanOp {
+  __device__ T apply(T a, T b) { return a + b; }
+  __device__ T initial_value() { return (T)0; }
+  __device__ T post_reduce(T a, size_t n) { return a / n; }
 };
 
 template <typename T>
@@ -99,7 +107,14 @@ __global__ void max_kernel(const T *in, T *out, const size_t *in_strides,
   reduce_base_fn<MaxOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
 }
 
-enum class ReduceKernelType { SUM, MAX };
+template <typename T>
+__global__ void mean_kernel(const T *in, T *out, const size_t *in_strides,
+                            const size_t *in_shape, const size_t n_dims,
+                            const size_t red_axis) {
+  reduce_base_fn<MeanOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
+}
+
+enum class ReduceKernelType { SUM, MAX, MEAN };
 
 template <typename T>
 void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
@@ -112,6 +127,9 @@ void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
         <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);
   } else if (type == ReduceKernelType::MAX) {
     max_kernel<T>
+        <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);
+  } else if (type == ReduceKernelType::MEAN) {
+    mean_kernel<T>
         <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);
   }
 }
