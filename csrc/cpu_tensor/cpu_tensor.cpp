@@ -7,6 +7,7 @@
 #include "unary_vectorized.hpp"
 #include "utils.hpp"
 #include <cblas.h>
+#include "./reducers.hpp"
 
 bool CpuTensor::is_contiguous() const {
   // if it is not dense, also not contiguous (todo -- handle this case)
@@ -258,4 +259,80 @@ CpuTensor CpuTensor::matmul(const CpuTensor &other) const {
                                    N, K, B, dtype);
     return out;
   }
+}
+
+
+CpuTensor CpuTensor::reduce(ReduceOp ker, axis_t axis,
+                              bool keepdims) const {
+  if (!is_contiguous()) {
+    return as_contiguous().reduce(ker, axis, keepdims);
+  }
+  // if axis is negative, we need to convert it to a positive axis
+  if (axis < 0) {
+    axis = shape.size() + axis;
+  }
+  PG_CHECK_ARG(axis < shape.size(), "axis out of bounds, got ", axis,
+               " for shape ", vec_to_string(shape));
+  shape_t new_shape = shape;
+  new_shape[axis] = 1;
+  size_t new_size = size() / shape[axis];
+  size_t n_dims = shape.size();
+  CpuTensor out(new_shape, dtype);
+  dispatch_reduce(ptr.get(), out.ptr.get(), strides, shape, axis, dtype, ker);
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze(axis);
+}
+
+CpuTensor CpuTensor::reduce(ReduceOp ker, axes_t axes,
+                              bool keepdims) const {
+  CpuTensor out = *this;
+  for (size_t axis : axes) {
+    out = out.reduce(ker, axis, true);
+  }
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze(axes);
+}
+
+CpuTensor CpuTensor::reduce(ReduceOp ker, bool keepdims) const {
+  CpuTensor out = *this;
+  for (size_t axis = 0; axis < shape.size(); ++axis) {
+    out = out.reduce(ker, axis, true);
+  }
+  if (keepdims) {
+    return out;
+  }
+  return out.squeeze();
+}
+
+CpuTensor CpuTensor::sum(axis_t axis, bool keepdims) const {
+  return reduce(ReduceOp::Sum, axis, keepdims);
+}
+CpuTensor CpuTensor::sum(axes_t axes, bool keepdims) const {
+  return reduce(ReduceOp::Sum, axes, keepdims);
+}
+CpuTensor CpuTensor::sum(bool keepdims) const {
+  return reduce(ReduceOp::Sum, keepdims);
+}
+CpuTensor CpuTensor::max(axis_t axis, bool keepdims) const {
+  return reduce(ReduceOp::Max, axis, keepdims);
+}
+CpuTensor CpuTensor::max(axes_t axes, bool keepdims) const {
+  return reduce(ReduceOp::Max, axes, keepdims);
+}
+CpuTensor CpuTensor::max(bool keepdims) const {
+  return reduce(ReduceOp::Max, keepdims);
+}
+
+CpuTensor CpuTensor::mean(axis_t axis, bool keepdims) const {
+  return reduce(ReduceOp::Mean, axis, keepdims);
+}
+CpuTensor CpuTensor::mean(axes_t axes, bool keepdims) const {
+  return reduce(ReduceOp::Mean, axes, keepdims);
+}
+CpuTensor CpuTensor::mean(bool keepdims) const {
+  return reduce(ReduceOp::Mean, keepdims);
 }

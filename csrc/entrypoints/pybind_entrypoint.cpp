@@ -132,6 +132,16 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
              std::swap(axes[0], axes[1]);
              return arr.permute(axes);
            })
+      .def(
+          "expand_dims",
+          [](const CpuTensor &arr, int axis) { return arr.unsqueeze(axis); },
+          py::arg("axis"))
+      .def(
+          "expand_dims",
+          [](const CpuTensor &arr, axes_t axis) {
+            return arr.unsqueeze(axis);
+          },
+          py::arg("axis"))
       .def("contiguous",
            [](const CpuTensor &arr) { return arr.as_contiguous(); })
       .def("is_contiguous",
@@ -159,5 +169,57 @@ PYBIND11_MODULE(pequegrad_cpu, m) {
       .def_property_readonly("size",
                              [](const CpuTensor &arr) { return arr.size(); })
       .def("matmul",
-           [](const CpuTensor &a, const CpuTensor &b) { return a.matmul(b); });
+           [](const CpuTensor &a, const CpuTensor &b) { return a.matmul(b); })
+      .def("sum",
+           [](const CpuTensor &arr, py::object axis, bool keepdims) {
+             if (axis.is_none()) {
+               return arr.sum(keepdims);
+             }
+             if (py::isinstance<py::int_>(axis)) {
+               return arr.sum(axis.cast<int>(), keepdims);
+             }
+              if (py::isinstance<py::list>(axis)) {
+                return arr.sum(axis.cast<axes_t>(), keepdims);
+              }
+              if (py::isinstance<py::tuple>(axis)) {
+                return arr.sum(axis.cast<axes_t>(), keepdims);
+              }
+              throw std::runtime_error("Unsupported axis type");
+           },
+            py::arg("axis"), py::arg("keepdims") = false)
+      .def("max",
+            [](const CpuTensor &arr, py::object axis, bool keepdims) {
+              if (axis.is_none()) {
+                return arr.max(keepdims);
+              }
+              if (py::isinstance<py::int_>(axis)) {
+                return arr.max(axis.cast<int>(), keepdims);
+              }
+              if (py::isinstance<py::list>(axis)) {
+                return arr.max(axis.cast<axes_t>(), keepdims);
+              }
+              if (py::isinstance<py::tuple>(axis)) {
+                return arr.max(axis.cast<axes_t>(), keepdims);
+              }
+              throw std::runtime_error("Unsupported axis type");
+            },
+              py::arg("axis"), py::arg("keepdims") = false)
+      .def("mean",
+            [](const CpuTensor &arr, py::object axis, bool keepdims) {
+              if (axis.is_none()) {
+                return arr.mean(keepdims);
+              }
+              if (py::isinstance<py::int_>(axis)) {
+                return arr.mean(axis.cast<int>(), keepdims);
+              }
+              if (py::isinstance<py::list>(axis)) {
+                return arr.mean(axis.cast<axes_t>(), keepdims);
+              }
+              if (py::isinstance<py::tuple>(axis)) {
+                return arr.mean(axis.cast<axes_t>(), keepdims);
+              }
+              throw std::runtime_error("Unsupported axis type");
+            },
+              py::arg("axis"), py::arg("keepdims") = false);
+      
 }

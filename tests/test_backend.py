@@ -386,7 +386,7 @@ class _Testbackend:
             [(1, 2, 3, 4, 5), 3, False],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     @pytest.mark.parametrize("op", ["sum", "max", "mean"])
     def test_reduce(self, params, class_backend, op):
         shape, axis, keepdims = params
@@ -414,7 +414,7 @@ class _Testbackend:
     @pytest.mark.parametrize(
         "shape", [[(3, 1, 4), 1], [(1, 2, 3), 0], [(3, 2, 1), -1], [(1, 2, 3), -3]]
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_squeeze(self, shape, class_backend):
         shape, axis = shape
         nparr = np.random.rand(*shape).astype(self.dtype)
@@ -433,7 +433,7 @@ class _Testbackend:
             [(1, 2, 3), (-1, -2)],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_squeeze_invalid(self, shape, class_backend):
         shape, axis = shape
         nparr = np.random.rand(*shape).astype(self.dtype)
@@ -454,7 +454,7 @@ class _Testbackend:
             [(1, 2, 3), (-1, -2)],
         ],
     )
-    @pytest.mark.parametrize("class_backend", backends_to_test)
+    @pytest.mark.parametrize("class_backend", backends_to_test + [CpuTensor])
     def test_expand_dims(self, shape, class_backend):
         shape, axis = shape
         nparr = np.random.rand(*shape).astype(self.dtype)

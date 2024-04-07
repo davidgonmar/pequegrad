@@ -8,6 +8,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <vector>
+#include "reducers.hpp"
 
 namespace py = pybind11;
 
@@ -42,10 +43,6 @@ public:
                   std::shared_ptr<void>(new char[compute_nbytes(shape, dtype)],
                                         [](void *p) { delete[] p; }),
                   dtype) {
-    std::cout << "CpuTensor constructor called" << std::endl;
-    std::cout << "shape: " << vec_to_string(shape) << std::endl;
-    std::cout << "dtype: " << dtype_to_string(dtype) << std::endl;
-    std::cout << "nbytes: " << nbytes << std::endl;
   }
 
   template <typename T> static CpuTensor from_numpy(py::array_t<T> np_array) {
@@ -102,7 +99,58 @@ public:
   CpuTensor permute(const shape_t &axes) const;
   CpuTensor as_contiguous() const;
 
+  CpuTensor reduce(ReduceOp ker, axis_t axis, bool keepdims) const;
+  CpuTensor reduce(ReduceOp ker, axes_t axes, bool keepdims) const;
+  CpuTensor reduce(ReduceOp ker, bool keepdims) const;
+  
+  CpuTensor sum(axis_t axis, bool keepdims) const;
+  CpuTensor sum(axes_t axes, bool keepdims) const;
+  CpuTensor sum(bool keepdims) const;
+  CpuTensor max(axis_t axis, bool keepdims) const;
+  CpuTensor max(axes_t axes, bool keepdims) const;
+  CpuTensor max(bool keepdims) const;
+  CpuTensor mean(axis_t axis, bool keepdims) const;
+  CpuTensor mean(axes_t axes, bool keepdims) const;
+  CpuTensor mean(bool keepdims) const;
+
+
+
   CpuTensor matmul(const CpuTensor &other) const;
+
+
+  // Copy and move constructors
+CpuTensor::CpuTensor(const CpuTensor &other)
+    : nbytes(other.nbytes), shape(other.shape), strides(other.strides),
+      ptr(other.ptr), dtype(other.dtype), offset(other.offset) {}
+
+CpuTensor &CpuTensor::operator=(const CpuTensor &other) {
+  if (this != &other) {
+    nbytes = other.nbytes;
+    shape = other.shape;
+    strides = other.strides;
+    ptr = other.ptr;
+    dtype = other.dtype;
+    offset = other.offset;
+  }
+  return *this;
+}
+
+CpuTensor::CpuTensor(CpuTensor &&other)
+    : nbytes(other.nbytes), shape(std::move(other.shape)),
+      strides(std::move(other.strides)), ptr(std::move(other.ptr)),
+      dtype(other.dtype), offset(other.offset) {}
+
+CpuTensor &CpuTensor::operator=(CpuTensor &&other) {
+  if (this != &other) {
+    nbytes = other.nbytes;
+    shape = std::move(other.shape);
+    strides = std::move(other.strides);
+    ptr = std::move(other.ptr);
+    dtype = other.dtype;
+    offset = other.offset;
+  }
+  return *this;
+}
 
   CpuTensor exp() const;
   CpuTensor log() const;
