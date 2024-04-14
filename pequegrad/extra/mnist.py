@@ -29,7 +29,7 @@ def get_mnist_dataset(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get MNIST dataset from path"""
 
-    if backend not in ["np", "cuda"]:
+    if backend not in ["np", "cuda", "cpu"]:
         raise ValueError(f"Backend {backend} not supported")
 
     # first, check if the dataset exists in path

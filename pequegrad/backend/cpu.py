@@ -96,6 +96,7 @@ try:
     bind_method(CpuTensor, "__pow__", lambda self, other: self.pow(other))
     bind_method(CpuTensor, "__getitem__", CpuTensor.slice)
     bind_method(CpuTensor, "__setitem__", CpuTensor.assign)
+    bind_method(CpuTensor, "__len__", lambda self: self.shape[0])
 
     def T(self):
         axis = list(range(self.ndim))

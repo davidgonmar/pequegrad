@@ -25,6 +25,18 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
   }
 }
 
+#define CHECK_INPUTS_LENGTH(inputs_vector, expected_length)                    \
+  PG_CHECK_ARG(inputs_vector.size() == expected_length, "Expected ",           \
+               expected_length, " inputs, got ", inputs_vector.size())
+
+#define CHECK_OUTPUTS_LENGTH(outputs_vector, expected_length)                  \
+  PG_CHECK_ARG(outputs_vector.size() == expected_length, "Expected ",          \
+               expected_length, " outputs, got ", outputs_vector.size())
+
+#define CHECK_SAME_SHAPE(tensor1, tensor2)                                     \
+  PG_CHECK_ARG(tensor1.shape() == tensor2.shape(),                             \
+               "Expected tensors to have the same shape")
+
 template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
   std::stringstream ss;
   ss << "[";

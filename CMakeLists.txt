@@ -88,7 +88,8 @@ else()
 endif()
 # ========================== CUDA version ==========================
 
-if(1)
+if (false)
+
     enable_language(CUDA)
 
     find_package(CUDA REQUIRED)
@@ -120,4 +121,56 @@ if(1)
     set_target_properties(pequegrad_cu PROPERTIES OUTPUT_NAME "pequegrad_cu")
 
 endif()
+
+# =========================- New Unified version ==========================
+
+include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
+include_directories(csrc)
+file(GLOB PG_SOURCES
+        csrc/dtype.cpp
+        csrc/shape.cpp
+        csrc/pybind_utils.cpp
+        csrc/utils.cu
+        csrc/cuda_tensor/*.cu 
+        csrc/cuda_tensor/*.cpp 
+        csrc/cuda_tensor/**/*.cu  
+        csrc/cpu/*.cpp
+        csrc/entrypoints/tensor_pybind.cpp
+        csrc/*.cpp
+    )
+
+
+pybind11_add_module(pequegrad_c ${PG_SOURCES})
+
+set_property(TARGET pequegrad_c PROPERTY CUDA_ARCHITECTURES native)
+set_property(TARGET pequegrad_c PROPERTY CXX_STANDARD 17)
+set_property(TARGET pequegrad_c PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+
+set_target_properties(pequegrad_c PROPERTIES OUTPUT_NAME "pequegrad_c")
+
+target_link_libraries(pequegrad_c PRIVATE ${BLAS_LIB})
+
+if (MSVC)
+    target_compile_options(pequegrad_c PRIVATE "/arch:AVX2")
+else()
+    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+    if(COMPILER_SUPPORTS_AVX2)
+        target_compile_options(pequegrad_c PRIVATE "-mavx2")
+    endif()
+endif()
+
+# use OpenMP if available
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found")
+    target_link_libraries(pequegrad_c PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+# add max optimization
+if (MSVC)
+    target_compile_options(pequegrad_c PRIVATE "/Ox")
+else()
+    target_compile_options(pequegrad_c PRIVATE "-O3")
+endif()
+
 

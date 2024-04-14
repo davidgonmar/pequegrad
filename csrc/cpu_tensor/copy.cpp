@@ -1,13 +1,15 @@
 
 
-#include "dtype.hpp"
-#include <vector>
 #include "copy.hpp"
+#include "dtype.hpp"
 #include "shape.hpp"
+#include <vector>
 
 namespace copy {
 
-void dispatch_copy(const shape_t &shape, const shape_t &in_strides, const shape_t &out_strides, const void *in, void *out, DType dtype) {
+void dispatch_copy(const shape_t &shape, const shape_t &in_strides,
+                   const shape_t &out_strides, const void *in, void *out,
+                   DType dtype) {
   switch (dtype) {
   case DType::Float32:
     copy_ker<float>(shape, static_cast<const float *>(in),

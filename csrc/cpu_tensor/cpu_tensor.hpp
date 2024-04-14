@@ -34,7 +34,7 @@ public:
   size_t offset;
   DType dtype;
 
-   void *get_base_ptr() const { return static_cast<char *>(ptr.get()) + offset; }
+  void *get_base_ptr() const { return static_cast<char *>(ptr.get()) + offset; }
   CpuTensor(const size_t nbytes, const shape_t &shape, const shape_t &strides,
             const std::shared_ptr<void> &ptr, DType dtype)
       : nbytes(nbytes), shape(shape), strides(strides), ptr(ptr), offset(0),

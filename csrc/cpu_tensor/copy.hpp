@@ -1,8 +1,8 @@
 #pragma once
 
 #include "dtype.hpp"
-#include <vector>
 #include "shape.hpp"
+#include <vector>
 
 namespace copy {
 
@@ -15,7 +15,7 @@ void copy_ker(const std::vector<size_t> &shape, const T *in, T *out,
   for (size_t dim : shape) {
     total_elements *= dim;
   }
-  #pragma omp parallel for
+#pragma omp parallel for
   for (int index = 0; index < total_elements; index++) {
     size_t offset_in = 0;
     size_t offset_out = 0;
@@ -32,5 +32,7 @@ void copy_ker(const std::vector<size_t> &shape, const T *in, T *out,
   }
 }
 
-void dispatch_copy(const shape_t &shape, const shape_t &in_strides, const shape_t &out_strides, const void *in, void *out, DType dtype);
+void dispatch_copy(const shape_t &shape, const shape_t &in_strides,
+                   const shape_t &out_strides, const void *in, void *out,
+                   DType dtype);
 } // namespace copy
