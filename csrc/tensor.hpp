@@ -30,6 +30,13 @@ static inline size_t compute_nbytes(const shape_t &shape, const DType dtype) {
          dtype_to_size(dtype);
 }
 
+#define _throw_if_not_initialized(msg)                                         \
+  if (!is_initialized()) {                                                       \
+    std::cout << "Exception on line " << __LINE__ << " in file " << __FILE__    \
+              << ": " << msg << std::endl;                                       \
+    throw std::runtime_error(msg);                                              \
+  }
+
 namespace pg {
 
 class ADPrimitive; // forward declaration
@@ -65,6 +72,7 @@ public:
     _ptr = std::shared_ptr<void>(new char[nbytes], [](void *p) { delete[] p; });
     _offset = 0;
     _initialized = true;
+    _dtype = dtype;
   }
 
   void init_view(const std::shared_ptr<View> &view) {
@@ -145,7 +153,7 @@ public:
   std::shared_ptr<ADPrimitive> primitive() const;
   std::vector<Tensor> children() const;
   const std::shared_ptr<Tensor> grad() const;
-  void accum_grad(std::shared_ptr<Tensor> &grad);
+  void accum_grad(Tensor &grad);
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
@@ -200,18 +208,37 @@ public:
     _view->init_view(view);
   }
 
-  shape_t shape() const { return view().shape(); }
+  shape_t shape() const {
+    _throw_if_not_initialized("shape() called on uninitialized tensor.");
+    return view().shape(); }
 
-  strides_t strides() const { return view().strides(); }
+  strides_t strides() const {
+    _throw_if_not_initialized("strides() called on uninitialized tensor.");
+    return view().strides(); }
 
-  size_t offset() const { return view().offset(); }
+  size_t offset() const {
+    _throw_if_not_initialized("offset() called on uninitialized tensor.");
+    return view().offset(); }
 
-  size_t nbytes() const { return view().nbytes(); }
+  size_t nbytes() const {
+    _throw_if_not_initialized("nbytes() called on uninitialized tensor.");
+    return view().nbytes(); }
 
-  DType dtype() const { return view().dtype(); }
+  DType dtype() const {
+    _throw_if_not_initialized("dtype() called on uninitialized tensor.");
+    return view().dtype(); }
 
-  void *get_base_ptr() const { return view().get_base_ptr(); }
+  void *get_base_ptr() const {
+    _throw_if_not_initialized("get_base_ptr() called on uninitialized tensor.");
+    return view().get_base_ptr(); }
 
+  template <typename T> T* get_casted_base_ptr() {
+    _throw_if_not_initialized("get_casted_base_ptr() called on uninitialized tensor.");
+    if (dtype_from_cpptype<T>() != this->dtype()) {
+      throw std::runtime_error("Cannot cast pointer to different dtype.");
+    }
+    return static_cast<T *>(view().get_base_ptr());
+  }
   template <typename T> static Tensor from_numpy(py::array_t<T> np_array) {
     py::buffer_info buffer_info = np_array.request();
     auto size = buffer_info.size;
@@ -234,7 +261,6 @@ public:
                strides, _ptr, dtype_from_pytype<T>());
     return arr;
   }
-
   template <typename T> py::array_t<T> to_numpy() {
     if (!is_evaled()) {
       eval();
@@ -257,14 +283,14 @@ public:
 
   bool is_initialized() const { return _view->is_initialized(); }
 
+  Tensor(const shape_t &shape, const DType dtype) {
+    _view = std::make_shared<View>(shape, dtype);
+  }
+
 private:
   std::shared_ptr<View> _view = std::make_shared<View>();
 
-  void _throw_if_not_initialized(std::string msg = "") const {
-    if (!is_initialized()) {
-      throw std::runtime_error("Tensor not initialized: " + msg);
-    }
-  }
+  
 
   std::shared_ptr<ADNode> _ad_node =
       std::make_shared<ADNode>(); // creates a leaf node by default
@@ -272,6 +298,8 @@ private:
   Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
          const std::shared_ptr<void> &ptr, DType dtype)
       : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype)) {}
+  
+  
 
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs) {

@@ -23,9 +23,19 @@ using NpArrayVariant =
 PYBIND11_MODULE(pequegrad_c, m) {
   namespace py = pybind11;
 
+  py::enum_<DType>(m, "dt")
+      .value("float32", DType::Float32)
+      .value("int32", DType::Int32)
+      .value("float64", DType::Float64);
+  
   // module functions
   m.def("add", &add);
   m.def("mul", &mul);
+  m.def("sub", &sub);
+  m.def("div", &pg::div);
+  m.def("neg", &neg);
+  m.def("fill", &fill);
+
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def("from_numpy",
@@ -57,6 +67,23 @@ PYBIND11_MODULE(pequegrad_c, m) {
                throw std::runtime_error("Unsupported data type");
              }
            })
+      .def("numpy",
+           [](Tensor &arr) -> NpArrayVariant {
+             if (!arr.is_evaled())
+               arr.eval();
+
+             switch (arr.dtype()) {
+             case DType::Float32:
+               return arr.to_numpy<float>();
+             case DType::Int32:
+               return arr.to_numpy<int>();
+             case DType::Float64:
+               return arr.to_numpy<double>();
+             default:
+               throw std::runtime_error("Unsupported data type");
+             }
+           })
       .def("backward", &Tensor::backward)
-      .def_property_readonly("grad", [](const Tensor &t) { return t.grad(); });
+      .def_property_readonly("grad", [](const Tensor &t) { return t.grad(); })
+      .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); });
 };

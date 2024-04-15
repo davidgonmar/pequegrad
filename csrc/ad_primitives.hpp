@@ -21,11 +21,9 @@
   std::vector<shape_t> output_shapes(const std::vector<Tensor> &inputs)        \
       override;
 
-#define DEFINE_ALL                                                             \
-  DEFINE_DISPATCH_CPU                                                          \
-  DEFINE_DISPATCH_CUDA                                                         \
-  DEFINE_BACKWARD                                                              \
-  DEFINE_OUTPUT_SHAPES
+#define DEFINE_STR_NAME(NAME)                                                  \
+  std::string str() { return #NAME; }
+
 
 namespace pg {
 class ADPrimitive {
@@ -53,18 +51,94 @@ public:
    * Strides are backend specific, so we don't need to worry about them here.
    */
   virtual std::vector<shape_t> output_shapes(const std::vector<Tensor> &inputs);
+
+  virtual std::string str() {
+    return "ADPrimitive";
+  }
 };
 
 class Add : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_BACKWARD
+  DEFINE_STR_NAME(Add)
 };
 
 class Mul : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_BACKWARD
+  DEFINE_STR_NAME(Mul)
+};
+
+class Sub : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Sub)
+};
+
+class Div : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Div)
+};
+
+class Gt : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Gt)
+};
+
+class Lt : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Lt)
+};
+
+class Eq : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Eq)
+};
+
+class Neq : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Neq)
+};
+
+class Ge : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Ge)
+};
+
+class Le : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Le)
+};
+
+class Pow : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Pow)
+};
+
+class Max : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Max)
 };
 
 } // namespace pg

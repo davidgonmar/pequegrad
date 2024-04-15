@@ -39,4 +39,19 @@ std::vector<Tensor> Mul::backward(const std::vector<Tensor> &primals,
   return {mul(tangents[0], primals[1]), mul(tangents[0], primals[0])};
 }
 
+std::vector<Tensor> Sub::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  return {tangents[0], neg(tangents[0])};
+}
+
+std::vector<Tensor> Div::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  Tensor tangent = tangents[0];
+  Tensor x = primals[0];
+  Tensor y = primals[1];
+  return {div(tangent, y), div(mul(x, neg(tangent)), mul(y, y))};
+}
+
 } // namespace pg

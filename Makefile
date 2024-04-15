@@ -1,4 +1,4 @@
-.PHONY: format lint pretty test test_nocuda testall testbe
+.PHONY: format lint pretty test test_nocuda testall testbe 
 
 
 C_SOURCES = $(wildcard csrc/*.cu csrc/*.cpp csrc/*.c csrc/*.h csrc/*.cuh csrc/*.hpp csrc/**/*.cu csrc/**/*.cpp csrc/**/*.c csrc/**/*.h csrc/**/*.cuh csrc/**/*.hpp csrc/**/**/*.cu csrc/**/**/*.cpp csrc/**/**/*.c csrc/**/**/*.h csrc/**/**/*.cuh csrc/**/**/*.hpp)
@@ -29,3 +29,6 @@ testall: test test_nocuda
 
 testbe:
 	python -m pytest tests/test_backend.py
+
+testnew:
+	python -m pytest tests/test_new.py

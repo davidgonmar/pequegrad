@@ -3,6 +3,8 @@
 #include "tensor.hpp"
 #include "ad_primitives.hpp"
 #include "ops.hpp"
+#include <vector>
+#include <algorithm>
 
 namespace pg {
 
@@ -33,14 +35,16 @@ ADNode::ADNode(std::shared_ptr<ADPrimitive> primitive,
 
 const std::shared_ptr<Tensor> ADNode::grad() const { return _grad; }
 
-void ADNode::accum_grad(std::shared_ptr<Tensor> &grad) {
+void ADNode::accum_grad(Tensor &grad) {
   if (this->_grad == nullptr) {
-    this->_grad = std::make_shared<Tensor>(*(grad.get()));
+    this->_grad = std::make_shared<Tensor>(grad);
+    this->_grad->eval();
     return;
   }
-  Tensor tmp = add(*(this->grad().get()), *(grad.get()));
+  Tensor tmp = add(*(this->grad().get()), grad);
   tmp.eval();
   this->_grad = std::make_shared<Tensor>(tmp);
+  this->_grad->eval();
 }
 
 ADNode ADNode::create_leaf() { return ADNode(); }
@@ -70,21 +74,71 @@ void Tensor::backward(Tensor &tangent) {
   if (tangent.shape() != shape()) {
     throw std::runtime_error("Tangent shape does not match tensor shape");
   }
-  this->_ad_node->accum_grad(std::make_shared<Tensor>(tangent));
+  this->_ad_node->accum_grad(tangent);
   if (this->_ad_node->is_leaf()) {
     return;
   }
-  ADPrimitive *primitive = (_ad_node->primitive().get());
-  std::vector<Tensor> children = _ad_node->children();
-  std::vector<Tensor> outputs = {*this};
-  std::vector<Tensor> tangents =
-      primitive->backward(children, {tangent}, outputs);
-  PG_CHECK_RUNTIME(tangents.size() == children.size(),
+  auto tensorComparator = [](const Tensor& lhs, const Tensor& rhs) {
+        // ??? weird but works. todo figure this out
+        return lhs._ad_node < rhs._ad_node;
+    };
+
+  std::set<Tensor, decltype(tensorComparator)> visited(tensorComparator);
+  std::vector<Tensor> nodes;
+
+  std::function<void(Tensor)> toposort = [&](Tensor t) -> void {
+        visited.insert(t);
+        for (auto child : t._ad_node->children()) {
+            if (!visited.count(child)) {
+                // Calling the lambda function recursively
+                toposort(child);
+            }
+        }
+        nodes.push_back(t);
+  };
+
+  toposort(*this);
+
+
+  /*
+      for node in reversed(nodes):
+            if node._ctx is not None and node.requires_grad:
+                grads = node._ctx.backward(node._grad.data)
+                grads = (
+                    [Tensor(g, backend=self.backend) for g in grads if g is not None]
+                    if isinstance(grads, tuple)
+                    else [Tensor(grads, backend=self.backend)]
+                    if grads is not None
+                    else []
+                )
+                for child, grad in zip(node._ctx.children, grads):
+                    if grad is not None:
+                        if child._grad is None:
+                            child._grad = grad
+                        else:
+                            child._grad += grad
+                assert (
+                    node._grad.shape == node.shape
+                ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}, tensor: {node}"
+                if not retain_ctx:
+                    del node._ctx
+                    del node._grad
+*/
+  auto nodes_reversed = std::vector<Tensor>(nodes.rbegin(), nodes.rend());
+  for (auto node : nodes_reversed) {
+    if (node._ad_node->is_leaf()) {
+      continue;
+    }
+    ADPrimitive *primitive = node._ad_node->primitive().get();
+    std::vector<Tensor> children = node._ad_node->children();
+    std::vector<Tensor> outputs = {node};
+    std::vector<Tensor> tangents = primitive->backward(children, {node.grad()}, outputs);
+    PG_CHECK_RUNTIME(tangents.size() == children.size(),
                    "ADPrimitive::backward must return the same number of "
                    "tangents as inputs");
-  for (size_t i = 0; i < children.size(); i++) {
-    tangents[i].eval();
-    children[i].backward(tangents[i]);
+    for (size_t i = 0; i < children.size(); i++) {
+      children[i]._ad_node->accum_grad(tangents[i]);
+    }
   }
 }
 } // namespace pg
