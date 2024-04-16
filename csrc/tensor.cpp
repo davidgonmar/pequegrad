@@ -101,31 +101,6 @@ void Tensor::backward(Tensor &tangent) {
 
   toposort(*this);
 
-
-  /*
-      for node in reversed(nodes):
-            if node._ctx is not None and node.requires_grad:
-                grads = node._ctx.backward(node._grad.data)
-                grads = (
-                    [Tensor(g, backend=self.backend) for g in grads if g is not None]
-                    if isinstance(grads, tuple)
-                    else [Tensor(grads, backend=self.backend)]
-                    if grads is not None
-                    else []
-                )
-                for child, grad in zip(node._ctx.children, grads):
-                    if grad is not None:
-                        if child._grad is None:
-                            child._grad = grad
-                        else:
-                            child._grad += grad
-                assert (
-                    node._grad.shape == node.shape
-                ), f"gradient shape {node._grad.shape} does not match tensor shape {node.shape}, tensor: {node}"
-                if not retain_ctx:
-                    del node._ctx
-                    del node._grad
-*/
   auto nodes_reversed = std::vector<Tensor>(nodes.rbegin(), nodes.rend());
   for (auto node : nodes_reversed) {
     if (node._ad_node->is_leaf()) {

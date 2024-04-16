@@ -116,5 +116,8 @@ Tensor expand_dims(const Tensor &a, const axes_t &axes) {
   return unsqueeze(a, axes);
 }
 
+Tensor permute(const Tensor &a, const axes_t &axes) {
+  return Tensor::from_primitive(std::make_shared<Permute>(axes), {a});
+}
 
 } // namespace pg

@@ -25,5 +25,14 @@ namespace pg {
         View view = view::unsqueeze(a.view(), axes);
         outputs[0].init_view(std::make_shared<View>(view));
     }
-    
+
+    void Permute::dispatch_cpu(const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs) {
+        CHECK_INPUTS_LENGTH(inputs, 1);
+        CHECK_OUTPUTS_LENGTH(outputs, 1);
+        const Tensor &a = inputs[0];
+        const axes_t &axes = _axes;
+        View view = view::permute(a.view(), axes);
+        outputs[0].init_view(std::make_shared<View>(view));
+    }
+
 }

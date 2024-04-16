@@ -41,7 +41,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("neq", &neq);
   m.def("pow", &pg::pow);
   m.def("log", &pg::log);
-  
+
   m.def("broadcast_to", &broadcast_to);
   m.def("broadcast_as", &broadcast_as);
 
@@ -62,6 +62,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
   BIND_REDUCE_OP("sum", pg::sum);
   BIND_REDUCE_OP("max_reduce", pg::max_reduce);
   BIND_REDUCE_OP("mean", pg::mean);
+
+  m.def("permute", &permute);
 
   // module classes
   py::class_<Tensor>(m, "Tensor")

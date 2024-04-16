@@ -44,4 +44,5 @@ Tensor expand_dims(const Tensor &a, const axes_t &axes);
 Tensor unsqueeze(const Tensor &a, axis_t axis);
 Tensor unsqueeze(const Tensor &a, const axes_t &axes);
 
+Tensor permute(const Tensor &a, const axes_t &axes);
 } // namespace pg

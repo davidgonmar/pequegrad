@@ -108,4 +108,20 @@ std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor>& primals,
     }
     return { broadcast_to(sum(tangents[0], _axes_to_reduce_in_bw, false), primals[0].shape()) };
 }
+
+std::vector<Tensor> Permute::backward(const std::vector<Tensor>& primals,
+    const std::vector<Tensor>& tangents,
+    const std::vector<Tensor>& outputs) {
+    // we need to compute the 'inverse' permutation
+    auto argsort = [](const axes_t& v) {
+        axes_t idx(v.size());
+        std::iota(idx.begin(), idx.end(), 0);
+        std::sort(idx.begin(), idx.end(), [&v](size_t i1, size_t i2) { return v[i1] < v[i2]; });
+        return idx;
+    };
+
+    axes_t inv_permutation = argsort(_axes);
+
+    return { permute(tangents[0], inv_permutation) };
+}
 } // namespace pg

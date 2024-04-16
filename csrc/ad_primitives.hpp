@@ -220,4 +220,16 @@ public:
   DEFINE_STR_NAME(Unsqueeze)
 };
 
+class Permute : public ADPrimitive {
+protected:
+  axes_t _axes;
+public:
+  explicit Permute(axes_t axes) : _axes(axes) {
+    PG_CHECK_ARG(axes.size() > 0, "Permute expects at least one axis");
+  }
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(Permute)
+  DEFINE_BACKWARD
+};
+
 } // namespace pg

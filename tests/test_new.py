@@ -180,3 +180,19 @@ class TestNew:
         def torch_fn(x):
             return torch.broadcast_to(x, target_shape)
         _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
+
+
+    # Test permute
+    @pytest.mark.parametrize("shape_and_dims", [
+        ((2, 3), (1, 0)),
+        ((2, 3, 4), (2, 0, 1)),
+        ((2, 3, 4), (0, 1, 2)),
+    ])
+    @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])
+    def test_permute(self, shape_and_dims, dtype):
+        shape, dims = shape_and_dims
+        def pq_fn(x):
+            return pg.permute(x, dims)
+        def torch_fn(x):
+            return torch.permute(x, dims)
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)

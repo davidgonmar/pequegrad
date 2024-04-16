@@ -128,5 +128,20 @@ namespace pg{
             }
             return view;
         }
+
+        View permute(const View &orig, const axes_t &axes) {
+            // TODO -- maybe check that the axes are indeed correct
+            PG_CHECK_ARG(axes.size() == orig.shape().size(), "[view::permute] axes size must be equal to shape size, got ", axes.size(), " and ", orig.shape().size());
+            shape_t new_shape;
+            strides_t new_strides;
+            for (size_t i = 0; i < axes.size(); i++) {
+                axis_t axis = axes[i] >= 0 ? axes[i] : orig.shape().size() + axes[i];
+                PG_CHECK_ARG(axis < orig.shape().size(), "[view::permute] axis out of bounds, got ", axis,
+                         " for shape ", vec_to_string(orig.shape()));
+                new_shape.push_back(orig.shape()[axis]);
+                new_strides.push_back(orig.strides()[axis]);
+            }
+            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype());
+        }
     }
 }
