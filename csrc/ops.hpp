@@ -24,6 +24,7 @@ Tensor log(const Tensor &a);
 Tensor neg(const Tensor &a);
 
 
+
 DEFINE_REDUCE_OP(sum)
 DEFINE_REDUCE_OP(max_reduce)
 DEFINE_REDUCE_OP(mean)
@@ -33,5 +34,14 @@ Tensor fill(const shape_t &shape, DType dtype, double value);
 Tensor broadcast_to(const Tensor &a, const shape_t &shape);
 Tensor broadcast_as(const Tensor &a, const Tensor &b);
 
+Tensor squeeze(const Tensor &a, const axes_t &axes);
+Tensor squeeze(const Tensor &a, axis_t axis);
+Tensor squeeze(const Tensor &a);
+
+Tensor expand_dims(const Tensor &a, axis_t axis);
+Tensor expand_dims(const Tensor &a, const axes_t &axes);
+
+Tensor unsqueeze(const Tensor &a, axis_t axis);
+Tensor unsqueeze(const Tensor &a, const axes_t &axes);
 
 } // namespace pg

@@ -4,6 +4,7 @@
 #include "tensor.hpp"
 #include "utils.hpp"
 #include "./reduce_helpers.hpp"
+#include "common/view_helpers.hpp"
 
 
 #define DECL_BINARY_OP(NAME, OP)                                               \
@@ -67,7 +68,10 @@ namespace pg {
                                 old_view.strides(), old_view.shape(), axis, old_view.dtype(), \
                                 OP);                                              \
             old_view = new_view;                                                  \
-        }                                                                         \
+        }\
+        if (!keepdims) { /* squeeze the axes if keepdims is false*/                                   \
+            new_view = view::squeeze(old_view, axes);                             \
+        }\
         outputs[0].init_view(std::make_shared<View>(new_view));                   \
     }
 

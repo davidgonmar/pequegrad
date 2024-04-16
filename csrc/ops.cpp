@@ -82,4 +82,39 @@ Tensor broadcast_as(const Tensor &a, const Tensor &b) {
   return broadcast_to(a, b.shape());
 }
 
+Tensor squeeze(const Tensor &a, const axes_t &axes) {
+  return Tensor::from_primitive(std::make_shared<Squeeze>(axes), {a});
+}
+
+Tensor squeeze(const Tensor &a, axis_t axis) {
+  return squeeze(a, axes_t{axis});
+}
+
+Tensor squeeze(const Tensor &a) {
+  axes_t axes;
+  for (size_t i = 0; i < a.shape().size(); i++) {
+    if (a.shape()[i] == 1) {
+      axes.push_back(i);
+    }
+  }
+  return squeeze(a, axes);
+}
+
+Tensor unsqueeze(const Tensor &a, const axes_t &axes) {
+  return Tensor::from_primitive(std::make_shared<Unsqueeze>(axes), {a});
+}
+
+Tensor unsqueeze(const Tensor &a, axis_t axis) {
+  return Tensor::from_primitive(std::make_shared<Unsqueeze>(axes_t{axis}), {a});
+}
+
+Tensor expand_dims(const Tensor &a, axis_t axis) {
+  return unsqueeze(a, axis);
+}
+
+Tensor expand_dims(const Tensor &a, const axes_t &axes) {
+  return unsqueeze(a, axes);
+}
+
+
 } // namespace pg

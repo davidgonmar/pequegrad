@@ -67,8 +67,11 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
                                   const std::vector<Tensor> &tangents,
                                   const std::vector<Tensor> &outputs) {
-  
-  throw std::runtime_error("Sum::backward not implemented");
+  // if we did not keep dims, and our output is not a scalar, we need to unsqueeze first
+  if (!_keepdims && _axes.size() != primals[0].shape().size()) {
+   return {broadcast_to(unsqueeze(tangents[0], _axes), primals[0].shape())};
+  }
+  return {broadcast_to(tangents[0], primals[0].shape())};
 }
 
 std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,
@@ -80,6 +83,9 @@ std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,
 std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor>& primals,
     const std::vector<Tensor>& tangents,
     const std::vector<Tensor>& outputs) {
-    return { sum(tangents[0], _axes_to_reduce_in_bw, false) };
+    if (_axes_to_reduce_in_bw.size() == 0) { // means we did not broadcast
+        return { tangents[0] };
+    }
+    return { broadcast_to(sum(tangents[0], _axes_to_reduce_in_bw, false), primals[0].shape()) };
 }
 } // namespace pg

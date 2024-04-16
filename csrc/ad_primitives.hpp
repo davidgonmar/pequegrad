@@ -162,10 +162,6 @@ protected:
     return shape;
   }
 
-  const View _unreduce_for_backward(const shape_t original_shape, const View reduced_view) {
-    return std::get<0>(view::broadcasted_to(reduced_view, original_shape)); // TODO -- when keepdims is false, we need to first expand dims
-  }
-
 public:
   DEFINE_STR_NAME(Reduce)
   explicit Reduce(axes_t axes, bool keepdims) : _axes(axes), _keepdims(keepdims) {}
@@ -204,5 +200,22 @@ public:
   DEFINE_BACKWARD
 };
 
+class Squeeze : public ADPrimitive {
+protected:
+  axes_t _axes;
+public:
+  explicit Squeeze(axes_t axes) : _axes(axes) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(Squeeze)
+};
+
+class Unsqueeze : public ADPrimitive {
+protected:
+  axes_t _axes;
+public:
+  explicit Unsqueeze(axes_t axes) : _axes(axes) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(Unsqueeze)
+};
 
 } // namespace pg

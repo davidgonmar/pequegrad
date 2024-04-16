@@ -139,12 +139,12 @@ class TestNew:
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
     @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), None])
-    @pytest.mark.parametrize("keepdims", [True])
+    @pytest.mark.parametrize("keepdims", [True, False])
     @pytest.mark.parametrize("lambdaop", [
         (
             lambda x, axes, keepdims: pg.sum(x, axes, keepdims),
             lambda x, axes, keepdims: torch.sum(x, dim=axes, keepdim=keepdims),
-            False
+            True
         ),
         (
             lambda x, axes, keepdims: pg.mean(x, axes, keepdims),
