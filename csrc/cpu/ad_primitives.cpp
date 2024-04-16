@@ -1,5 +1,6 @@
 #include "ad_primitives.hpp"
 #include "./binary_helpers.hpp"
+#include "./unary_helpers.hpp"
 #include "tensor.hpp"
 #include "utils.hpp"
 
@@ -31,4 +32,14 @@ DECL_BINARY_OP(Ge, Ge)
 DECL_BINARY_OP(Le, Le)
 DECL_BINARY_OP(Pow, Pow)
 DECL_BINARY_OP(Max, Max)
+
+void Log::dispatch_cpu(const std::vector<Tensor> &inputs,
+                       std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &a = inputs[0];
+  outputs[0].init_view(std::make_shared<View>(a.shape(), a.dtype()));
+  cpu::dispatch_unary_op(a.dtype(), cpu::UnaryOpType::Log, a.get_base_ptr(), outputs[0].get_base_ptr(),
+                         a.nbytes() / dtype_to_size(a.dtype())); // todo -- this assumes contiguity
+}
 } // namespace pg

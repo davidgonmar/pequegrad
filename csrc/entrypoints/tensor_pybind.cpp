@@ -35,6 +35,13 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("div", &pg::div);
   m.def("neg", &neg);
   m.def("fill", &fill);
+  m.def("gt", &gt);
+  m.def("lt", &lt);
+  m.def("eq", &eq);
+  m.def("neq", &neq);
+  m.def("pow", &pg::pow);
+  m.def("log", &pg::log);
+
 
   // module classes
   py::class_<Tensor>(m, "Tensor")

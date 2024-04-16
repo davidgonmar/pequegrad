@@ -57,6 +57,14 @@ public:
   }
 };
 
+
+class Log : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Log)
+};
+
 class Add : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
@@ -88,42 +96,36 @@ public:
 class Gt : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
-  DEFINE_BACKWARD
   DEFINE_STR_NAME(Gt)
 };
 
 class Lt : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
-  DEFINE_BACKWARD
   DEFINE_STR_NAME(Lt)
 };
 
 class Eq : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
-  DEFINE_BACKWARD
   DEFINE_STR_NAME(Eq)
 };
 
 class Neq : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
-  DEFINE_BACKWARD
   DEFINE_STR_NAME(Neq)
 };
 
 class Ge : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
-  DEFINE_BACKWARD
   DEFINE_STR_NAME(Ge)
 };
 
 class Le : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
-  DEFINE_BACKWARD
   DEFINE_STR_NAME(Le)
 };
 

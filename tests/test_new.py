@@ -1,4 +1,5 @@
-from pequegrad.backend.c import *
+import pequegrad.backend.c as pg
+from pequegrad.backend.c import Tensor, dt
 import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
@@ -62,7 +63,7 @@ def _compare_fn_with_torch(
 
 class TestNew:
     def test_fill(self):
-        a = fill((2, 3), dt.float32, 1)
+        a = pg.fill((2, 3), dt.float32, 1)
         assert np.allclose(a.to_numpy(), np.ones((2, 3)))
     
     @pytest.mark.skip(reason="Not implemented")
@@ -71,7 +72,7 @@ class TestNew:
             return (a * b + c * d) * d
         
         def pq_fn(a,b,c,d):
-            return mul(add(mul(a, b), mul(c, d)), d)
+            return pg.mul(pg.add(pg.mul(a, b), pg.mul(c, d)), d)
         
         _compare_fn_with_torch([(2, 3), (2, 3), (2, 3), (2, 3)], pq_fn, torch_fn)
     
@@ -80,7 +81,7 @@ class TestNew:
             return torch.mul(torch.add(torch.mul(a, b), c), b)
         
         def pq_fn(a,b,c):
-            return mul(add(mul(a, b), c), b)
+            return pg.mul(pg.add(pg.mul(a, b), c), b)
         
         _compare_fn_with_torch([(2, 3), (2, 3), (2, 3)], pq_fn, torch_fn)
 
@@ -89,23 +90,47 @@ class TestNew:
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
     @pytest.mark.parametrize("lambdaop", [
         (
-            lambda x, y: add(x, y),
+            lambda x, y: pg.add(x, y),
             lambda x, y: torch.add(x, y),
+            True
         ),
         (
-            lambda x, y: mul(x, y),
+            lambda x, y: pg.mul(x, y),
             lambda x, y: torch.mul(x, y),
+            True
         ),
         (
-            lambda x, y: sub(x, y),
+            lambda x, y: pg.sub(x, y),
             lambda x, y: torch.sub(x, y),
+            True
         ),
         (
-            lambda x, y: div(x, y),
+            lambda x, y: pg.div(x, y),
             lambda x, y: torch.div(x, y),
+            True
+        ),
+        (
+            lambda x, y: pg.pow(x, y),
+            lambda x, y: torch.pow(x, y),
+            True
+        ),
+        (
+            lambda x, y: pg.gt(x, y),
+            lambda x, y: torch.gt(x, y),
+            False
+        ),
+        (
+            lambda x, y: pg.lt(x, y),
+            lambda x, y: torch.lt(x, y),
+            False
+        ),
+        (
+            lambda x, y: pg.neq(x, y),
+            lambda x, y: torch.ne(x, y),
+            False
         ),
     ])
     def test_binary_ops(self, shape, dtype, lambdaop):
-        pq_fn, torch_fn = lambdaop
-        _compare_fn_with_torch([shape, shape], pq_fn, torch_fn)
+        pq_fn, torch_fn, do_backward = lambdaop
+        _compare_fn_with_torch([shape, shape], pq_fn, torch_fn, backward=do_backward)
                                           
