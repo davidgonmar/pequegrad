@@ -103,7 +103,7 @@ static inline void dispatch_binary_op(const shape_t &shape,
                                        result_strides, lhs, rhs, result, op);
     break;
   default:
-    throw std::runtime_error("Unsupported data type");
+    throw std::runtime_error("Unsupported data type: " + dtype_to_string(dtype));
   }
 }
 

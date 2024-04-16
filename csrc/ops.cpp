@@ -53,4 +53,24 @@ Tensor neg(const Tensor &a) {
   return mul(a, minus_one);
 }
 
+
+#define DEFINE_REDUCE_OP(op_name, functor) \
+  Tensor op_name(const Tensor &a, const axes_t &axes, bool keepdims) { \
+    return Tensor::from_primitive(std::make_shared<functor>(axes, keepdims), {a}); \
+  } \
+  Tensor op_name(const Tensor &a, bool keepdims) { \
+    axes_t axes(a.shape().size()); \
+    std::iota(axes.begin(), axes.end(), 0); \
+    return Tensor::from_primitive(std::make_shared<functor>(axes, keepdims), {a}); \
+  } \
+  Tensor op_name(const Tensor &a, axis_t axis, bool keepdims) { \
+    axes_t axes = {axis}; \
+    return Tensor::from_primitive(std::make_shared<functor>(axes, keepdims), {a}); \
+  }
+
+
+DEFINE_REDUCE_OP(sum, Sum)
+DEFINE_REDUCE_OP(max_reduce, MaxReduce)
+DEFINE_REDUCE_OP(mean, Mean)
+
 } // namespace pg

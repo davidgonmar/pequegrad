@@ -43,6 +43,23 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("log", &pg::log);
 
 
+   #define BIND_REDUCE_OP(python_name, name) \
+    m.def(python_name, [](const Tensor &a, py::object axes, bool keepdims) { \
+      if (axes.is_none()) { \
+        return name(a, keepdims); \
+      } else if (py::isinstance<py::int_>(axes)) { \
+        return name(a, axes.cast<axis_t>(), keepdims); \
+      } else if (py::isinstance<py::list>(axes) || py::isinstance<py::tuple>(axes)) { \
+        return name(a, axes.cast<axes_t>(), keepdims); \
+      } else { \
+        throw std::runtime_error(#python_name ": axes must be an int, list, None or tuple, and keepdims must be a bool"); \
+      } \
+    }, py::arg("a"), py::arg("axes") = py::none(), py::arg("keepdims") = false);
+    
+  BIND_REDUCE_OP("sum", pg::sum);
+  BIND_REDUCE_OP("max_reduce", pg::max_reduce);
+  BIND_REDUCE_OP("mean", pg::mean);
+
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def("from_numpy",
@@ -71,7 +88,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
              case DType::Float64:
                return arr.to_numpy<double>();
              default:
-               throw std::runtime_error("Unsupported data type");
+               throw std::runtime_error("Unsupported data type: " +
+                                        dtype_to_string(arr.dtype()));
              }
            })
       .def("numpy",
@@ -87,7 +105,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
              case DType::Float64:
                return arr.to_numpy<double>();
              default:
-               throw std::runtime_error("Unsupported data type");
+               throw std::runtime_error("Unsupported data type: " +
+                                        dtype_to_string(arr.dtype()));
              }
            })
       .def("backward", &Tensor::backward)

@@ -133,4 +133,34 @@ class TestNew:
     def test_binary_ops(self, shape, dtype, lambdaop):
         pq_fn, torch_fn, do_backward = lambdaop
         _compare_fn_with_torch([shape, shape], pq_fn, torch_fn, backward=do_backward)
-                                          
+    
+
+    # REDUCERS TESTS
+    @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), None])
+    @pytest.mark.parametrize("keepdims", [True])
+    @pytest.mark.parametrize("lambdaop", [
+        (
+            lambda x, axes, keepdims: pg.sum(x, axes, keepdims),
+            lambda x, axes, keepdims: torch.sum(x, dim=axes, keepdim=keepdims),
+            False
+        ),
+        (
+            lambda x, axes, keepdims: pg.mean(x, axes, keepdims),
+            lambda x, axes, keepdims: torch.mean(x, dim=axes, keepdim=keepdims),
+            False
+        ),
+        (
+            lambda x, axes, keepdims: pg.max_reduce(x, axes, keepdims),
+            lambda x, axes, keepdims: torch.max(x, dim=axes, keepdim=keepdims)[0],
+            False
+        ),
+    ])
+    def test_reducers(self, shape, dtype, axes, keepdims, lambdaop):
+        def pq_fn(x):
+            return pg.sum(x, axes, keepdims)
+        def torch_fn(x):
+            return torch.sum(x, dim=axes, keepdim=keepdims)
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=lambdaop[2])
+

@@ -64,6 +64,12 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
           mul(log(x), mul(pow(x, y), tangent))};
 }
 
+std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  // We need to broadcast the tangent to the shape of the input
+  throw std::runtime_error("Sum::backward not implemented");
+}
 std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,
     const std::vector<Tensor>& tangents,
     const std::vector<Tensor>& outputs) {

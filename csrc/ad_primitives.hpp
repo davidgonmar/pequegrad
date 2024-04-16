@@ -143,4 +143,47 @@ public:
   DEFINE_STR_NAME(Max)
 };
 
+// REDUCE
+class Reduce : public ADPrimitive {
+protected:
+  axes_t _axes;
+  bool _keepdims;
+
+  const shape_t _reduce_single_shape_assuming_keepdims(View &input_view, axis_t single_axis) {
+    shape_t shape = shape_t(input_view.shape()); // copy the shape
+    if (single_axis < 0) {
+      single_axis = shape.size() + single_axis;
+    }
+    PG_CHECK_ARG(single_axis < shape.size(), "axis out of bounds, got ", single_axis,
+                 " for shape ", vec_to_string(shape));
+    shape[single_axis] = 1;
+    return shape;
+  }
+public:
+  DEFINE_STR_NAME(Reduce)
+  explicit Reduce(axes_t axes, bool keepdims) : _axes(axes), _keepdims(keepdims) {}
+};
+
+class Sum : public Reduce {
+using Reduce::Reduce;
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Sum)
+};
+
+class MaxReduce : public Reduce {
+using Reduce::Reduce;
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(MaxReduce)
+};
+
+class Mean : public Reduce {
+using Reduce::Reduce;
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(Mean)
+};
+
 } // namespace pg
