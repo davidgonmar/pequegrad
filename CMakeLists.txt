@@ -129,6 +129,7 @@ include_directories(csrc)
 file(GLOB PG_SOURCES
         csrc/dtype.cpp
         csrc/shape.cpp
+        csrc/common/*.cpp
         csrc/pybind_utils.cpp
         csrc/utils.cu
         csrc/cuda_tensor/*.cu 

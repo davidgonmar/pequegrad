@@ -41,6 +41,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("neq", &neq);
   m.def("pow", &pg::pow);
   m.def("log", &pg::log);
+  
+  m.def("broadcast_to", &broadcast_to);
+  m.def("broadcast_as", &broadcast_as);
 
 
    #define BIND_REDUCE_OP(python_name, name) \

@@ -14,6 +14,8 @@ void *View::get_base_ptr() const {
   return static_cast<char *>(_ptr.get()) + _offset;
 }
 
+std::shared_ptr<void> View::shared_ptr() const { return _ptr; }
+
 shape_t View::shape() const { return _shape; }
 
 strides_t View::strides() const { return _strides; }

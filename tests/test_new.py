@@ -164,3 +164,19 @@ class TestNew:
             return torch.sum(x, dim=axes, keepdim=keepdims)
         _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=lambdaop[2])
 
+
+    # Test broadcast to
+    @pytest.mark.parametrize("shapes", [
+        ((2, 3), (4, 2, 3)),
+        ((2, 3), (2, 3)),
+        ((2, 3), (1, 2, 3)),
+        ((1, 2, 3), (2, 2, 3)),
+    ])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    def test_broadcast_to(self, shapes, dtype):
+        shape, target_shape = shapes
+        def pq_fn(x):
+            return pg.broadcast_to(x, target_shape)
+        def torch_fn(x):
+            return torch.broadcast_to(x, target_shape)
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)

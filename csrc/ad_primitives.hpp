@@ -3,6 +3,8 @@
 #include "tensor.hpp"
 #include <stdexcept>
 #include <vector>
+#include "common/view_helpers.hpp"
+
 
 #define DEFINE_DISPATCH_CPU                                                    \
   void dispatch_cpu(const std::vector<Tensor> &inputs,                         \
@@ -159,6 +161,11 @@ protected:
     shape[single_axis] = 1;
     return shape;
   }
+
+  const View _unreduce_for_backward(const shape_t original_shape, const View reduced_view) {
+    return std::get<0>(view::broadcasted_to(reduced_view, original_shape)); // TODO -- when keepdims is false, we need to first expand dims
+  }
+
 public:
   DEFINE_STR_NAME(Reduce)
   explicit Reduce(axes_t axes, bool keepdims) : _axes(axes), _keepdims(keepdims) {}
@@ -185,5 +192,17 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(Mean)
 };
+
+class BroadcastTo : public ADPrimitive {
+protected:
+  shape_t _shape_to;
+  axes_t _axes_to_reduce_in_bw; // will be populated when the op is run
+public:
+  explicit BroadcastTo(shape_t shape_to) : _shape_to(shape_to) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(Broadcast)
+  DEFINE_BACKWARD
+};
+
 
 } // namespace pg

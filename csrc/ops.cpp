@@ -73,4 +73,13 @@ DEFINE_REDUCE_OP(sum, Sum)
 DEFINE_REDUCE_OP(max_reduce, MaxReduce)
 DEFINE_REDUCE_OP(mean, Mean)
 
+
+Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
+  return Tensor::from_primitive(std::make_shared<BroadcastTo>(shape), {a});
+}
+
+Tensor broadcast_as(const Tensor &a, const Tensor &b) {
+  return broadcast_to(a, b.shape());
+}
+
 } // namespace pg

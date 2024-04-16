@@ -67,13 +67,19 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
                                   const std::vector<Tensor> &tangents,
                                   const std::vector<Tensor> &outputs) {
-  // We need to broadcast the tangent to the shape of the input
+  
   throw std::runtime_error("Sum::backward not implemented");
 }
+
 std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,
     const std::vector<Tensor>& tangents,
     const std::vector<Tensor>& outputs) {
     return { div(tangents[0], primals[0]) };
 }
 
+std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor>& primals,
+    const std::vector<Tensor>& tangents,
+    const std::vector<Tensor>& outputs) {
+    return { sum(tangents[0], _axes_to_reduce_in_bw, false) };
+}
 } // namespace pg

@@ -54,10 +54,7 @@ namespace pg {
         const axes_t &axes = _axes;                                                \
         if (axes.size() == 0) {                                                    \
             throw std::runtime_error("Reduce expects at least one axis");         \
-        }                                                                         \
-        if (!_keepdims) {                                                          \
-            throw std::runtime_error("Reduce does not support keepdims=false");   \
-        }                                                                         \
+        }                                                                          \
         const bool keepdims = _keepdims;                                           \
         const bool is_sum = OP == cpu::ReduceOp::Sum;                             \
         View old_view = inputs[0].view();                                         \

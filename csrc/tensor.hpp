@@ -48,6 +48,7 @@ class View {
 public:
   void *get_base_ptr() const;
 
+  std::shared_ptr<void> shared_ptr() const;
   shape_t shape() const;
 
   strides_t strides() const;
