@@ -74,6 +74,26 @@ std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
   return {broadcast_to(tangents[0], primals[0].shape())};
 }
 
+std::vector<Tensor> MaxReduce::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  Tensor max_val = outputs[0];
+  Tensor argmax = primals[1];
+  Tensor tangent = tangents[0];
+  Tensor mask = eq(argmax, max_val);
+  return {mul(mask, tangent)};
+}
+
+std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
+                                   const std::vector<Tensor> &tangents,
+                                   const std::vector<Tensor> &outputs) {
+  long total_els_reduced = 1;
+  for (auto &axis : _axes) {
+    total_els_reduced *= primals[0].shape()[axis];
+  }
+  return {broadcast_to(div(tangents[0], fill(primals[0].shape(), primals[0].dtype(), total_els_reduced)), primals[0].shape())};
+}
+
 std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,
     const std::vector<Tensor>& tangents,
     const std::vector<Tensor>& outputs) {

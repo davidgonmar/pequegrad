@@ -167,6 +167,7 @@ class Tensor {
 public:
   const Tensor &grad() const { return *(_ad_node->grad().get()); }
 
+  long numel() const {return std::accumulate(shape().begin(), shape().end(), 1, std::multiplies<long>());}
   bool Tensor::is_contiguous() const {
     if (offset() != 0) {
       return false;

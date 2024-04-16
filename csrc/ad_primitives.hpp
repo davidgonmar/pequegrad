@@ -180,6 +180,7 @@ using Reduce::Reduce;
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(MaxReduce)
+  DEFINE_BACKWARD
 };
 
 class Mean : public Reduce {
@@ -187,6 +188,7 @@ using Reduce::Reduce;
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(Mean)
+  DEFINE_BACKWARD
 };
 
 class BroadcastTo : public ADPrimitive {

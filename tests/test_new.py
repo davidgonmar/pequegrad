@@ -149,12 +149,12 @@ class TestNew:
         (
             lambda x, axes, keepdims: pg.mean(x, axes, keepdims),
             lambda x, axes, keepdims: torch.mean(x, dim=axes, keepdim=keepdims),
-            False
+            True
         ),
         (
             lambda x, axes, keepdims: pg.max_reduce(x, axes, keepdims),
             lambda x, axes, keepdims: torch.max(x, dim=axes, keepdim=keepdims)[0],
-            False
+            True
         ),
     ])
     def test_reducers(self, shape, dtype, axes, keepdims, lambdaop):
