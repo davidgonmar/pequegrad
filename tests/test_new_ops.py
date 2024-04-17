@@ -1,5 +1,5 @@
 import pequegrad.backend.c as pg
-from pequegrad.backend.c import Tensor, dt
+from pequegrad.backend.c import Tensor, dt, device 
 import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
@@ -63,7 +63,7 @@ def _compare_fn_with_torch(
 
 class TestNew:
     def test_fill(self):
-        a = pg.fill((2, 3), dt.float32, 1)
+        a = pg.fill((2, 3), dt.float32, 1, device.cpu)
         assert np.allclose(a.to_numpy(), np.ones((2, 3)))
     
     @pytest.mark.skip(reason="Not implemented")

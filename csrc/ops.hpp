@@ -29,7 +29,7 @@ DEFINE_REDUCE_OP(sum)
 DEFINE_REDUCE_OP(max_reduce)
 DEFINE_REDUCE_OP(mean)
 
-Tensor fill(const shape_t &shape, DType dtype, double value);
+Tensor fill(const shape_t &shape, DType dtype, double value, device::DeviceKind device);
 
 Tensor broadcast_to(const Tensor &a, const shape_t &shape);
 Tensor broadcast_as(const Tensor &a, const Tensor &b);

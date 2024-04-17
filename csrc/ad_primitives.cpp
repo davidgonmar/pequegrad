@@ -60,7 +60,7 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
   Tensor tangent = tangents[0];
   Tensor x = primals[0];
   Tensor y = primals[1];
-  return {mul(mul(y, pow(x, sub(y, fill(y.shape(), y.dtype(), 1)))), tangent),
+  return {mul(mul(y, pow(x, sub(y, fill(y.shape(), y.dtype(), 1, x.device())))), tangent),
           mul(log(x), mul(pow(x, y), tangent))};
 }
 
@@ -91,7 +91,7 @@ std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
   for (auto &axis : _axes) {
     total_els_reduced *= primals[0].shape()[axis];
   }
-  return {broadcast_to(div(tangents[0], fill(primals[0].shape(), primals[0].dtype(), total_els_reduced)), primals[0].shape())};
+  return {broadcast_to(div(tangents[0], fill(primals[0].shape(), primals[0].dtype(), total_els_reduced, primals[0].device())), primals[0].shape())};
 }
 
 std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,

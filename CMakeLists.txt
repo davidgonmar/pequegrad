@@ -86,7 +86,7 @@ else()
     target_compile_options(pequegrad_cpu PRIVATE "-O
     3")
 endif()
-# ========================== CUDA version ==========================
+# ========================== CUDA version (old) ==========================
 
 if (false)
 
@@ -124,6 +124,11 @@ endif()
 
 # =========================- New Unified version ==========================
 
+### Instead of doing target_compile_options, we set the cxx_flags variable and pass it to the target_compile_options
+### But only for the CPU version, as the CUDA compiler does not like those flags
+enable_language(CUDA)
+
+find_package(CUDA REQUIRED)
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 include_directories(csrc)
 file(GLOB PG_SOURCES
@@ -136,6 +141,8 @@ file(GLOB PG_SOURCES
         csrc/cuda_tensor/*.cpp 
         csrc/cuda_tensor/**/*.cu  
         csrc/cpu/*.cpp
+        csrc/cuda/*.cu
+        csrc/cuda/*.cpp
         csrc/entrypoints/tensor_pybind.cpp
         csrc/*.cpp
     )
@@ -151,14 +158,6 @@ set_target_properties(pequegrad_c PROPERTIES OUTPUT_NAME "pequegrad_c")
 
 target_link_libraries(pequegrad_c PRIVATE ${BLAS_LIB})
 
-if (MSVC)
-    target_compile_options(pequegrad_c PRIVATE "/arch:AVX2")
-else()
-    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
-    if(COMPILER_SUPPORTS_AVX2)
-        target_compile_options(pequegrad_c PRIVATE "-mavx2")
-    endif()
-endif()
 
 # use OpenMP if available
 find_package(OpenMP)
@@ -169,9 +168,26 @@ endif()
 
 # add max optimization
 if (MSVC)
-    target_compile_options(pequegrad_c PRIVATE "/Ox")
+    set(cxx_flags "/Ox")
+    set(cu_flags "-O3")
 else()
-    target_compile_options(pequegrad_c PRIVATE "-O3")
+    set(cxx_flags "-O3")
+    set(cu_flags "-O3")
 endif()
+
+if (MSVC)
+    # add to cxx flags
+    set(cxx_flags "${cxx_flags} /arch:AVX2")
+else()
+    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+    if(COMPILER_SUPPORTS_AVX2)
+
+        set(cxx_flags "${cxx_flags} -mavx2")
+    endif()
+endif()
+
+
+target_compile_options(pequegrad_c PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>)
+target_compile_options(pequegrad_c PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${cu_flags}>)
 
 

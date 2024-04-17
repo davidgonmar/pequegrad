@@ -47,7 +47,7 @@ namespace pg{
                 return std::make_tuple(view, axes_t());
             }
             auto [new_strides, broadcasted_axes] = get_broadcasting_info(view.shape(), view.strides(), shape_to);
-            return std::make_tuple(View(view.shared_ptr(), view.nbytes(), shape_to, new_strides, view.offset(), view.dtype()), broadcasted_axes);
+            return std::make_tuple(View(view.shared_ptr(), view.nbytes(), shape_to, new_strides, view.offset(), view.dtype(), view.device()), broadcasted_axes);
         }
         View squeeze(const View &orig, axis_t axis) {
             if (axis < 0) {
@@ -66,7 +66,7 @@ namespace pg{
                     new_strides.push_back(orig.strides()[i]);
                 }
             }
-            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype());
+            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype(), orig.device());
         }
         View squeeze(const View &orig, const axes_t &axes) {
             View view = orig;
@@ -108,7 +108,7 @@ namespace pg{
             new_shape.insert(new_shape.begin() + axis, 1);
             strides_t new_strides(orig.strides());
             new_strides.insert(new_strides.begin() + axis, (axis < orig.strides().size()) ? orig.strides()[std::max(0, (int)axis - 1)] : dtype_to_size(orig.dtype()));
-            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype());
+            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype(), orig.device());
         }
         View unsqueeze(const View &orig, const axes_t &axes) {
             View view = orig;
@@ -141,7 +141,7 @@ namespace pg{
                 new_shape.push_back(orig.shape()[axis]);
                 new_strides.push_back(orig.strides()[axis]);
             }
-            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype());
+            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype(), orig.device());
         }
     }
 }

@@ -27,9 +27,9 @@ size_t View::nbytes() const { return _nbytes; }
 DType View::dtype() const { return _dtype; }
 View::View(const std::shared_ptr<void> &ptr, const size_t nbytes,
            const shape_t &shape, const strides_t &strides, const size_t offset,
-           DType dtype)
+           DType dtype, device::DeviceKind device)
     : _ptr(ptr), _nbytes(nbytes), _shape(shape), _strides(strides),
-      _offset(offset), _dtype(dtype), _initialized(true) {}
+      _offset(offset), _dtype(dtype), _initialized(true), _device(device) {}
 
 ADNode::ADNode(std::shared_ptr<ADPrimitive> primitive,
                std::vector<Tensor> children)
@@ -54,6 +54,7 @@ ADNode ADNode::create_leaf() { return ADNode(); }
 std::shared_ptr<ADPrimitive> ADNode::primitive() const { return _primitive; }
 
 std::vector<Tensor> ADNode::children() const { return _children; }
+
 
 void Tensor::eval() const {
   if (is_evaled()) {

@@ -28,6 +28,10 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .value("int32", DType::Int32)
       .value("float64", DType::Float64);
   
+  py::enum_<device::DeviceKind>(m, "device")
+      .value("cpu", device::DeviceKind::CPU)
+      .value("cuda", device::DeviceKind::CUDA);
+    
   // module functions
   m.def("add", &add);
   m.def("mul", &mul);
@@ -67,6 +71,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   // module classes
   py::class_<Tensor>(m, "Tensor")
+      .def("to", &Tensor::to)
       .def("from_numpy",
            [](py::array_t<float> np_array) {
              return Tensor::from_numpy(np_array);
@@ -116,5 +121,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
            })
       .def("backward", &Tensor::backward)
       .def_property_readonly("grad", [](const Tensor &t) { return t.grad(); })
-      .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); });
+      .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); })
+      .def_property_readonly("dtype", [](const Tensor &t) { return t.dtype(); })
+      .def_property_readonly("device", [](const Tensor &t) { return t.device(); });
 };

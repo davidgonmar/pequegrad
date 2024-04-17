@@ -42,14 +42,14 @@ Tensor log(const Tensor &a) {
   return Tensor::from_primitive(std::make_shared<Log>(), {a});
 }
 
-Tensor fill(const shape_t &shape, DType dtype, double value) {
-  Tensor t = Tensor(shape, dtype);
+Tensor fill(const shape_t &shape, DType dtype, double value, device::DeviceKind device) {
+  Tensor t = Tensor(shape, dtype, device);
   cpu::fill(t, value, shape);
   return t;
 }
 
 Tensor neg(const Tensor &a) {
-  Tensor minus_one = fill(a.shape(), a.dtype(), -1.0);
+  Tensor minus_one = fill(a.shape(), a.dtype(), -1.0, a.device());
   return mul(a, minus_one);
 }
 

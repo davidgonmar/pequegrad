@@ -15,7 +15,7 @@
     const Tensor &a = inputs[0];                                               \
     const Tensor &b = inputs[1];                                               \
     CHECK_SAME_SHAPE(a, b);                                                    \
-    outputs[0].init_view(std::make_shared<View>(a.shape(), a.dtype()));        \
+    outputs[0].init_view(std::make_shared<View>(a.shape(), a.dtype(), device::CPU));        \
     cpu::dispatch_binary_op(a.shape(), a.strides(), b.strides(),               \
                             outputs[0].strides(), a.get_base_ptr(),            \
                             b.get_base_ptr(), outputs[0].get_base_ptr(),       \
@@ -41,7 +41,7 @@ namespace pg {
         CHECK_INPUTS_LENGTH(inputs, 1);
         CHECK_OUTPUTS_LENGTH(outputs, 1);
         const Tensor& a = inputs[0];
-        outputs[0].init_view(std::make_shared<View>(a.shape(), a.dtype()));
+        outputs[0].init_view(std::make_shared<View>(a.shape(), a.dtype(), device::CPU));
         cpu::dispatch_unary_op(a.dtype(), cpu::UnaryOpType::Log, a.get_base_ptr(), outputs[0].get_base_ptr(),
             a.nbytes() / dtype_to_size(a.dtype())); // todo -- this assumes contiguity
     }
@@ -62,7 +62,7 @@ namespace pg {
         View new_view;                                                            \
         for (int i = 0; i < axes.size(); i++) {                                   \
             const shape_t new_shape = _reduce_single_shape_assuming_keepdims(old_view, axes[i]); \
-            new_view = View(new_shape, a.dtype());                                \
+            new_view = View(new_shape, a.dtype(), device::CPU);                                \
             axis_t axis = axes[i];                                                \
             cpu::dispatch_reduce(old_view.get_base_ptr(), new_view.get_base_ptr(), \
                                 old_view.strides(), old_view.shape(), axis, old_view.dtype(), \

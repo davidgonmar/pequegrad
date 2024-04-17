@@ -9,6 +9,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <vector>
+#include "device.hpp"
+#include "cpu/mem.hpp"
+#include "cuda/mem.hpp"
 
 static inline strides_t _compute_natural_strides(const shape_t &shape,
                                                  const DType dtype) {
@@ -59,18 +62,21 @@ public:
 
   DType dtype() const;
 
+  device::DeviceKind device() const { return _device; }
+
   View(const std::shared_ptr<void> &ptr, const size_t nbytes,
        const shape_t &shape, const strides_t &strides, const size_t offset,
-       DType dtype);
+       DType dtype, device::DeviceKind device);
 
-  View(const shape_t shape, DType dtype) {
+  View(const shape_t shape, DType dtype, device::DeviceKind device) {
     _shape = shape;
     size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
                                     std::multiplies<size_t>()) *
                     dtype_to_size(dtype);
     _nbytes = nbytes;
     _strides = _compute_natural_strides(shape, dtype);
-    _ptr = std::shared_ptr<void>(new char[nbytes], [](void *p) { delete[] p; });
+    _ptr = device::allocate(nbytes, device);
+    _device = device;
     _offset = 0;
     _initialized = true;
     _dtype = dtype;
@@ -88,6 +94,7 @@ public:
     _offset = view->_offset;
     _dtype = view->_dtype;
     _initialized = true;
+    _device = view->_device;
   }
 
   View() = default;
@@ -102,6 +109,8 @@ public:
     _strides = other._strides;
     _offset = other._offset;
     _dtype = other._dtype;
+    _device = other._device;
+    _initialized = other._initialized;
   }
 
   View(View &&other) {
@@ -111,6 +120,8 @@ public:
     _strides = std::move(other._strides);
     _offset = other._offset;
     _dtype = other._dtype;
+    _device = other._device;
+    _initialized = other._initialized;
   }
 
   View &operator=(const View &other) {
@@ -120,6 +131,8 @@ public:
     _strides = other._strides;
     _offset = other._offset;
     _dtype = other._dtype;
+    _device = other._device;
+    _initialized = other._initialized;
     return *this;
   }
 
@@ -130,6 +143,8 @@ public:
     _strides = std::move(other._strides);
     _offset = other._offset;
     _dtype = other._dtype;
+    _device = other._device;
+    _initialized = other._initialized;
     return *this;
   }
 
@@ -142,6 +157,7 @@ private:
   size_t _offset; // offset in bytes
   DType _dtype;
   bool _initialized = false;
+  device::DeviceKind _device;
 };
 
 class ADNode {
@@ -234,6 +250,11 @@ public:
     _throw_if_not_initialized("get_base_ptr() called on uninitialized tensor.");
     return view().get_base_ptr(); }
 
+  device::DeviceKind device() const {
+    _throw_if_not_initialized("device() called on uninitialized tensor.");
+    return view().device(); }
+
+
   template <typename T> T* get_casted_base_ptr() {
     _throw_if_not_initialized("get_casted_base_ptr() called on uninitialized tensor.");
     if (dtype_from_cpptype<T>() != this->dtype()) {
@@ -260,16 +281,55 @@ public:
     auto _ptr = std::shared_ptr<T>(new T[size], [](T *p) { delete[] p; });
     std::memcpy(_ptr.get(), buffer_info.ptr, size * sizeof(T));
     Tensor arr(buffer_info.size * dtype_to_size(dtype_from_pytype<T>()), shape,
-               strides, _ptr, dtype_from_pytype<T>());
+               strides, _ptr, dtype_from_pytype<T>(), device::DeviceKind::CPU);
     return arr;
   }
   template <typename T> py::array_t<T> to_numpy() {
     if (!is_evaled()) {
       eval();
     }
+    // TODO -- maybe dont copy 2 times
+    if (device() != device::DeviceKind::CPU) {
+      return to_cpu().to_numpy<T>();
+    }
     py::array_t<T> np_array(shape(), strides());
     std::memcpy(np_array.mutable_data(), get_base_ptr(), nbytes());
     return np_array;
+  }
+
+  Tensor to(device::DeviceKind device) {
+    if (device == device::DeviceKind::CPU) {
+      return to_cpu();
+    } else if (device == device::DeviceKind::CUDA) {
+      return to_cuda();
+    }
+    throw std::runtime_error("Unsupported device type.");
+  }
+
+  Tensor to_cpu() {
+    if (device() == device::DeviceKind::CPU) {
+      return *this;
+    }
+    if (!is_initialized()) {
+      throw std::runtime_error("Cannot move uninitialized tensor. Eval it first.");
+    }
+    size_t nbytes = this->nbytes();
+    auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
+    copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
+    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(), device::DeviceKind::CPU);
+  }
+
+  Tensor to_cuda() {
+    if (device() == device::DeviceKind::CUDA) {
+      return *this;
+    }
+    if (!is_initialized()) {
+      throw std::runtime_error("Cannot move uninitialized tensor. Eval it first.");
+    }
+    size_t nbytes = this->nbytes();
+    auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
+    copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
+    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(), device::DeviceKind::CUDA);
   }
 
   static Tensor from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
@@ -285,21 +345,19 @@ public:
 
   bool is_initialized() const { return _view->is_initialized(); }
 
-  Tensor(const shape_t &shape, const DType dtype) {
-    _view = std::make_shared<View>(shape, dtype);
+  Tensor(const shape_t &shape, const DType dtype, device::DeviceKind device) {
+    _view = std::make_shared<View>(shape, dtype, device);
   }
 
 private:
   std::shared_ptr<View> _view = std::make_shared<View>();
 
-  
-
   std::shared_ptr<ADNode> _ad_node =
       std::make_shared<ADNode>(); // creates a leaf node by default
 
   Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
-         const std::shared_ptr<void> &ptr, DType dtype)
-      : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype)) {}
+         const std::shared_ptr<void> &ptr, DType dtype, device::DeviceKind device)
+      : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype, device)) {}
   
   
 
