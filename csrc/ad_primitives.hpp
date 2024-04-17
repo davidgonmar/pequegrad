@@ -65,6 +65,7 @@ public:
 class Add : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Add)
 };
@@ -72,6 +73,7 @@ public:
 class Mul : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Mul)
 };
@@ -79,6 +81,7 @@ public:
 class Sub : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Sub)
 };
@@ -86,6 +89,7 @@ public:
 class Div : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Div)
 };
@@ -93,36 +97,42 @@ public:
 class Gt : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Gt)
 };
 
 class Lt : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Lt)
 };
 
 class Eq : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Eq)
 };
 
 class Neq : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Neq)
 };
 
 class Ge : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Ge)
 };
 
 class Le : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Le)
 };
 

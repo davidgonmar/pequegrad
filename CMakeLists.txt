@@ -168,8 +168,8 @@ endif()
 
 # add max optimization
 if (MSVC)
-    set(cxx_flags "/Ox")
-    set(cu_flags "-O3")
+    set(cxx_flags "/O0")
+    set(cu_flags "-O0")
 else()
     set(cxx_flags "-O3")
     set(cu_flags "-O3")

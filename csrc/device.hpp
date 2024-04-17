@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 
 namespace pg {
 
@@ -14,6 +16,22 @@ enum class DeviceKind {
 
 constexpr DeviceKind CPU = DeviceKind::CPU;
 constexpr DeviceKind CUDA = DeviceKind::CUDA;
+
+inline std::string device_to_string(const DeviceKind device) {
+  switch (device) {
+  case DeviceKind::CPU:
+    return "CPU";
+  case DeviceKind::CUDA:
+    return "CUDA";
+  default:
+    return "Unknown";
+  }
+}
+
+inline std::ostream &operator<<(std::ostream &os, const DeviceKind &device) {
+  os << device_to_string(device);
+  return os;
+}
 
 const DeviceKind &default_device();
 

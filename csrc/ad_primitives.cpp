@@ -152,19 +152,24 @@ static bool is_vec_vec(const std::vector<Tensor> &t) {
   return is_vec(t[0]) && is_vec(t[1]);
 }
 
-std::vector<Tensor> MatMul::backward(const std::vector<Tensor>& primals,
-    const std::vector<Tensor>& tangents,
-    const std::vector<Tensor>& outputs) {
+std::vector<Tensor> MatMul::backward(const std::vector<Tensor> &primals,
+                                     const std::vector<Tensor> &tangents,
+                                     const std::vector<Tensor> &outputs) {
 
-    Tensor a = primals[0];
-    Tensor b = primals[1];
+  Tensor a = primals[0];
+  Tensor b = primals[1];
 
-    if (is_mat_mat(primals)) {
-        return { matmul(tangents[0], b.T()), matmul(a.T(), tangents[0]) };
-    } else if (is_vec_vec(primals)) {
-        PG_CHECK_RUNTIME(tangents[0].ndim() == 0, "[MatMul::backward] expected scalar tangent for vector-vector matmul, got ", vec_to_string(tangents[0].shape()));
-        return { mul(broadcast_to(tangents[0], b.shape()), b), mul(broadcast_to(tangents[0], a.shape()), a) };
-    }
-    throw std::runtime_error("MatMul::backward not implemented for the given shapes");
+  if (is_mat_mat(primals)) {
+    return {matmul(tangents[0], b.T()), matmul(a.T(), tangents[0])};
+  } else if (is_vec_vec(primals)) {
+    PG_CHECK_RUNTIME(tangents[0].ndim() == 0,
+                     "[MatMul::backward] expected scalar tangent for "
+                     "vector-vector matmul, got ",
+                     vec_to_string(tangents[0].shape()));
+    return {mul(broadcast_to(tangents[0], b.shape()), b),
+            mul(broadcast_to(tangents[0], a.shape()), a)};
+  }
+  throw std::runtime_error(
+      "MatMul::backward not implemented for the given shapes");
 }
 } // namespace pg

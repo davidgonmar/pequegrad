@@ -4,7 +4,8 @@
 #include <vector>
 
 using shape_t = std::vector<size_t>;
-using strides_t = std::vector<long>; // might be negative
+using stride_t = long;
+using strides_t = std::vector<stride_t>; // might be negative
 using axis_t = long;
 using axes_t = std::vector<axis_t>;
 

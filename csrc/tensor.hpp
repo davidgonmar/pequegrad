@@ -13,7 +13,6 @@
 #include <pybind11/stl.h>
 #include <vector>
 
-
 static inline strides_t _compute_natural_strides(const shape_t &shape,
                                                  const DType dtype) {
   if (shape.size() == 0) {
@@ -65,7 +64,7 @@ public:
 
   size_t ndim() const { return _shape.size(); }
 
-  
+  void set_device(device::DeviceKind device) { _device = device; }
 
   device::DeviceKind device() const { return _device; }
 
@@ -190,13 +189,11 @@ class Tensor {
 public:
   const Tensor &grad() const { return *(_ad_node->grad().get()); }
 
-  Tensor T() {
-    return t(*this);
-  }
+  Tensor T() { return t(*this); }
 
-  long numel() const {
-    return std::accumulate(shape().begin(), shape().end(), 1,
-                           std::multiplies<long>());
+  size_t numel() const {
+    shape_t s = shape();
+    return std::accumulate(s.begin(), s.end(), 1, std::multiplies<size_t>());
   }
 
   size_t ndim() const { return shape().size(); }
@@ -273,8 +270,8 @@ public:
   }
 
   device::DeviceKind device() const {
-    _throw_if_not_initialized("device() called on uninitialized tensor.");
-    return view().device();
+    // We need to know device before initialization
+    return _view->device();
   }
 
   template <typename T> T *get_casted_base_ptr() {
@@ -301,7 +298,8 @@ public:
       shape.assign(py_shape.begin(), py_shape.end());
     }
 
-    auto _ptr = std::shared_ptr<T>(new T[size], [](T *p) { delete[] p; });
+    auto _ptr = device::allocate(size * dtype_to_size(dtype_from_pytype<T>()),
+                                 device::DeviceKind::CPU);
     std::memcpy(_ptr.get(), buffer_info.ptr, size * sizeof(T));
     Tensor arr(buffer_info.size * dtype_to_size(dtype_from_pytype<T>()), shape,
                strides, _ptr, dtype_from_pytype<T>(), device::DeviceKind::CPU);
@@ -391,6 +389,14 @@ private:
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs) {
     _ad_node = std::make_shared<ADNode>(primitive, inputs);
+    device::DeviceKind device = inputs[0].device();
+    for (const Tensor &input : inputs) {
+      PG_CHECK_ARG(input.device() == device,
+                   "All inputs to a primitive must be on the same device, got ",
+                   device_to_string(input.device()), " and ",
+                   device_to_string(device));
+    }
+    this->_view->set_device(device);
   }
 };
 

@@ -35,18 +35,20 @@ ADNode::ADNode(std::shared_ptr<ADPrimitive> primitive,
                std::vector<Tensor> children)
     : _primitive(std::move(primitive)), _children(std::move(children)) {}
 
-const std::shared_ptr<Tensor> ADNode::grad() const { return _grad; }
+const std::shared_ptr<Tensor> ADNode::grad() const {
+  if (_grad == nullptr) {
+    throw std::runtime_error("Gradient not yet computed");
+  }
+  return _grad;
+}
 
 void ADNode::accum_grad(Tensor &grad) {
   if (this->_grad == nullptr) {
     this->_grad = std::make_shared<Tensor>(grad);
-    this->_grad->eval();
     return;
   }
   Tensor tmp = add(*(this->grad().get()), grad);
-  tmp.eval();
   this->_grad = std::make_shared<Tensor>(tmp);
-  this->_grad->eval();
 }
 
 ADNode ADNode::create_leaf() { return ADNode(); }
@@ -60,13 +62,25 @@ void Tensor::eval() const {
     return;
   }
   ADPrimitive *primitive = (_ad_node->primitive().get());
+  const device::DeviceKind this_device = this->device();
   std::vector<Tensor> children = _ad_node->children();
   for (const Tensor &child : children) {
+    PG_CHECK_RUNTIME(child.device() == this_device,
+                     "All children must be on the same device");
     child.eval();
   }
   // outputs is just `this` tensor
   std::vector<Tensor> outputs = {*this};
-  primitive->dispatch_cpu(children, outputs);
+  switch (this_device) {
+  case device::DeviceKind::CPU:
+    primitive->dispatch_cpu(children, outputs);
+    break;
+  case device::DeviceKind::CUDA:
+    primitive->dispatch_cuda(children, outputs);
+    break;
+  default:
+    throw std::runtime_error("Unsupported device");
+  }
 }
 
 void Tensor::backward(Tensor &tangent) {

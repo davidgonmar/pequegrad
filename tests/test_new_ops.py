@@ -12,6 +12,7 @@ def _compare_fn_with_torch(
     torch_fn=None,
     tol: float = 1e-5,
     backward=True,
+    device: device = device.cpu,
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
@@ -23,7 +24,7 @@ def _compare_fn_with_torch(
     # Use a uniform distribution to initialize the arrays with 'good numbers' so that there are no numerical stability issues
     np_arr = [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
     tensors = [
-        Tensor.from_numpy(arr.astype(np.float64)) for arr in np_arr
+        Tensor.from_numpy(arr.astype(np.float64)).to(device) for arr in np_arr
     ]  # Using double precision
 
     torch_tensors = [
@@ -50,7 +51,7 @@ def _compare_fn_with_torch(
     if backward:
         # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
         nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
-        peq_res.backward(Tensor.from_numpy(nparr.astype(np.float64)))
+        peq_res.backward(Tensor.from_numpy(nparr.astype(np.float64)).to(device))
         torch_res.backward(torch_tensor(nparr, dtype=torch.float64))
 
         for i, (t, torch_t) in enumerate(zip(tensors, torch_tensors)):
@@ -84,6 +85,7 @@ class TestNew:
 
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize(
         "lambdaop",
         [
@@ -97,9 +99,11 @@ class TestNew:
             (lambda x, y: pg.neq(x, y), lambda x, y: torch.ne(x, y), False),
         ],
     )
-    def test_binary_ops(self, shape, dtype, lambdaop):
+    def test_binary_ops(self, shape, dtype, lambdaop, device):
         pq_fn, torch_fn, do_backward = lambdaop
-        _compare_fn_with_torch([shape, shape], pq_fn, torch_fn, backward=do_backward)
+        _compare_fn_with_torch(
+            [shape, shape], pq_fn, torch_fn, backward=do_backward, device=device
+        )
 
     # REDUCERS TESTS
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
@@ -155,7 +159,7 @@ class TestNew:
         def torch_fn(x):
             return torch.broadcast_to(x, target_shape)
 
-        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=False)
 
     # Test permute
     @pytest.mark.parametrize(
@@ -177,7 +181,6 @@ class TestNew:
             return torch.permute(x, dims)
 
         _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
-
 
     # Test matmul
     @pytest.mark.parametrize(

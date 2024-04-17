@@ -45,7 +45,12 @@ Tensor log(const Tensor &a) {
 Tensor fill(const shape_t &shape, DType dtype, double value,
             device::DeviceKind device) {
   Tensor t = Tensor(shape, dtype, device);
-  cpu::fill(t, value, shape);
+  if (device == device::CPU) {
+    cpu::fill(t, value, shape);
+    return t;
+  } else {
+    cuda::fill(t, value, shape);
+  }
   return t;
 }
 
