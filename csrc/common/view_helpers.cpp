@@ -1,9 +1,9 @@
 #include "view_helpers.hpp"
 
 // returns new strides + axes of the output that are 'broadcasted'
-static std::tuple<strides_t, axes_t> get_broadcasting_info(const shape_t shape_from,
-                                     const strides_t strides_from,
-                                     const shape_t shape_to) {
+static std::tuple<strides_t, axes_t>
+get_broadcasting_info(const shape_t shape_from, const strides_t strides_from,
+                      const shape_t shape_to) {
 
   const size_t from_ndim = shape_from.size();
   const size_t to_ndim = shape_to.size();
@@ -40,108 +40,128 @@ static std::tuple<strides_t, axes_t> get_broadcasting_info(const shape_t shape_f
   return std::make_tuple(new_strides, broadcasted_axes);
 }
 
-namespace pg{
-    namespace view {
-        std::tuple<View, axes_t> broadcasted_to(const View &view, const shape_t &shape_to) {
-            if (view.shape() == shape_to) {
-                return std::make_tuple(view, axes_t());
-            }
-            auto [new_strides, broadcasted_axes] = get_broadcasting_info(view.shape(), view.strides(), shape_to);
-            return std::make_tuple(View(view.shared_ptr(), view.nbytes(), shape_to, new_strides, view.offset(), view.dtype(), view.device()), broadcasted_axes);
-        }
-        View squeeze(const View &orig, axis_t axis) {
-            if (axis < 0) {
-                axis = orig.shape().size() + axis;
-            }
-            PG_CHECK_ARG(axis < orig.shape().size(), "[view::squeeze] axis out of bounds, got ", axis,
-                         " for shape ", vec_to_string(orig.shape()));
-            PG_CHECK_ARG(orig.shape()[axis] == 1, "[view:squeeze] cannot squeeze axis ", axis,
-                         " as it is not 1, got ", orig.shape()[axis]);
-            
-            shape_t new_shape;
-            strides_t new_strides;
-            for (size_t i = 0; i < orig.shape().size(); i++) {
-                if (i != axis) {
-                    new_shape.push_back(orig.shape()[i]);
-                    new_strides.push_back(orig.strides()[i]);
-                }
-            }
-            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype(), orig.device());
-        }
-        View squeeze(const View &orig, const axes_t &axes) {
-            View view = orig;
-            // we need to sort them in reverse order
-            axes_t processed_nonnegative_axes;
-            for (auto axis : axes) {
-                if (axis < 0) {
-                    axis = orig.shape().size() + axis;
-                }
-                processed_nonnegative_axes.push_back(axis);
-            }
-            std::sort(processed_nonnegative_axes.begin(), processed_nonnegative_axes.end());
-            std::reverse(processed_nonnegative_axes.begin(), processed_nonnegative_axes.end());
-            shape_t new_shape;
-            strides_t new_strides;
-            for (auto axis : processed_nonnegative_axes) {
-                view = squeeze(view, axis);
-            }
-            return view;
-        }
-        View squeeze(const View &orig) {
-            axes_t all_axes;
-            for (long i = orig.shape().size() - 1; i >= 0; i--) {
-                if (orig.shape()[i] == 1) {
-                    all_axes.push_back(i);
-                }
-            }
-            return squeeze(orig, all_axes);
-        }
-
-        View unsqueeze(const View &orig, axis_t axis) {
-            if (axis < 0) {
-                axis = orig.shape().size() + axis + 1;
-            }
-            PG_CHECK_ARG(axis <= orig.shape().size()
-            , "[view::unsqueeze] axis out of bounds, got ", axis,
-                         " for shape ", vec_to_string(orig.shape()), " of size ", orig.shape().size());
-            shape_t new_shape(orig.shape());
-            new_shape.insert(new_shape.begin() + axis, 1);
-            strides_t new_strides(orig.strides());
-            new_strides.insert(new_strides.begin() + axis, (axis < orig.strides().size()) ? orig.strides()[std::max(0, (int)axis - 1)] : dtype_to_size(orig.dtype()));
-            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype(), orig.device());
-        }
-        View unsqueeze(const View &orig, const axes_t &axes) {
-            View view = orig;
-            // we need to sort them in reverse order
-            axes_t processed_nonnegative_axes;
-            for (auto axis : axes) {
-                if (axis < 0) {
-                    axis = orig.shape().size() + axis;
-                }
-                processed_nonnegative_axes.push_back(axis);
-            }
-            std::sort(processed_nonnegative_axes.begin(), processed_nonnegative_axes.end());
-            std::cout << "axes: " << vec_to_string(processed_nonnegative_axes) << std::endl;
-            // we dont reverse in unsqueeze
-            for (auto axis : processed_nonnegative_axes) {
-                view = unsqueeze(view, axis);
-            }
-            return view;
-        }
-
-        View permute(const View &orig, const axes_t &axes) {
-            // TODO -- maybe check that the axes are indeed correct
-            PG_CHECK_ARG(axes.size() == orig.shape().size(), "[view::permute] axes size must be equal to shape size, got ", axes.size(), " and ", orig.shape().size());
-            shape_t new_shape;
-            strides_t new_strides;
-            for (size_t i = 0; i < axes.size(); i++) {
-                axis_t axis = axes[i] >= 0 ? axes[i] : orig.shape().size() + axes[i];
-                PG_CHECK_ARG(axis < orig.shape().size(), "[view::permute] axis out of bounds, got ", axis,
-                         " for shape ", vec_to_string(orig.shape()));
-                new_shape.push_back(orig.shape()[axis]);
-                new_strides.push_back(orig.strides()[axis]);
-            }
-            return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides, orig.offset(), orig.dtype(), orig.device());
-        }
-    }
+namespace pg {
+namespace view {
+std::tuple<View, axes_t> broadcasted_to(const View &view,
+                                        const shape_t &shape_to) {
+  if (view.shape() == shape_to) {
+    return std::make_tuple(view, axes_t());
+  }
+  auto [new_strides, broadcasted_axes] =
+      get_broadcasting_info(view.shape(), view.strides(), shape_to);
+  return std::make_tuple(View(view.shared_ptr(), view.nbytes(), shape_to,
+                              new_strides, view.offset(), view.dtype(),
+                              view.device()),
+                         broadcasted_axes);
 }
+View squeeze(const View &orig, axis_t axis) {
+  if (axis < 0) {
+    axis = orig.shape().size() + axis;
+  }
+  PG_CHECK_ARG(axis < orig.shape().size(),
+               "[view::squeeze] axis out of bounds, got ", axis, " for shape ",
+               vec_to_string(orig.shape()));
+  PG_CHECK_ARG(orig.shape()[axis] == 1, "[view:squeeze] cannot squeeze axis ",
+               axis, " as it is not 1, got ", orig.shape()[axis]);
+
+  shape_t new_shape;
+  strides_t new_strides;
+  for (size_t i = 0; i < orig.shape().size(); i++) {
+    if (i != axis) {
+      new_shape.push_back(orig.shape()[i]);
+      new_strides.push_back(orig.strides()[i]);
+    }
+  }
+  return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides,
+              orig.offset(), orig.dtype(), orig.device());
+}
+View squeeze(const View &orig, const axes_t &axes) {
+  View view = orig;
+  // we need to sort them in reverse order
+  axes_t processed_nonnegative_axes;
+  for (auto axis : axes) {
+    if (axis < 0) {
+      axis = orig.shape().size() + axis;
+    }
+    processed_nonnegative_axes.push_back(axis);
+  }
+  std::sort(processed_nonnegative_axes.begin(),
+            processed_nonnegative_axes.end());
+  std::reverse(processed_nonnegative_axes.begin(),
+               processed_nonnegative_axes.end());
+  shape_t new_shape;
+  strides_t new_strides;
+  for (auto axis : processed_nonnegative_axes) {
+    view = squeeze(view, axis);
+  }
+  return view;
+}
+View squeeze(const View &orig) {
+  axes_t all_axes;
+  for (long i = orig.shape().size() - 1; i >= 0; i--) {
+    if (orig.shape()[i] == 1) {
+      all_axes.push_back(i);
+    }
+  }
+  return squeeze(orig, all_axes);
+}
+
+View unsqueeze(const View &orig, axis_t axis) {
+  if (axis < 0) {
+    axis = orig.shape().size() + axis + 1;
+  }
+  PG_CHECK_ARG(axis <= orig.shape().size(),
+               "[view::unsqueeze] axis out of bounds, got ", axis,
+               " for shape ", vec_to_string(orig.shape()), " of size ",
+               orig.shape().size());
+  shape_t new_shape(orig.shape());
+  new_shape.insert(new_shape.begin() + axis, 1);
+  strides_t new_strides(orig.strides());
+  new_strides.insert(new_strides.begin() + axis,
+                     (axis < orig.strides().size())
+                         ? orig.strides()[std::max(0, (int)axis - 1)]
+                         : dtype_to_size(orig.dtype()));
+  return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides,
+              orig.offset(), orig.dtype(), orig.device());
+}
+View unsqueeze(const View &orig, const axes_t &axes) {
+  View view = orig;
+  // we need to sort them in reverse order
+  axes_t processed_nonnegative_axes;
+  for (auto axis : axes) {
+    if (axis < 0) {
+      axis = orig.shape().size() + axis;
+    }
+    processed_nonnegative_axes.push_back(axis);
+  }
+  std::sort(processed_nonnegative_axes.begin(),
+            processed_nonnegative_axes.end());
+  std::cout << "axes: " << vec_to_string(processed_nonnegative_axes)
+            << std::endl;
+  // we dont reverse in unsqueeze
+  for (auto axis : processed_nonnegative_axes) {
+    view = unsqueeze(view, axis);
+  }
+  return view;
+}
+
+View permute(const View &orig, const axes_t &axes) {
+  // TODO -- maybe check that the axes are indeed correct
+  PG_CHECK_ARG(axes.size() == orig.shape().size(),
+               "[view::permute] axes size must be equal to shape size, got ",
+               axes.size(), " and ", orig.shape().size());
+  shape_t new_shape;
+  strides_t new_strides;
+  for (size_t i = 0; i < axes.size(); i++) {
+    axis_t axis = axes[i] >= 0 ? axes[i] : orig.shape().size() + axes[i];
+    PG_CHECK_ARG(axis < orig.shape().size(),
+                 "[view::permute] axis out of bounds, got ", axis,
+                 " for shape ", vec_to_string(orig.shape()));
+    new_shape.push_back(orig.shape()[axis]);
+    new_strides.push_back(orig.strides()[axis]);
+  }
+  return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides,
+              orig.offset(), orig.dtype(), orig.device());
+}
+} // namespace view
+} // namespace pg

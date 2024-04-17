@@ -3,8 +3,8 @@
 #include "tensor.hpp"
 #include "ad_primitives.hpp"
 #include "ops.hpp"
-#include <vector>
 #include <algorithm>
+#include <vector>
 
 namespace pg {
 
@@ -55,7 +55,6 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const { return _primitive; }
 
 std::vector<Tensor> ADNode::children() const { return _children; }
 
-
 void Tensor::eval() const {
   if (is_evaled()) {
     return;
@@ -81,23 +80,23 @@ void Tensor::backward(Tensor &tangent) {
   if (this->_ad_node->is_leaf()) {
     return;
   }
-  auto tensorComparator = [](const Tensor& lhs, const Tensor& rhs) {
-        // ??? weird but works. todo figure this out
-        return lhs._ad_node < rhs._ad_node;
-    };
+  auto tensorComparator = [](const Tensor &lhs, const Tensor &rhs) {
+    // ??? weird but works. todo figure this out
+    return lhs._ad_node < rhs._ad_node;
+  };
 
   std::set<Tensor, decltype(tensorComparator)> visited(tensorComparator);
   std::vector<Tensor> nodes;
 
   std::function<void(Tensor)> toposort = [&](Tensor t) -> void {
-        visited.insert(t);
-        for (auto child : t._ad_node->children()) {
-            if (!visited.count(child)) {
-                // Calling the lambda function recursively
-                toposort(child);
-            }
-        }
-        nodes.push_back(t);
+    visited.insert(t);
+    for (auto child : t._ad_node->children()) {
+      if (!visited.count(child)) {
+        // Calling the lambda function recursively
+        toposort(child);
+      }
+    }
+    nodes.push_back(t);
   };
 
   toposort(*this);
@@ -110,10 +109,11 @@ void Tensor::backward(Tensor &tangent) {
     ADPrimitive *primitive = node._ad_node->primitive().get();
     std::vector<Tensor> children = node._ad_node->children();
     std::vector<Tensor> outputs = {node};
-    std::vector<Tensor> tangents = primitive->backward(children, {node.grad()}, outputs);
+    std::vector<Tensor> tangents =
+        primitive->backward(children, {node.grad()}, outputs);
     PG_CHECK_RUNTIME(tangents.size() == children.size(),
-                   "ADPrimitive::backward must return the same number of "
-                   "tangents as inputs");
+                     "ADPrimitive::backward must return the same number of "
+                     "tangents as inputs");
     for (size_t i = 0; i < children.size(); i++) {
       children[i]._ad_node->accum_grad(tangents[i]);
     }

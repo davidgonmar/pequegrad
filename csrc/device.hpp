@@ -1,11 +1,11 @@
 #pragma once
+#include <cstdlib>
 #include <memory>
 #include <stdexcept>
-#include <cstdlib>
 
 namespace pg {
 
-namespace device{
+namespace device {
 
 enum class DeviceKind {
   CPU,

@@ -27,11 +27,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .value("float32", DType::Float32)
       .value("int32", DType::Int32)
       .value("float64", DType::Float64);
-  
+
   py::enum_<device::DeviceKind>(m, "device")
       .value("cpu", device::DeviceKind::CPU)
       .value("cuda", device::DeviceKind::CUDA);
-    
+
   // module functions
   m.def("add", &add);
   m.def("mul", &mul);
@@ -49,20 +49,28 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("broadcast_to", &broadcast_to);
   m.def("broadcast_as", &broadcast_as);
 
+  m.def("matmul", &matmul);
 
-   #define BIND_REDUCE_OP(python_name, name) \
-    m.def(python_name, [](const Tensor &a, py::object axes, bool keepdims) { \
-      if (axes.is_none()) { \
-        return name(a, keepdims); \
-      } else if (py::isinstance<py::int_>(axes)) { \
-        return name(a, axes.cast<axis_t>(), keepdims); \
-      } else if (py::isinstance<py::list>(axes) || py::isinstance<py::tuple>(axes)) { \
-        return name(a, axes.cast<axes_t>(), keepdims); \
-      } else { \
-        throw std::runtime_error(#python_name ": axes must be an int, list, None or tuple, and keepdims must be a bool"); \
-      } \
-    }, py::arg("a"), py::arg("axes") = py::none(), py::arg("keepdims") = false);
-    
+#define BIND_REDUCE_OP(python_name, name)                                      \
+  m.def(                                                                       \
+      python_name,                                                             \
+      [](const Tensor &a, py::object axes, bool keepdims) {                    \
+        if (axes.is_none()) {                                                  \
+          return name(a, keepdims);                                            \
+        } else if (py::isinstance<py::int_>(axes)) {                           \
+          return name(a, axes.cast<axis_t>(), keepdims);                       \
+        } else if (py::isinstance<py::list>(axes) ||                           \
+                   py::isinstance<py::tuple>(axes)) {                          \
+          return name(a, axes.cast<axes_t>(), keepdims);                       \
+        } else {                                                               \
+          throw std::runtime_error(#python_name                                \
+                                   ": axes must be an int, list, None or "     \
+                                   "tuple, and keepdims must be a bool");      \
+        }                                                                      \
+      },                                                                       \
+      py::arg("a"), py::arg("axes") = py::none(),                              \
+      py::arg("keepdims") = false);
+
   BIND_REDUCE_OP("sum", pg::sum);
   BIND_REDUCE_OP("max_reduce", pg::max_reduce);
   BIND_REDUCE_OP("mean", pg::mean);
@@ -123,5 +131,6 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def_property_readonly("grad", [](const Tensor &t) { return t.grad(); })
       .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); })
       .def_property_readonly("dtype", [](const Tensor &t) { return t.dtype(); })
-      .def_property_readonly("device", [](const Tensor &t) { return t.device(); });
+      .def_property_readonly("device",
+                             [](const Tensor &t) { return t.device(); });
 };

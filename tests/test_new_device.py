@@ -1,5 +1,6 @@
-from pequegrad.backend.c import Tensor, device 
+from pequegrad.backend.c import Tensor, device
 import numpy as np
+
 
 def test_to():
     x = Tensor.from_numpy(np.array([1, 2, 3], dtype=np.float32))

@@ -60,23 +60,25 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
   Tensor tangent = tangents[0];
   Tensor x = primals[0];
   Tensor y = primals[1];
-  return {mul(mul(y, pow(x, sub(y, fill(y.shape(), y.dtype(), 1, x.device())))), tangent),
+  return {mul(mul(y, pow(x, sub(y, fill(y.shape(), y.dtype(), 1, x.device())))),
+              tangent),
           mul(log(x), mul(pow(x, y), tangent))};
 }
 
 std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
                                   const std::vector<Tensor> &tangents,
                                   const std::vector<Tensor> &outputs) {
-  // if we did not keep dims, and our output is not a scalar, we need to unsqueeze first
+  // if we did not keep dims, and our output is not a scalar, we need to
+  // unsqueeze first
   if (!_keepdims && _axes.size() != primals[0].shape().size()) {
-   return {broadcast_to(unsqueeze(tangents[0], _axes), primals[0].shape())};
+    return {broadcast_to(unsqueeze(tangents[0], _axes), primals[0].shape())};
   }
   return {broadcast_to(tangents[0], primals[0].shape())};
 }
 
 std::vector<Tensor> MaxReduce::backward(const std::vector<Tensor> &primals,
-                                  const std::vector<Tensor> &tangents,
-                                  const std::vector<Tensor> &outputs) {
+                                        const std::vector<Tensor> &tangents,
+                                        const std::vector<Tensor> &outputs) {
   Tensor max_val = outputs[0];
   Tensor argmax = primals[1];
   Tensor tangent = tangents[0];
@@ -91,37 +93,78 @@ std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
   for (auto &axis : _axes) {
     total_els_reduced *= primals[0].shape()[axis];
   }
-  return {broadcast_to(div(tangents[0], fill(primals[0].shape(), primals[0].dtype(), total_els_reduced, primals[0].device())), primals[0].shape())};
+  return {broadcast_to(
+      div(tangents[0], fill(primals[0].shape(), primals[0].dtype(),
+                            total_els_reduced, primals[0].device())),
+      primals[0].shape())};
 }
 
-std::vector<Tensor> Log::backward(const std::vector<Tensor>& primals,
-    const std::vector<Tensor>& tangents,
-    const std::vector<Tensor>& outputs) {
-    return { div(tangents[0], primals[0]) };
+std::vector<Tensor> Log::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  return {div(tangents[0], primals[0])};
 }
 
-std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor>& primals,
+std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor> &primals,
+                                          const std::vector<Tensor> &tangents,
+                                          const std::vector<Tensor> &outputs) {
+  if (_axes_to_reduce_in_bw.size() == 0) { // means we did not broadcast
+    return {tangents[0]};
+  }
+  return {broadcast_to(sum(tangents[0], _axes_to_reduce_in_bw, false),
+                       primals[0].shape())};
+}
+
+std::vector<Tensor> Permute::backward(const std::vector<Tensor> &primals,
+                                      const std::vector<Tensor> &tangents,
+                                      const std::vector<Tensor> &outputs) {
+  // we need to compute the 'inverse' permutation
+  auto argsort = [](const axes_t &v) {
+    axes_t idx(v.size());
+    std::iota(idx.begin(), idx.end(), 0);
+    std::sort(idx.begin(), idx.end(),
+              [&v](size_t i1, size_t i2) { return v[i1] < v[i2]; });
+    return idx;
+  };
+
+  axes_t inv_permutation = argsort(_axes);
+
+  return {permute(tangents[0], inv_permutation)};
+}
+
+static bool is_vec(const Tensor &t) { return t.shape().size() == 1; }
+
+static bool is_mat_at_least(const Tensor &t) { return t.shape().size() >= 2; }
+
+static bool is_vec_mat(const std::vector<Tensor> &t) {
+  return is_vec(t[0]) && is_mat_at_least(t[1]);
+}
+
+static bool is_mat_vec(const std::vector<Tensor> &t) {
+  return is_mat_at_least(t[0]) && is_vec(t[1]);
+}
+
+static bool is_mat_mat(const std::vector<Tensor> &t) {
+  return is_mat_at_least(t[0]) && is_mat_at_least(t[1]);
+}
+
+static bool is_vec_vec(const std::vector<Tensor> &t) {
+  return is_vec(t[0]) && is_vec(t[1]);
+}
+
+std::vector<Tensor> MatMul::backward(const std::vector<Tensor>& primals,
     const std::vector<Tensor>& tangents,
     const std::vector<Tensor>& outputs) {
-    if (_axes_to_reduce_in_bw.size() == 0) { // means we did not broadcast
-        return { tangents[0] };
+
+    Tensor a = primals[0];
+    Tensor b = primals[1];
+
+    if (is_mat_mat(primals)) {
+        return { matmul(tangents[0], b.T()), matmul(a.T(), tangents[0]) };
+    } else if (is_vec_vec(primals)) {
+        PG_CHECK_RUNTIME(tangents[0].ndim() == 0, "[MatMul::backward] expected scalar tangent for vector-vector matmul, got ", vec_to_string(tangents[0].shape()));
+        return { mul(broadcast_to(tangents[0], b.shape()), b), mul(broadcast_to(tangents[0], a.shape()), a) };
     }
-    return { broadcast_to(sum(tangents[0], _axes_to_reduce_in_bw, false), primals[0].shape()) };
-}
-
-std::vector<Tensor> Permute::backward(const std::vector<Tensor>& primals,
-    const std::vector<Tensor>& tangents,
-    const std::vector<Tensor>& outputs) {
-    // we need to compute the 'inverse' permutation
-    auto argsort = [](const axes_t& v) {
-        axes_t idx(v.size());
-        std::iota(idx.begin(), idx.end(), 0);
-        std::sort(idx.begin(), idx.end(), [&v](size_t i1, size_t i2) { return v[i1] < v[i2]; });
-        return idx;
-    };
-
-    axes_t inv_permutation = argsort(_axes);
-
-    return { permute(tangents[0], inv_permutation) };
+    throw std::runtime_error("MatMul::backward not implemented for the given shapes");
 }
 } // namespace pg

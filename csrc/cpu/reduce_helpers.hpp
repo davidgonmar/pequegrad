@@ -1,17 +1,15 @@
 #pragma once
 
 #include "dtype.hpp"
-#include <vector>
 #include "shape.hpp"
+#include <vector>
 
 namespace pg {
 namespace cpu {
 
-
 template <typename Op, typename T>
 void reduce_base_fn(const T *in, T *out, const strides_t &in_strides,
-                    const shape_t &in_shape,
-                    const size_t red_axis) {
+                    const shape_t &in_shape, const size_t red_axis) {
   Op op;
   size_t red_axis_stride = in_strides[red_axis];
   size_t n_dims = in_shape.size();
@@ -89,11 +87,10 @@ template <typename T> struct MeanOp {
 enum class ReduceOp { Sum, Max, Mean };
 
 template <typename T>
-static inline void dispatch_reduce_helper(const T *in, T *out,
-                                          const strides_t &in_strides,
-                                          const shape_t &in_shape,
-                                          const size_t red_axis,
-                                          const ReduceOp op) {
+static inline void
+dispatch_reduce_helper(const T *in, T *out, const strides_t &in_strides,
+                       const shape_t &in_shape, const size_t red_axis,
+                       const ReduceOp op) {
   switch (op) {
   case ReduceOp::Sum:
     reduce_base_fn<SumOp<T>>(in, out, in_strides, in_shape, red_axis);

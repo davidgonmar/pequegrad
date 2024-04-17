@@ -1,10 +1,9 @@
 #pragma once
+#include "common/view_helpers.hpp"
 #include "shape.hpp"
 #include "tensor.hpp"
 #include <stdexcept>
 #include <vector>
-#include "common/view_helpers.hpp"
-
 
 #define DEFINE_DISPATCH_CPU                                                    \
   void dispatch_cpu(const std::vector<Tensor> &inputs,                         \
@@ -25,7 +24,6 @@
 
 #define DEFINE_STR_NAME(NAME)                                                  \
   std::string str() { return #NAME; }
-
 
 namespace pg {
 class ADPrimitive {
@@ -54,11 +52,8 @@ public:
    */
   virtual std::vector<shape_t> output_shapes(const std::vector<Tensor> &inputs);
 
-  virtual std::string str() {
-    return "ADPrimitive";
-  }
+  virtual std::string str() { return "ADPrimitive"; }
 };
-
 
 class Log : public ADPrimitive {
 public:
@@ -151,24 +146,27 @@ protected:
   axes_t _axes;
   bool _keepdims;
 
-  const shape_t _reduce_single_shape_assuming_keepdims(View &input_view, axis_t single_axis) {
+  const shape_t _reduce_single_shape_assuming_keepdims(View &input_view,
+                                                       axis_t single_axis) {
     shape_t shape = shape_t(input_view.shape()); // copy the shape
     if (single_axis < 0) {
       single_axis = shape.size() + single_axis;
     }
-    PG_CHECK_ARG(single_axis < shape.size(), "axis out of bounds, got ", single_axis,
-                 " for shape ", vec_to_string(shape));
+    PG_CHECK_ARG(single_axis < shape.size(), "axis out of bounds, got ",
+                 single_axis, " for shape ", vec_to_string(shape));
     shape[single_axis] = 1;
     return shape;
   }
 
 public:
   DEFINE_STR_NAME(Reduce)
-  explicit Reduce(axes_t axes, bool keepdims) : _axes(axes), _keepdims(keepdims) {}
+  explicit Reduce(axes_t axes, bool keepdims)
+      : _axes(axes), _keepdims(keepdims) {}
 };
 
 class Sum : public Reduce {
-using Reduce::Reduce;
+  using Reduce::Reduce;
+
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_BACKWARD
@@ -176,7 +174,8 @@ public:
 };
 
 class MaxReduce : public Reduce {
-using Reduce::Reduce;
+  using Reduce::Reduce;
+
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(MaxReduce)
@@ -184,7 +183,8 @@ public:
 };
 
 class Mean : public Reduce {
-using Reduce::Reduce;
+  using Reduce::Reduce;
+
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(Mean)
@@ -205,6 +205,7 @@ public:
 class Squeeze : public ADPrimitive {
 protected:
   axes_t _axes;
+
 public:
   explicit Squeeze(axes_t axes) : _axes(axes) {}
   DEFINE_DISPATCH_CPU
@@ -214,6 +215,7 @@ public:
 class Unsqueeze : public ADPrimitive {
 protected:
   axes_t _axes;
+
 public:
   explicit Unsqueeze(axes_t axes) : _axes(axes) {}
   DEFINE_DISPATCH_CPU
@@ -223,12 +225,20 @@ public:
 class Permute : public ADPrimitive {
 protected:
   axes_t _axes;
+
 public:
   explicit Permute(axes_t axes) : _axes(axes) {
     PG_CHECK_ARG(axes.size() > 0, "Permute expects at least one axis");
   }
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(Permute)
+  DEFINE_BACKWARD
+};
+
+class MatMul : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(MatMul)
   DEFINE_BACKWARD
 };
 

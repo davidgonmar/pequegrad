@@ -4,9 +4,8 @@
 #include <cmath>
 #include <iostream>
 
-
 namespace pg {
-  namespace cpu {
+namespace cpu {
 /**
  * This functions implement unary element-wise operations on a vector.
  * They are vectorized using AVX if available, otherwise they fall back to
@@ -88,5 +87,5 @@ static inline void dispatch_unary_op(DType dtype, UnaryOpType op, void *ptr,
     break;
   }
 }
-  }
-}
+} // namespace cpu
+} // namespace pg

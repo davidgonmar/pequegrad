@@ -35,7 +35,10 @@ void PG_CHECK_RUNTIME(T cond, Args... args) {
 
 #define CHECK_SAME_SHAPE(tensor1, tensor2)                                     \
   PG_CHECK_ARG(tensor1.shape() == tensor2.shape(),                             \
-               "Expected tensors to have the same shape")
+               "Expected tensors to have the same shape, got ",                \
+               vec_to_string(tensor1.shape()), " and ",                        \
+                vec_to_string(tensor2.shape()))
+                
 
 template <typename T> std::string vec_to_string(const std::vector<T> &vec) {
   std::stringstream ss;

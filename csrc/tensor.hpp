@@ -1,5 +1,8 @@
 
 #pragma once
+#include "cpu/mem.hpp"
+#include "cuda/mem.hpp"
+#include "device.hpp"
 #include "dtype.hpp"
 #include "shape.hpp"
 #include "utils.hpp"
@@ -9,9 +12,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <vector>
-#include "device.hpp"
-#include "cpu/mem.hpp"
-#include "cuda/mem.hpp"
+
 
 static inline strides_t _compute_natural_strides(const shape_t &shape,
                                                  const DType dtype) {
@@ -34,10 +35,10 @@ static inline size_t compute_nbytes(const shape_t &shape, const DType dtype) {
 }
 
 #define _throw_if_not_initialized(msg)                                         \
-  if (!is_initialized()) {                                                       \
-    std::cout << "Exception on line " << __LINE__ << " in file " << __FILE__    \
-              << ": " << msg << std::endl;                                       \
-    throw std::runtime_error(msg);                                              \
+  if (!is_initialized()) {                                                     \
+    std::cout << "Exception on line " << __LINE__ << " in file " << __FILE__   \
+              << ": " << msg << std::endl;                                     \
+    throw std::runtime_error(msg);                                             \
   }
 
 namespace pg {
@@ -61,6 +62,10 @@ public:
   size_t nbytes() const;
 
   DType dtype() const;
+
+  size_t ndim() const { return _shape.size(); }
+
+  
 
   device::DeviceKind device() const { return _device; }
 
@@ -178,12 +183,23 @@ private:
   std::shared_ptr<Tensor> _grad = nullptr;
 };
 
+// forward declaration
+Tensor t(const Tensor &t);
 class Tensor {
 
 public:
   const Tensor &grad() const { return *(_ad_node->grad().get()); }
 
-  long numel() const {return std::accumulate(shape().begin(), shape().end(), 1, std::multiplies<long>());}
+  Tensor T() {
+    return t(*this);
+  }
+
+  long numel() const {
+    return std::accumulate(shape().begin(), shape().end(), 1,
+                           std::multiplies<long>());
+  }
+
+  size_t ndim() const { return shape().size(); }
   bool Tensor::is_contiguous() const {
     if (offset() != 0) {
       return false;
@@ -228,35 +244,42 @@ public:
 
   shape_t shape() const {
     _throw_if_not_initialized("shape() called on uninitialized tensor.");
-    return view().shape(); }
+    return view().shape();
+  }
 
   strides_t strides() const {
     _throw_if_not_initialized("strides() called on uninitialized tensor.");
-    return view().strides(); }
+    return view().strides();
+  }
 
   size_t offset() const {
     _throw_if_not_initialized("offset() called on uninitialized tensor.");
-    return view().offset(); }
+    return view().offset();
+  }
 
   size_t nbytes() const {
     _throw_if_not_initialized("nbytes() called on uninitialized tensor.");
-    return view().nbytes(); }
+    return view().nbytes();
+  }
 
   DType dtype() const {
     _throw_if_not_initialized("dtype() called on uninitialized tensor.");
-    return view().dtype(); }
+    return view().dtype();
+  }
 
   void *get_base_ptr() const {
     _throw_if_not_initialized("get_base_ptr() called on uninitialized tensor.");
-    return view().get_base_ptr(); }
+    return view().get_base_ptr();
+  }
 
   device::DeviceKind device() const {
     _throw_if_not_initialized("device() called on uninitialized tensor.");
-    return view().device(); }
+    return view().device();
+  }
 
-
-  template <typename T> T* get_casted_base_ptr() {
-    _throw_if_not_initialized("get_casted_base_ptr() called on uninitialized tensor.");
+  template <typename T> T *get_casted_base_ptr() {
+    _throw_if_not_initialized(
+        "get_casted_base_ptr() called on uninitialized tensor.");
     if (dtype_from_cpptype<T>() != this->dtype()) {
       throw std::runtime_error("Cannot cast pointer to different dtype.");
     }
@@ -311,12 +334,14 @@ public:
       return *this;
     }
     if (!is_initialized()) {
-      throw std::runtime_error("Cannot move uninitialized tensor. Eval it first.");
+      throw std::runtime_error(
+          "Cannot move uninitialized tensor. Eval it first.");
     }
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
     copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
-    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(), device::DeviceKind::CPU);
+    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(),
+                  device::DeviceKind::CPU);
   }
 
   Tensor to_cuda() {
@@ -324,12 +349,14 @@ public:
       return *this;
     }
     if (!is_initialized()) {
-      throw std::runtime_error("Cannot move uninitialized tensor. Eval it first.");
+      throw std::runtime_error(
+          "Cannot move uninitialized tensor. Eval it first.");
     }
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
     copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
-    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(), device::DeviceKind::CUDA);
+    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(),
+                  device::DeviceKind::CUDA);
   }
 
   static Tensor from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
@@ -356,10 +383,10 @@ private:
       std::make_shared<ADNode>(); // creates a leaf node by default
 
   Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
-         const std::shared_ptr<void> &ptr, DType dtype, device::DeviceKind device)
-      : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype, device)) {}
-  
-  
+         const std::shared_ptr<void> &ptr, DType dtype,
+         device::DeviceKind device)
+      : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype,
+                                     device)) {}
 
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs) {
