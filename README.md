@@ -1,5 +1,8 @@
 ## Pequegrad
 
+** THIS IS THE OLD README **
+** I AM CURRENTLY REWRITING THE ENGINE IN CPP, AND THE README WILL BE UPDATED ACCORDINGLY WHEN IT IS READY **
+
 Pequegrad is a simple deep learning framework for Python. It works with tensors, and provides automatic differentiation. It's API is similar to PyTorch's.
 It has strong GPU acceleration through CUDA.
 
@@ -71,8 +74,14 @@ You can still use Pequegrad without the GPU acceleration, and will use Numpy und
 
 ### Roadmap
 
+** THIS IS THE OLD ROADMAP **
+
 - Complete the tests for the tensor operations on CPU (GPU works fine). Performance does not matter for now.
 - Unify the backends (CpuTensor + CudaTensor) into a single Tensor class in CPP, and remove the Numpy backend. That is, move the entire computation backend to Cpp.
 - Optimize the computation backend (especially the CPU one).
 - Refactor and maybe document better
 - Move autograd to Cpp ????
+
+** CURRENT ROADMAP **
+
+- Rewrite the entire engine in Cpp (including autograd)
