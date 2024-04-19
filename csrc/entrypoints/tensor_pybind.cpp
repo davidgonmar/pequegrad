@@ -81,6 +81,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   // module classes
   py::class_<Tensor>(m, "Tensor")
+      .def("detach", &Tensor::detach)
       .def("to", &Tensor::to)
       .def("from_numpy",
            [](py::array_t<float> np_array) {

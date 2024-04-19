@@ -54,6 +54,10 @@ public:
   infer_output_shapes(const std::vector<Tensor> &inputs);
 
   virtual std::string str() { return "ADPrimitive"; }
+  virtual std::vector<DType>
+  infer_output_dtypes(const std::vector<Tensor> &inputs) {
+    return {inputs[0].dtype()};
+  }
 };
 
 class Log : public ADPrimitive {

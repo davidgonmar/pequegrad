@@ -57,9 +57,9 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const { return _primitive; }
 
 std::vector<Tensor> ADNode::children() const { return _children; }
 
-void Tensor::eval() const {
+Tensor Tensor::eval() const {
   if (is_evaled()) {
-    return;
+    return *this;
   }
   ADPrimitive *primitive = (_ad_node->primitive().get());
   const device::DeviceKind this_device = this->device();
@@ -81,6 +81,8 @@ void Tensor::eval() const {
   default:
     throw std::runtime_error("Unsupported device");
   }
+
+  return *this;
 }
 
 void Tensor::backward(Tensor &tangent) {
@@ -133,6 +135,11 @@ void Tensor::backward(Tensor &tangent) {
     }
   }
 }
+DType Tensor::dtype() const {
+  //_throw_if_not_initialized("dtype() called on uninitialized tensor, with
+  //primitive: " + _ad_node->primitive()->str());
+  return _view->dtype();
+}
 
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
                std::vector<Tensor> inputs) {
@@ -149,5 +156,6 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
   std::vector<shape_t> shape = primitive_ptr->infer_output_shapes(inputs);
   PG_CHECK_RUNTIME(shape.size() == 1, "Primitive must return a single shape");
   this->_view->set_shape(shape[0]);
+  this->_view->set_dtype(primitive_ptr->infer_output_dtypes(inputs)[0]);
 }
 } // namespace pg

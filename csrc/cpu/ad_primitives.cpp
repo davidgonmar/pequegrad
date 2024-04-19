@@ -14,6 +14,11 @@
                           std::vector<Tensor> &outputs) {                      \
     CHECK_INPUTS_LENGTH(inputs, 2);                                            \
     CHECK_OUTPUTS_LENGTH(outputs, 1);                                          \
+    PG_CHECK_ARG(                                                              \
+        inputs[0].dtype() == inputs[1].dtype(),                                \
+        "Binary operation expects inputs to have the same dtype, got ",        \
+        dtype_to_string(inputs[0].dtype()), " and ",                           \
+        dtype_to_string(inputs[1].dtype()));                                   \
     const Tensor &a = inputs[0];                                               \
     const Tensor &b = inputs[1];                                               \
     CHECK_SAME_SHAPE(a, b);                                                    \
@@ -142,13 +147,6 @@ void MatMul::dispatch_cpu(const std::vector<Tensor> &inputs,
   new_shape.push_back(M);
   new_shape.push_back(N);
   View out_view(new_shape, a.dtype(), device::CPU);
-  std::cout << "M: " << M << " N: " << N << " K: " << K << " B: " << B
-            << std::endl;
-  // print strides
-  std::cout << "a strides: " << vec_to_string(a.strides()) << std::endl;
-  std::cout << "b strides: " << vec_to_string(b.strides()) << std::endl;
-  std::cout << "out strides: " << vec_to_string(out_view.strides())
-            << std::endl;
   dispatch_contiguous_matmul_ker(a.get_base_ptr(), b.get_base_ptr(),
                                  out_view.get_base_ptr(), M, N, K, B,
                                  a.dtype());

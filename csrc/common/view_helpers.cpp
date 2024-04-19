@@ -136,8 +136,7 @@ View unsqueeze(const View &orig, const axes_t &axes) {
   }
   std::sort(processed_nonnegative_axes.begin(),
             processed_nonnegative_axes.end());
-  std::cout << "axes: " << vec_to_string(processed_nonnegative_axes)
-            << std::endl;
+
   // we dont reverse in unsqueeze
   for (auto axis : processed_nonnegative_axes) {
     view = unsqueeze(view, axis);

@@ -37,7 +37,7 @@ static inline size_t compute_nbytes(const shape_t &shape, const DType dtype) {
   if (!is_initialized()) {                                                     \
     std::cout << "Exception on line " << __LINE__ << " in file " << __FILE__   \
               << ": " << msg << std::endl;                                     \
-    throw std::runtime_error(msg);                                             \
+    throw std::runtime_error("not initialized!!!!");                           \
   }
 
 namespace pg {
@@ -53,7 +53,7 @@ public:
 
   std::shared_ptr<void> shared_ptr() const;
   shape_t shape() const;
-
+  void set_dtype(DType dtype) { _dtype = dtype; }
   strides_t strides() const;
 
   size_t numel() {
@@ -182,7 +182,6 @@ public:
   const std::shared_ptr<Tensor> grad() const;
   void accum_grad(Tensor &grad);
   shape_t inferred_shape() const { return _inferred_shape; }
-  void set_inferred_shape(const shape_t &shape) { _inferred_shape = shape; }
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
@@ -196,8 +195,15 @@ Tensor t(const Tensor &t);
 class Tensor {
 
 public:
+  Tensor detach() {
+    if (!is_evaled()) {
+      throw std::runtime_error("Cannot detach unevaluated tensor.");
+    }
+    Tensor detached = *this;
+    detached._ad_node = std::make_shared<ADNode>(); // creates a leaf node
+    return detached;
+  }
   const Tensor &grad() const { return *(_ad_node->grad().get()); }
-  const shape_t inferred_shape() const { return _ad_node->inferred_shape(); }
   Tensor T() const { return t(*this); }
 
   size_t numel() const {
@@ -268,10 +274,7 @@ public:
     return view().nbytes();
   }
 
-  DType dtype() const {
-    _throw_if_not_initialized("dtype() called on uninitialized tensor.");
-    return view().dtype();
-  }
+  DType dtype() const;
 
   void *get_base_ptr() const {
     _throw_if_not_initialized("get_base_ptr() called on uninitialized tensor.");
@@ -371,7 +374,7 @@ public:
     return Tensor(primitive, inputs);
   }
 
-  void eval() const;
+  Tensor eval() const;
 
   void backward(Tensor &tangent);
 
