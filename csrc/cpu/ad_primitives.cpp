@@ -108,104 +108,50 @@ void MatMul::dispatch_cpu(const std::vector<Tensor> &inputs,
                           std::vector<Tensor> &outputs) {
   CHECK_INPUTS_LENGTH(inputs, 2);
   CHECK_OUTPUTS_LENGTH(outputs, 1);
-  View a = inputs[0].view();
-  View b = inputs[1].view();
+  View a = pg::cpu::view::as_contiguous(inputs[0].view());
+  View b = pg::cpu::view::as_contiguous(inputs[1].view());
   PG_CHECK_ARG(a.dtype() == b.dtype(),
                "MatMul expects inputs to have the same dtype, got ",
                dtype_to_string(a.dtype()), " and ", dtype_to_string(b.dtype()));
+  // We need to do 2 checks:
+  // Given two inputs [D1, D2, .., A, B1] and [D1, D2, .., B2, C], we need to
+  // make sure the batch dimensions are equal (not broadcastable, that is
+  // handled externally, here they should be equal) and make sure B1 == B2
+  PG_CHECK_ARG(
+      a.ndim() == b.ndim(),
+      "MatMul expects inputs to have the same number of dimensions, got ",
+      a.ndim(), " and ", b.ndim());
 
-  bool added_a_dim = false;
-  bool added_b_dim = false;
-  DType dtype = a.dtype();
-  // In vector-matrix multiplication, expand dimensions to make both inputs
-  // matrices
-  if (a.ndim() == 1 && b.ndim() != 1) {
-    added_a_dim = true;
-    a = view::unsqueeze(a, 0);
-  } else {
-    a = cpu::view::as_contiguous(a);
-  }
-  // In matrix-vector multiplication, expand dimensions to make both inputs
-  // matrices
-  if (b.ndim() == 1 && a.ndim() != 1) {
-    added_b_dim = true;
-    b = view::unsqueeze(b, 1);
-  } else {
-    b = cpu::view::as_contiguous(b);
-  }
   shape_t new_shape;
-  size_t size1, midsize, size2;
-  if (a.ndim() == 1 && b.ndim() == 1) {
-    View out_view({1}, a.dtype(), device::CPU);
-    dispatch_contiguous_dot_ker(a.get_base_ptr(), b.get_base_ptr(),
-                                out_view.get_base_ptr(), a.shape()[0], dtype);
-    out_view = view::squeeze(out_view); // Make a scalar output
-    outputs[0].init_view(std::make_shared<View>(out_view));
-    return;
-  } else {
-    if (a.ndim() > 2 || b.ndim() > 2) {
-      size_t a_prod = 1;
-      size_t b_prod = 1;
-      for (size_t i = 0; i < a.ndim(); i++) {
-        a_prod *= a.shape()[i];
-      }
-      for (size_t i = 0; i < b.ndim(); i++) {
-        b_prod *= b.shape()[i];
-      }
-      if (a.ndim() > b.ndim()) { // we will try to broadcast, but keep
-        // last to dims. That is, broadcast D0...DN where
-        // shapes are D0...DN, M, N
-        shape_t b_new = shape_t(a.shape());
-        b_new[b_new.size() - 1] = b.shape()[b.shape().size() - 1];
-        b_new[b_new.size() - 2] = b.shape()[b.shape().size() - 2];
-        b = cpu::view::as_contiguous(
-            std::get<0>(view::broadcasted_to(b, b_new)));
-      } else if (a.ndim() < b.ndim()) {
-        shape_t a_new = shape_t(b.shape());
-        a_new[a_new.size() - 1] = a.shape()[a.shape().size() - 1];
-        a_new[a_new.size() - 2] = a.shape()[a.shape().size() - 2];
-        a = cpu::view::as_contiguous(
-            std::get<0>(view::broadcasted_to(a, a_new)));
-        // if ndim are equal, we will broadcast the one with the smallest
-        // product
-      } else if (a_prod >= b_prod) {
-        shape_t b_new = shape_t(a.shape());
-        b_new[b_new.size() - 1] = b.shape()[b.shape().size() - 1];
-        b_new[b_new.size() - 2] = b.shape()[b.shape().size() - 2];
-        b = cpu::view::as_contiguous(
-            std::get<0>(view::broadcasted_to(b, b_new)));
-      } else if (a_prod < b_prod) {
-        shape_t a_new = shape_t(b.shape());
-        a_new[a_new.size() - 1] = a.shape()[a.shape().size() - 1];
-        a_new[a_new.size() - 2] = a.shape()[a.shape().size() - 2];
-        a = cpu::view::as_contiguous(
-            std::get<0>(view::broadcasted_to(a, a_new)));
-      }
-    }
-    size1 = a.shape().at(a.ndim() - 2);
-    midsize = a.shape().at(a.ndim() - 1);
-    size2 = b.shape().at(b.ndim() - 1);
-    new_shape = a.shape();
-    new_shape[new_shape.size() - 1] = size2;
-    if (added_a_dim) {
-      new_shape.erase(new_shape.begin());
-    }
-    if (added_b_dim) {
-      new_shape.erase(new_shape.end() - 1);
-    }
-    int new_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                   std::multiplies<int>());
-
-    View out_view(new_shape, dtype, device::CPU);
-    size_t M = size1;
-    size_t N = size2;
-    size_t K = midsize;
-    size_t B = new_size / (M * N); // batch size
-    std::cout << "M: " << M << " N: " << N << " K: " << K << " B: " << B
-              << std::endl;
-    dispatch_contiguous_matmul_ker(a.get_base_ptr(), b.get_base_ptr(),
-                                   out_view.get_base_ptr(), M, N, K, B, dtype);
-    outputs[0].init_view(std::make_shared<View>(out_view));
+  int B = 1;
+  for (size_t i = 0; i < a.ndim() - 2; i++) {
+    PG_CHECK_ARG(a.shape()[i] == b.shape()[i],
+                 "MatMul expects inputs to have the same shape in the batch "
+                 "dimensions, got ",
+                 vec_to_string(a.shape()), " and ", vec_to_string(b.shape()));
+    new_shape.push_back(a.shape()[i]);
+    B *= a.shape()[i];
   }
+  int M = a.shape()[a.ndim() - 2];
+  int N = b.shape()[b.ndim() - 1];
+  int K = a.shape()[a.ndim() - 1];
+  PG_CHECK_ARG(K == b.shape()[b.ndim() - 2],
+               "MatMul expects inputs to have the same shape in the inner "
+               "dimensions, got ",
+               vec_to_string(a.shape()), " and ", vec_to_string(b.shape()));
+  new_shape.push_back(M);
+  new_shape.push_back(N);
+  View out_view(new_shape, a.dtype(), device::CPU);
+  std::cout << "M: " << M << " N: " << N << " K: " << K << " B: " << B
+            << std::endl;
+  // print strides
+  std::cout << "a strides: " << vec_to_string(a.strides()) << std::endl;
+  std::cout << "b strides: " << vec_to_string(b.strides()) << std::endl;
+  std::cout << "out strides: " << vec_to_string(out_view.strides())
+            << std::endl;
+  dispatch_contiguous_matmul_ker(a.get_base_ptr(), b.get_base_ptr(),
+                                 out_view.get_base_ptr(), M, N, K, B,
+                                 a.dtype());
+  outputs[0].init_view(std::make_shared<View>(out_view));
 }
 } // namespace pg

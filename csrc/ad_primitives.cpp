@@ -145,6 +145,48 @@ Where::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
+std::vector<shape_t>
+Squeeze::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  shape_t new_shape = inputs[0].shape();
+  for (auto &axis : std::vector<axis_t>(_axes.rbegin(), _axes.rend())) {
+    if (axis < 0) {
+      axis += new_shape.size();
+    }
+    PG_CHECK_ARG(new_shape[axis] == 1, "cannot squeeze axis ", axis,
+                 " as it is not 1, got ", new_shape[axis]);
+    new_shape.erase(new_shape.begin() + axis);
+  }
+  return {new_shape};
+}
+
+std::vector<shape_t>
+Unsqueeze::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  shape_t new_shape = inputs[0].shape();
+  for (auto &axis : axes_t(_axes)) {
+    if (axis < 0) {
+      axis += new_shape.size() + 1;
+    }
+    new_shape.insert(new_shape.begin() + axis, 1);
+  }
+  return {new_shape};
+}
+
+std::vector<shape_t>
+Permute::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  shape_t new_shape = inputs[0].shape();
+  // Permute basically reorders the axes
+  // First normalize them (if negative)
+  shape_t new_shape_permuted(new_shape.size());
+  for (size_t i = 0; i < _axes.size(); i++) {
+    if (_axes[i] < 0) {
+      _axes[i] += new_shape.size();
+    }
+    PG_CHECK_ARG(_axes[i] < new_shape.size(), "Permute axis out of bounds");
+    new_shape_permuted[i] = new_shape[_axes[i]];
+  }
+  return {new_shape_permuted};
+}
+
 std::vector<Tensor> Mul::backward(const std::vector<Tensor> &primals,
                                   const std::vector<Tensor> &tangents,
                                   const std::vector<Tensor> &outputs) {
@@ -188,7 +230,6 @@ std::vector<Tensor> Max::backward(const std::vector<Tensor> &primals,
   Tensor mask = gt(a, b);
   return {where(mask, tangents[0], zeros_like(a)),
           where(mask, zeros_like(b), tangents[0])};
-  
 }
 
 std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
@@ -278,27 +319,144 @@ static bool is_vec_vec(const std::vector<Tensor> &t) {
   return is_vec(t[0]) && is_vec(t[1]);
 }
 
+static shape_t get_broadcasted_shapes(const shape_t &a, const shape_t &b) {
+  size_t max_dim = std::max(a.size(), b.size());
+  shape_t new_shape(max_dim);
+  for (size_t i = 0; i < max_dim; i++) {
+    size_t a_dim = i < a.size() ? a[i] : 1;
+    size_t b_dim = i < b.size() ? b[i] : 1;
+    if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
+      throw std::runtime_error("Shapes are not broadcastable");
+    }
+    new_shape[i] = std::max(a_dim, b_dim);
+  }
+  return new_shape;
+}
+
+static std::vector<Tensor> prepare_shapes_for_matmul(const Tensor &_a,
+                                                     const Tensor &_b) {
+
+  shape_t shape_a = _a.shape();
+  shape_t shape_b = _b.shape();
+  shape_t new_shape_a;
+  shape_t new_shape_b;
+  // CASE 1: vec x vec
+  if (shape_a.size() == 1 && shape_b.size() == 1) {
+    // [1, a] x [b, 1] -> [1, 1]. We will handle squeezing later so [1, 1] -> []
+    Tensor a = unsqueeze(_a, 0); // [a] -> [1, a]
+    Tensor b = unsqueeze(_b, 1); // [b] -> [b, 1]
+    return {a, b};
+  }
+  // CASE 2: vec x mat
+  if (shape_a.size() == 1 && shape_b.size() >= 2) {
+    // vec x mat can be seen as [1, a] x [d1, d2, ..., a, b] where d's are batch
+    // sizes (optional)
+    new_shape_a = {1, shape_a[0]};
+    // now, we need to try to broadcast a's shape to match the batch size of b
+    for (size_t i = 0; i < shape_b.size() - 2; i++) {
+      new_shape_a.insert(new_shape_a.begin(), shape_b[i]);
+    }
+    // this makes the op as [d1, d2, ..., 1, a] x [d1, d2, ..., a, b] -> [d1,
+    // d2, ..., 1, b]
+    Tensor a = broadcast_to(a, new_shape_a);
+    return {a, _b};
+  }
+  // CASE 3: mat x vec
+  if (shape_a.size() >= 2 && shape_b.size() == 1) {
+    // mat x vec can be seen as [d1, d2, ..., a, b] x [b, 1] where d's are batch
+    // sizes (optional)
+    new_shape_b = {shape_b[0], 1};
+    // now, we need to try to broadcast b's shape to match the batch size of a
+    for (size_t i = 0; i < shape_a.size() - 2; i++) {
+      new_shape_b.insert(new_shape_b.begin(), shape_a[i]);
+    }
+    // this makes the op as [d1, d2, ..., a, b] x [d1, d2, ..., b, 1] -> [d1,
+    // d2, ..., a, 1]
+    Tensor b = broadcast_to(b, new_shape_b);
+    return {_a, b};
+  }
+  // CASE 4: mat x mat
+  if (shape_a.size() >= 2 && shape_b.size() >= 2) {
+    // mat x mat can be seen as [d1, d2, ..., a, b] x [d1, d2, ..., b, c] where
+    // d's are batch sizes (optional) we need to keep the last 2 dims of the
+    // shapes equal, and try to broadcast the rest
+    shape_t batch_shape_a = shape_a;
+    shape_t batch_shape_b = shape_b;
+    // remove last two dims from the shapes
+    batch_shape_a.pop_back();
+    batch_shape_a.pop_back();
+    batch_shape_b.pop_back();
+    batch_shape_b.pop_back();
+    // now, we need to try to broadcast the batch shapes
+    shape_t new_batch_shape =
+        get_broadcasted_shapes(batch_shape_a, batch_shape_b);
+    // now, we need to append the last two dims
+    new_shape_a = new_batch_shape;
+    new_shape_a.push_back(shape_a[shape_a.size() - 2]);
+    new_shape_a.push_back(shape_a[shape_a.size() - 1]);
+    new_shape_b = new_batch_shape;
+    new_shape_b.push_back(shape_b[shape_b.size() - 2]);
+    new_shape_b.push_back(shape_b[shape_b.size() - 1]);
+    Tensor a = broadcast_to(_a, new_shape_a);
+    Tensor b = broadcast_to(_b, new_shape_b);
+    return {a, b};
+  }
+  throw std::runtime_error(
+      "Invalid shapes for matmul: " + vec_to_string(shape_a) + " and " +
+      vec_to_string(shape_b));
+}
+std::vector<shape_t>
+MatMul::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  std::vector<Tensor> prepared =
+      prepare_shapes_for_matmul(inputs[0], inputs[1]);
+  Tensor a = prepared[0];
+  Tensor b = prepared[1];
+  shape_t shape_a = a.shape();
+  shape_t shape_b = b.shape();
+  shape_t new_shape;
+  // we need to do 2 checks:
+  // Given two inputs [D1, D2, .., A, B1] and [D1, D2, .., B2, C], we need to
+  // make sure the batch dimensions are equal (not broadcastable, that is
+  // handled externally, here they should be equal) and make sure B1 == B2
+  PG_CHECK_ARG(
+      shape_a.size() == shape_b.size(),
+      "MatMul expects inputs to have the same number of dimensions, got ",
+      shape_a.size(), " and ", shape_b.size());
+  for (size_t i = 0; i < shape_a.size() - 2; i++) {
+    PG_CHECK_ARG(shape_a[i] == shape_b[i],
+                 "MatMul expects inputs to have the same shape in the batch "
+                 "dimensions, got ",
+                 vec_to_string(shape_a), " and ", vec_to_string(shape_b));
+    new_shape.push_back(shape_a[i]);
+  }
+  int M = shape_a[shape_a.size() - 2];
+  int N = shape_b[shape_b.size() - 1];
+  int K = shape_a[shape_a.size() - 1];
+  PG_CHECK_ARG(K == shape_b[shape_b.size() - 2],
+               "MatMul expects inputs to have the same shape in the inner "
+               "dimensions, got ",
+               vec_to_string(shape_a), " and ", vec_to_string(shape_b));
+  new_shape.push_back(M);
+  new_shape.push_back(N);
+  return {new_shape};
+}
+
 std::vector<Tensor> MatMul::backward(const std::vector<Tensor> &primals,
                                      const std::vector<Tensor> &tangents,
                                      const std::vector<Tensor> &outputs) {
-
-  Tensor a = primals[0];
-  Tensor b = primals[1];
-
-  if (is_mat_mat(primals)) {
-    return {matmul(tangents[0], b.T()), matmul(a.T(), tangents[0])};
-  } else if (is_vec_vec(primals)) {
-    PG_CHECK_RUNTIME(tangents[0].ndim() == 0,
-                     "[MatMul::backward] expected scalar tangent for "
-                     "vector-vector matmul, got ",
-                     vec_to_string(tangents[0].shape()));
-    return {mul(broadcast_to(tangents[0], b.shape()), b),
-            mul(broadcast_to(tangents[0], a.shape()), a)};
-  }
-  throw std::runtime_error(
-      "MatMul::backward not implemented for the given shapes");
+  return {matmul(tangents[0], primals[1].T()),
+          matmul(primals[0].T(), tangents[0])};
 }
 
+std::vector<Tensor> Squeeze::backward(const std::vector<Tensor> &primals,
+                                      const std::vector<Tensor> &tangents,
+                                      const std::vector<Tensor> &outputs) {
+  return {unsqueeze(tangents[0], _axes)};
+}
 
-
+std::vector<Tensor> Unsqueeze::backward(const std::vector<Tensor> &primals,
+                                        const std::vector<Tensor> &tangents,
+                                        const std::vector<Tensor> &outputs) {
+  return {squeeze(tangents[0], _axes)};
+}
 } // namespace pg

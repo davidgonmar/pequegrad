@@ -191,9 +191,87 @@ Tensor t(const Tensor &a) {
   std::swap(axes[axes.size() - 1], axes[axes.size() - 2]);
   return permute(a, axes);
 }
+static std::vector<Tensor> prepare_shapes_for_matmul(const Tensor &_a,
+                                                     const Tensor &_b) {
+
+  shape_t shape_a = _a.shape();
+  shape_t shape_b = _b.shape();
+  shape_t new_shape_a;
+  shape_t new_shape_b;
+  // CASE 1: vec x vec
+  if (shape_a.size() == 1 && shape_b.size() == 1) {
+    // [1, a] x [b, 1] -> [1, 1]. We will handle squeezing later so [1, 1] -> []
+    Tensor a = unsqueeze(_a, 0); // [a] -> [1, a]
+    Tensor b = unsqueeze(_b, 1); // [b] -> [b, 1]
+    return {a, b};
+  }
+  // CASE 2: vec x mat
+  if (shape_a.size() == 1 && shape_b.size() >= 2) {
+    // vec x mat can be seen as [1, a] x [d1, d2, ..., a, b] where d's are batch
+    // sizes (optional)
+    new_shape_a = {1, shape_a[0]};
+    // now, we need to try to broadcast a's shape to match the batch size of b
+    for (size_t i = 0; i < shape_b.size() - 2; i++) {
+      new_shape_a.insert(new_shape_a.begin(), shape_b[i]);
+    }
+    // this makes the op as [d1, d2, ..., 1, a] x [d1, d2, ..., a, b] -> [d1,
+    // d2, ..., 1, b]
+    Tensor a = broadcast_to(a, new_shape_a);
+    return {a, _b};
+  }
+  // CASE 3: mat x vec
+  if (shape_a.size() >= 2 && shape_b.size() == 1) {
+    // mat x vec can be seen as [d1, d2, ..., a, b] x [b, 1] where d's are batch
+    // sizes (optional)
+    new_shape_b = {shape_b[0], 1};
+    // now, we need to try to broadcast b's shape to match the batch size of a
+    for (size_t i = 0; i < shape_a.size() - 2; i++) {
+      new_shape_b.insert(new_shape_b.begin(), shape_a[i]);
+    }
+    // this makes the op as [d1, d2, ..., a, b] x [d1, d2, ..., b, 1] -> [d1,
+    // d2, ..., a, 1]
+    Tensor b = broadcast_to(b, new_shape_b);
+    return {_a, b};
+  }
+  // CASE 4: mat x mat
+  if (shape_a.size() >= 2 && shape_b.size() >= 2) {
+    // mat x mat can be seen as [d1, d2, ..., a, b] x [d1, d2, ..., b, c] where
+    // d's are batch sizes (optional) we need to keep the last 2 dims of the
+    // shapes equal, and try to broadcast the rest
+    shape_t batch_shape_a = shape_a;
+    shape_t batch_shape_b = shape_b;
+    // remove last two dims from the shapes
+    batch_shape_a.pop_back();
+    batch_shape_a.pop_back();
+    batch_shape_b.pop_back();
+    batch_shape_b.pop_back();
+    // now, we need to try to broadcast the batch shapes
+    shape_t new_batch_shape =
+        get_broadcasted_shapes(batch_shape_a, batch_shape_b);
+    // now, we need to append the last two dims
+    new_shape_a = new_batch_shape;
+    new_shape_a.push_back(shape_a[shape_a.size() - 2]);
+    new_shape_a.push_back(shape_a[shape_a.size() - 1]);
+    new_shape_b = new_batch_shape;
+    new_shape_b.push_back(shape_b[shape_b.size() - 2]);
+    new_shape_b.push_back(shape_b[shape_b.size() - 1]);
+    Tensor a = broadcast_to(_a, new_shape_a);
+    Tensor b = broadcast_to(_b, new_shape_b);
+    return {a, b};
+  }
+  throw std::runtime_error(
+      "Invalid shapes for matmul: " + vec_to_string(shape_a) + " and " +
+      vec_to_string(shape_b));
+}
 
 Tensor matmul(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<MatMul>(), {a, b});
+  std::vector<Tensor> tensors = prepare_shapes_for_matmul(a, b);
+  Tensor res = Tensor::from_primitive(std::make_shared<MatMul>(), tensors);
+  // Now, we need to squeeze the result if needed
+  if (a.shape().size() == 1 && b.shape().size() == 1) {
+    return squeeze(res);
+  }
+  return res;
 }
 
 Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b) {

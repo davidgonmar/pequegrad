@@ -145,13 +145,9 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
                  device_to_string(device));
   }
   this->_view->set_device(device);
-  try {
-    ADPrimitive *primitive_ptr = primitive.get();
-    std::vector<shape_t> shape = primitive_ptr->infer_output_shapes(inputs);
-    PG_CHECK_RUNTIME(shape.size() == 1, "Primitive must return a single shape");
-    this->_view->set_shape(shape[0]);
-  } catch (const std::exception &e) {
-    // todo -- this should always throw
-  }
+  ADPrimitive *primitive_ptr = primitive.get();
+  std::vector<shape_t> shape = primitive_ptr->infer_output_shapes(inputs);
+  PG_CHECK_RUNTIME(shape.size() == 1, "Primitive must return a single shape");
+  this->_view->set_shape(shape[0]);
 }
 } // namespace pg

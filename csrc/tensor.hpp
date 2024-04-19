@@ -198,7 +198,7 @@ class Tensor {
 public:
   const Tensor &grad() const { return *(_ad_node->grad().get()); }
   const shape_t inferred_shape() const { return _ad_node->inferred_shape(); }
-  Tensor T() { return t(*this); }
+  Tensor T() const { return t(*this); }
 
   size_t numel() const {
     shape_t s = shape();

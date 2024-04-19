@@ -254,6 +254,8 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Squeeze)
+  DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Unsqueeze : public ADPrimitive {
@@ -265,6 +267,8 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Unsqueeze)
+  DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Permute : public ADPrimitive {
@@ -279,6 +283,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Permute)
   DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class MatMul : public ADPrimitive {
@@ -286,6 +291,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(MatMul)
   DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 } // namespace pg
