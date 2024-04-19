@@ -105,6 +105,22 @@ class TestNew:
             [shape, shape], pq_fn, torch_fn, backward=do_backward, device=device
         )
 
+    # unary ops
+    @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize(
+        "lambdaop",
+        [
+            (lambda x: pg.log(x), lambda x: torch.log(x), True),
+        ],
+    )
+    def test_unary_ops(self, shape, dtype, lambdaop, device):
+        pq_fn, torch_fn, do_backward = lambdaop
+        _compare_fn_with_torch(
+            [shape], pq_fn, torch_fn, backward=do_backward, device=device
+        )
+
     # REDUCERS TESTS
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])

@@ -58,6 +58,7 @@ public:
 class Log : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Log)
 };
@@ -139,6 +140,7 @@ public:
 class Pow : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Pow)
 };
