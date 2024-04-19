@@ -3,6 +3,10 @@
 namespace pg {
 void BroadcastTo::dispatch_cpu(const std::vector<Tensor> &inputs,
                                std::vector<Tensor> &outputs) {
+  if (inputs[0].shape() == _shape_to) {
+    outputs[0].init_view(std::make_shared<View>(inputs[0].view()));
+    return;
+  }
   auto [view, broadcasted_axis] =
       view::broadcasted_to(inputs[0].view(), _shape_to);
   outputs[0].init_view(std::make_shared<View>(view));
@@ -11,6 +15,10 @@ void BroadcastTo::dispatch_cpu(const std::vector<Tensor> &inputs,
 
 void BroadcastTo::dispatch_cuda(const std::vector<Tensor> &inputs,
                                std::vector<Tensor> &outputs) {
+  if (inputs[0].shape() == _shape_to) {
+    outputs[0].init_view(std::make_shared<View>(inputs[0].view()));
+    return;
+  }
   auto [view, broadcasted_axis] =
       view::broadcasted_to(inputs[0].view(), _shape_to);
   outputs[0].init_view(std::make_shared<View>(view));

@@ -18,8 +18,8 @@
                                const std::vector<Tensor> &tangents,            \
                                const std::vector<Tensor> &outputs) override;
 
-#define DEFINE_OUTPUT_SHAPES                                                   \
-  std::vector<shape_t> output_shapes(const std::vector<Tensor> &inputs)        \
+#define DEFINE_INFER_OUTPUT_SHAPES                                                   \
+  std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs)        \
       override;
 
 #define DEFINE_STR_NAME(NAME)                                                  \
@@ -50,7 +50,7 @@ public:
   /** Get the output shapes of the primitive.
    * Strides are backend specific, so we don't need to worry about them here.
    */
-  virtual std::vector<shape_t> output_shapes(const std::vector<Tensor> &inputs);
+  virtual std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs);
 
   virtual std::string str() { return "ADPrimitive"; }
 };
@@ -61,6 +61,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Log)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Add : public ADPrimitive {
@@ -69,6 +70,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Add)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Mul : public ADPrimitive {
@@ -77,6 +79,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Mul)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Sub : public ADPrimitive {
@@ -85,6 +88,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Sub)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Div : public ADPrimitive {
@@ -93,6 +97,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Div)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Gt : public ADPrimitive {
@@ -100,6 +105,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Gt)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Lt : public ADPrimitive {
@@ -107,6 +113,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Lt)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Eq : public ADPrimitive {
@@ -114,6 +121,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Eq)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Neq : public ADPrimitive {
@@ -121,6 +129,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Neq)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Ge : public ADPrimitive {
@@ -128,6 +137,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Ge)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Le : public ADPrimitive {
@@ -135,6 +145,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Le)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Pow : public ADPrimitive {
@@ -143,6 +154,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Pow)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Max : public ADPrimitive {
@@ -150,6 +162,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Max)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 // REDUCE
@@ -184,6 +197,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Sum)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class MaxReduce : public Reduce {
@@ -194,6 +208,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(MaxReduce)
   DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Mean : public Reduce {
@@ -204,6 +219,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Mean)
   DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class BroadcastTo : public ADPrimitive {
@@ -216,6 +232,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Broadcast)
   DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class Squeeze : public ADPrimitive {

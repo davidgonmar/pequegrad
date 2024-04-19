@@ -5,37 +5,66 @@
 #include "tensor.hpp"
 
 namespace pg {
-Tensor add(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Add>(), {a, b});
+
+Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
+  return Tensor::from_primitive(std::make_shared<BroadcastTo>(shape), {a});
 }
+
+static shape_t get_broadcasted_shapes(const shape_t &a,
+                                                 const shape_t &b) {
+  size_t max_dim = std::max(a.size(), b.size());
+  shape_t new_shape(max_dim);
+  for (size_t i = 0; i < max_dim; i++) {
+    size_t a_dim = i < a.size() ? a[i] : 1;
+    size_t b_dim = i < b.size() ? b[i] : 1;
+    if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
+      throw std::runtime_error("Shapes are not broadcastable");
+    }
+    new_shape[i] = std::max(a_dim, b_dim);
+  }
+  return new_shape;
+}
+
+static std::vector<Tensor> broadcast_tensors(const Tensor &a,
+                                                     const Tensor &b) {
+  shape_t new_shape = get_broadcasted_shapes(a.shape(), b.shape());
+  Tensor a_broadcasted = broadcast_to(a, new_shape);
+  Tensor b_broadcasted = broadcast_to(b, new_shape);
+  return {a_broadcasted, b_broadcasted};
+}
+
+Tensor add(const Tensor &a, const Tensor &b) {
+  return Tensor::from_primitive(std::make_shared<Add>(), broadcast_tensors(a, b));
+}
+
 Tensor mul(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Mul>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Mul>(), broadcast_tensors(a, b));
 }
 Tensor sub(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Sub>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Sub>(), broadcast_tensors(a, b));
 }
 Tensor div(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Div>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Div>(), broadcast_tensors(a, b));
 }
 
 Tensor gt(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Gt>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Gt>(), broadcast_tensors(a, b));
 }
 
 Tensor lt(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Lt>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Lt>(), broadcast_tensors(a, b));
 }
 
 Tensor eq(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Eq>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Eq>(), broadcast_tensors(a, b));
 }
 
 Tensor neq(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Neq>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Neq>(), broadcast_tensors(a, b));
 }
 
 Tensor pow(const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive(std::make_shared<Pow>(), {a, b});
+  return Tensor::from_primitive(std::make_shared<Pow>(), broadcast_tensors(a, b));
 }
 
 Tensor log(const Tensor &a) {
@@ -80,9 +109,6 @@ DEFINE_REDUCE_OP(sum, Sum)
 DEFINE_REDUCE_OP(max_reduce, MaxReduce)
 DEFINE_REDUCE_OP(mean, Mean)
 
-Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
-  return Tensor::from_primitive(std::make_shared<BroadcastTo>(shape), {a});
-}
 
 Tensor broadcast_as(const Tensor &a, const Tensor &b) {
   return broadcast_to(a, b.shape());

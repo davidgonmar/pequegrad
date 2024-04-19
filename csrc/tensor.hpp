@@ -70,6 +70,7 @@ public:
   size_t ndim() const { return _shape.size(); }
 
   void set_device(device::DeviceKind device) { _device = device; }
+  void set_shape(const shape_t &shape) { _shape = shape; }
 
   device::DeviceKind device() const { return _device; }
 
@@ -180,11 +181,15 @@ public:
   std::vector<Tensor> children() const;
   const std::shared_ptr<Tensor> grad() const;
   void accum_grad(Tensor &grad);
-
+  shape_t inferred_shape() const { return _inferred_shape; }
+  void set_inferred_shape(const shape_t &shape) {
+    _inferred_shape = shape;
+  }
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children;
   std::shared_ptr<Tensor> _grad = nullptr;
+  shape_t _inferred_shape;
 };
 
 // forward declaration
@@ -193,7 +198,7 @@ class Tensor {
 
 public:
   const Tensor &grad() const { return *(_ad_node->grad().get()); }
-
+  const shape_t inferred_shape() const { return _ad_node->inferred_shape(); }
   Tensor T() { return t(*this); }
 
   size_t numel() const {
@@ -245,8 +250,8 @@ public:
   }
 
   shape_t shape() const {
-    _throw_if_not_initialized("shape() called on uninitialized tensor.");
-    return view().shape();
+    //_throw_if_not_initialized("shape() called on uninitialized tensor.");
+    return _view->shape();
   }
 
   strides_t strides() const {
@@ -392,17 +397,7 @@ private:
                                      device)) {}
 
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-         std::vector<Tensor> inputs) {
-    _ad_node = std::make_shared<ADNode>(primitive, inputs);
-    device::DeviceKind device = inputs[0].device();
-    for (const Tensor &input : inputs) {
-      PG_CHECK_ARG(input.device() == device,
-                   "All inputs to a primitive must be on the same device, got ",
-                   device_to_string(input.device()), " and ",
-                   device_to_string(device));
-    }
-    this->_view->set_device(device);
-  }
+         std::vector<Tensor> inputs);
 };
 
 } // namespace pg
