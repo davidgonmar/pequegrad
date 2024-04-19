@@ -95,6 +95,10 @@ Tensor pow(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Pow>(),
                                 broadcast_tensors(a, b));
 }
+Tensor max(const Tensor &a, const Tensor &b) {
+  return Tensor::from_primitive(std::make_shared<Max>(),
+                                broadcast_tensors(a, b));
+}
 
 Tensor log(const Tensor &a) {
   return Tensor::from_primitive(std::make_shared<Log>(), {a});

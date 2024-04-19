@@ -176,6 +176,20 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
               tangent),
           mul(log(x), mul(pow(x, y), tangent))};
 }
+static Tensor zeros_like(const Tensor &t) {
+  return fill(t.shape(), t.dtype(), 0, t.device());
+}
+
+std::vector<Tensor> Max::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  Tensor a = primals[0];
+  Tensor b = primals[1];
+  Tensor mask = gt(a, b);
+  return {where(mask, tangents[0], zeros_like(a)),
+          where(mask, zeros_like(b), tangents[0])};
+  
+}
 
 std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
                                   const std::vector<Tensor> &tangents,
@@ -285,8 +299,6 @@ std::vector<Tensor> MatMul::backward(const std::vector<Tensor> &primals,
       "MatMul::backward not implemented for the given shapes");
 }
 
-static Tensor zeros_like(const Tensor &t) {
-  return fill(t.shape(), t.dtype(), 0, t.device());
-}
+
 
 } // namespace pg

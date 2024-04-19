@@ -97,6 +97,7 @@ class TestNew:
             (lambda x, y: pg.gt(x, y), lambda x, y: torch.gt(x, y), False),
             (lambda x, y: pg.lt(x, y), lambda x, y: torch.lt(x, y), False),
             (lambda x, y: pg.neq(x, y), lambda x, y: torch.ne(x, y), False),
+            (lambda x, y: pg.max(x, y), lambda x, y: torch.max(x, y), True),
         ],
     )
     def test_binary_ops(self, shape, dtype, lambdaop, device):
