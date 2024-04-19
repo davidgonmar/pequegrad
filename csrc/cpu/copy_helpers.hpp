@@ -8,8 +8,7 @@ namespace copy {
 
 template <typename T>
 void copy_ker(const shape_t &shape, const T *in, T *out,
-              const strides_t &in_strides,
-              const strides_t &out_strides) {
+              const strides_t &in_strides, const strides_t &out_strides) {
 
   size_t total_elements = 1;
   for (size_t dim : shape) {

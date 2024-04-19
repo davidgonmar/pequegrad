@@ -134,26 +134,24 @@ void Tensor::backward(Tensor &tangent) {
   }
 }
 
-Tensor::Tensor(const std::shared_ptr<ADPrimitive>& primitive,
-    std::vector<Tensor> inputs) {
-    _ad_node = std::make_shared<ADNode>(primitive, inputs);
-    device::DeviceKind device = inputs[0].device();
-    for (const Tensor& input : inputs) {
-        PG_CHECK_ARG(input.device() == device,
-            "All inputs to a primitive must be on the same device, got ",
-            device_to_string(input.device()), " and ",
-            device_to_string(device));
-    }
-    this->_view->set_device(device);
-    try {
-        ADPrimitive* primitive_ptr = primitive.get();
-        std::vector<shape_t> shape = primitive_ptr->infer_output_shapes(inputs);
-        PG_CHECK_RUNTIME(shape.size() == 1,
-            "Primitive must return a single shape");
-        this->_view->set_shape(shape[0]);
-    }
-    catch (const std::exception& e) {
-        // todo -- this should always throw
-    }
+Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
+               std::vector<Tensor> inputs) {
+  _ad_node = std::make_shared<ADNode>(primitive, inputs);
+  device::DeviceKind device = inputs[0].device();
+  for (const Tensor &input : inputs) {
+    PG_CHECK_ARG(input.device() == device,
+                 "All inputs to a primitive must be on the same device, got ",
+                 device_to_string(input.device()), " and ",
+                 device_to_string(device));
+  }
+  this->_view->set_device(device);
+  try {
+    ADPrimitive *primitive_ptr = primitive.get();
+    std::vector<shape_t> shape = primitive_ptr->infer_output_shapes(inputs);
+    PG_CHECK_RUNTIME(shape.size() == 1, "Primitive must return a single shape");
+    this->_view->set_shape(shape[0]);
+  } catch (const std::exception &e) {
+    // todo -- this should always throw
+  }
 }
 } // namespace pg

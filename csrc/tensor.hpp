@@ -182,9 +182,8 @@ public:
   const std::shared_ptr<Tensor> grad() const;
   void accum_grad(Tensor &grad);
   shape_t inferred_shape() const { return _inferred_shape; }
-  void set_inferred_shape(const shape_t &shape) {
-    _inferred_shape = shape;
-  }
+  void set_inferred_shape(const shape_t &shape) { _inferred_shape = shape; }
+
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children;

@@ -33,51 +33,63 @@ std::vector<Tensor> Add::backward(const std::vector<Tensor> &primals,
   return {tangents[0], tangents[0]};
 }
 
-std::vector<shape_t> Add::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Add::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Mul::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Mul::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Sub::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Sub::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Div::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Div::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Pow::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Pow::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Max::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Max::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Gt::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Gt::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Lt::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Lt::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Eq::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Eq::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Neq::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Neq::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Ge::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Ge::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> Le::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Le::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
@@ -91,9 +103,10 @@ shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
     }
   }
   std::sort(sorted_axes.begin(), sorted_axes.end());
-  
+
   for (size_t i = 0; i < shape.size(); i++) {
-    if (std::find(sorted_axes.begin(), sorted_axes.end(), i) == sorted_axes.end()) {
+    if (std::find(sorted_axes.begin(), sorted_axes.end(), i) ==
+        sorted_axes.end()) {
       new_shape.push_back(shape[i]);
     } else if (keepdims) {
       new_shape.push_back(1);
@@ -102,26 +115,34 @@ shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
   return new_shape;
 }
 
-std::vector<shape_t> Sum::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Sum::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {reduce_shape(inputs[0].shape(), _axes, _keepdims)};
 }
 
-std::vector<shape_t> MaxReduce::infer_output_shapes(
-    const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+MaxReduce::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {reduce_shape(inputs[0].shape(), _axes, _keepdims)};
 }
 
-std::vector<shape_t> Mean::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Mean::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {reduce_shape(inputs[0].shape(), _axes, _keepdims)};
 }
 
-std::vector<shape_t> Log::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Log::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
-std::vector<shape_t> BroadcastTo::infer_output_shapes(
-    const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+BroadcastTo::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {_shape_to};
+}
+
+std::vector<shape_t>
+Where::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  return {inputs[0].shape()};
 }
 
 std::vector<Tensor> Mul::backward(const std::vector<Tensor> &primals,
@@ -263,4 +284,9 @@ std::vector<Tensor> MatMul::backward(const std::vector<Tensor> &primals,
   throw std::runtime_error(
       "MatMul::backward not implemented for the given shapes");
 }
+
+static Tensor zeros_like(const Tensor &t) {
+  return fill(t.shape(), t.dtype(), 0, t.device());
+}
+
 } // namespace pg

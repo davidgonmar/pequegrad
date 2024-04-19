@@ -2,6 +2,7 @@
 #include "./binary_helpers.hpp"
 #include "./matmul_helpers.hpp"
 #include "./reduce_helpers.hpp"
+#include "./ternary_helpers.hpp"
 #include "./unary_helpers.hpp"
 #include "common/view_helpers.hpp"
 #include "cpu/view_helpers.hpp"
@@ -23,6 +24,7 @@
                             b.get_base_ptr(), outputs[0].get_base_ptr(),       \
                             a.dtype(), cpu::BinaryOpType::OP);                 \
   }
+
 namespace pg {
 DECL_BINARY_OP(Add, Add)
 DECL_BINARY_OP(Mul, Mul)
@@ -83,6 +85,24 @@ void Log::dispatch_cpu(const std::vector<Tensor> &inputs,
 DECL_REDUCE_OP(Sum, cpu::ReduceOp::Sum)
 DECL_REDUCE_OP(MaxReduce, cpu::ReduceOp::Max)
 DECL_REDUCE_OP(Mean, cpu::ReduceOp::Mean)
+
+void Where::dispatch_cpu(const std::vector<Tensor> &inputs,
+                         std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 3);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &condition = inputs[0];
+  const Tensor &a = inputs[1];
+  const Tensor &b = inputs[2];
+  CHECK_SAME_SHAPE(a, b);
+  CHECK_SAME_SHAPE(condition, a);
+  outputs[0].init_view(
+      std::make_shared<View>(a.shape(), a.dtype(), device::CPU));
+  cpu::dispatch_ternary_op(condition.shape(), condition.strides(), a.strides(),
+                           b.strides(), outputs[0].strides(),
+                           condition.get_base_ptr(), a.get_base_ptr(),
+                           b.get_base_ptr(), outputs[0].get_base_ptr(),
+                           a.dtype(), cpu::TernaryOpType::Where);
+}
 
 void MatMul::dispatch_cpu(const std::vector<Tensor> &inputs,
                           std::vector<Tensor> &outputs) {

@@ -154,7 +154,9 @@ class TestNew:
         def torch_fn(x):
             return torch.sum(x, dim=axes, keepdim=keepdims)
 
-        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=lambdaop[2], device=device)
+        _compare_fn_with_torch(
+            [shape], pq_fn, torch_fn, backward=lambdaop[2], device=device
+        )
 
     # Test broadcast to
     @pytest.mark.parametrize(
@@ -217,3 +219,29 @@ class TestNew:
             return torch.matmul(a, b)
 
         _compare_fn_with_torch(shapes, pq_fn, torch_fn, backward=True)
+
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            (2, 3),
+            (3, 4),
+            (4, 5),
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize(
+        "lambdaop",
+        [
+            (
+                lambda cond, x, y: pg.where(cond, x, y),
+                lambda cond, x, y: torch.where(cond.bool(), x, y),
+                False,
+            ),  # backward not implemented
+        ],
+    )
+    def test_where(self, shape, dtype, lambdaop, device):
+        pq_fn, torch_fn, do_backward = lambdaop
+        _compare_fn_with_torch(
+            [shape, shape, shape], pq_fn, torch_fn, backward=do_backward, device=device
+        )

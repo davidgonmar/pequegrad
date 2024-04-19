@@ -14,7 +14,7 @@ void BroadcastTo::dispatch_cpu(const std::vector<Tensor> &inputs,
 }
 
 void BroadcastTo::dispatch_cuda(const std::vector<Tensor> &inputs,
-                               std::vector<Tensor> &outputs) {
+                                std::vector<Tensor> &outputs) {
   if (inputs[0].shape() == _shape_to) {
     outputs[0].init_view(std::make_shared<View>(inputs[0].view()));
     return;
@@ -36,7 +36,7 @@ void Squeeze::dispatch_cpu(const std::vector<Tensor> &inputs,
 }
 
 void Squeeze::dispatch_cuda(const std::vector<Tensor> &inputs,
-                           std::vector<Tensor> &outputs) {
+                            std::vector<Tensor> &outputs) {
   CHECK_INPUTS_LENGTH(inputs, 1);
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
@@ -44,7 +44,6 @@ void Squeeze::dispatch_cuda(const std::vector<Tensor> &inputs,
   View view = view::squeeze(a.view(), axes);
   outputs[0].init_view(std::make_shared<View>(view));
 }
-
 
 void Unsqueeze::dispatch_cpu(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
@@ -57,7 +56,7 @@ void Unsqueeze::dispatch_cpu(const std::vector<Tensor> &inputs,
 }
 
 void Unsqueeze::dispatch_cuda(const std::vector<Tensor> &inputs,
-                             std::vector<Tensor> &outputs) {
+                              std::vector<Tensor> &outputs) {
   CHECK_INPUTS_LENGTH(inputs, 1);
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
@@ -77,7 +76,7 @@ void Permute::dispatch_cpu(const std::vector<Tensor> &inputs,
 }
 
 void Permute::dispatch_cuda(const std::vector<Tensor> &inputs,
-                           std::vector<Tensor> &outputs) {
+                            std::vector<Tensor> &outputs) {
   CHECK_INPUTS_LENGTH(inputs, 1);
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];

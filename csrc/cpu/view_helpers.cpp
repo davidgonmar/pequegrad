@@ -7,7 +7,8 @@ namespace view {
 View as_contiguous(const View &view) {
   View new_view = View(view.shape(), view.dtype(), device::CPU);
   copy::dispatch_copy(view.shape(), view.strides(), new_view.strides(),
-                      view.get_base_ptr(), new_view.get_base_ptr(), view.dtype());
+                      view.get_base_ptr(), new_view.get_base_ptr(),
+                      view.dtype());
   return new_view;
 }
 } // namespace view

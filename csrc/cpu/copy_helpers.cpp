@@ -5,7 +5,6 @@
 #include "shape.hpp"
 #include <vector>
 
-
 namespace copy {
 
 void dispatch_copy(const shape_t &shape, const strides_t &in_strides,

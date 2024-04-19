@@ -45,4 +45,6 @@ Tensor permute(const Tensor &a, const axes_t &axes);
 
 Tensor t(const Tensor &a);
 Tensor matmul(const Tensor &a, const Tensor &b);
+
+Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b);
 } // namespace pg

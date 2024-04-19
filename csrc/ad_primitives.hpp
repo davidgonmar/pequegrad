@@ -18,8 +18,8 @@
                                const std::vector<Tensor> &tangents,            \
                                const std::vector<Tensor> &outputs) override;
 
-#define DEFINE_INFER_OUTPUT_SHAPES                                                   \
-  std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs)        \
+#define DEFINE_INFER_OUTPUT_SHAPES                                             \
+  std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs)  \
       override;
 
 #define DEFINE_STR_NAME(NAME)                                                  \
@@ -50,7 +50,8 @@ public:
   /** Get the output shapes of the primitive.
    * Strides are backend specific, so we don't need to worry about them here.
    */
-  virtual std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs);
+  virtual std::vector<shape_t>
+  infer_output_shapes(const std::vector<Tensor> &inputs);
 
   virtual std::string str() { return "ADPrimitive"; }
 };
@@ -162,6 +163,14 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Max)
+  DEFINE_INFER_OUTPUT_SHAPES
+};
+
+class Where : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Where)
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
