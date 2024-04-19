@@ -1,11 +1,12 @@
 #include "dtype.hpp"
 #include "reduce_helpers.cuh"
+#include "shape.hpp"
 
 namespace pg {
 namespace cuda {
 void launch_reduce_kernel(ReduceKernelType type, DType dtype, dim3 blocks,
                           dim3 threads, const void *in, void *out,
-                          const size_t *in_strides, const size_t *in_shape,
+                          const stride_t *in_strides, const size_t *in_shape,
                           const size_t n_dims, const size_t red_axis) {
   if (dtype == DType::Float32) {
     launch_reduce_kernel_helper<float>(

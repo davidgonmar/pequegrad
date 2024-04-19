@@ -181,6 +181,7 @@ class Sum : public Reduce {
 
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Sum)
 };
@@ -190,6 +191,7 @@ class MaxReduce : public Reduce {
 
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(MaxReduce)
   DEFINE_BACKWARD
 };
@@ -199,6 +201,7 @@ class Mean : public Reduce {
 
 public:
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Mean)
   DEFINE_BACKWARD
 };
@@ -210,6 +213,7 @@ protected:
 public:
   explicit BroadcastTo(shape_t shape_to) : _shape_to(shape_to) {}
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Broadcast)
   DEFINE_BACKWARD
 };
@@ -221,6 +225,7 @@ protected:
 public:
   explicit Squeeze(axes_t axes) : _axes(axes) {}
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Squeeze)
 };
 
@@ -231,6 +236,7 @@ protected:
 public:
   explicit Unsqueeze(axes_t axes) : _axes(axes) {}
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Unsqueeze)
 };
 
@@ -243,6 +249,7 @@ public:
     PG_CHECK_ARG(axes.size() > 0, "Permute expects at least one axis");
   }
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Permute)
   DEFINE_BACKWARD
 };

@@ -56,6 +56,11 @@ public:
 
   strides_t strides() const;
 
+  size_t numel() {
+    shape_t s = shape();
+    return std::accumulate(s.begin(), s.end(), 1, std::multiplies<size_t>());
+  }
+
   size_t offset() const;
 
   size_t nbytes() const;

@@ -122,6 +122,7 @@ class TestNew:
         )
 
     # REDUCERS TESTS
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
     @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), None])
@@ -146,14 +147,14 @@ class TestNew:
             ),
         ],
     )
-    def test_reducers(self, shape, dtype, axes, keepdims, lambdaop):
+    def test_reducers(self, device, shape, dtype, axes, keepdims, lambdaop):
         def pq_fn(x):
             return pg.sum(x, axes, keepdims)
 
         def torch_fn(x):
             return torch.sum(x, dim=axes, keepdim=keepdims)
 
-        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=lambdaop[2])
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=lambdaop[2], device=device)
 
     # Test broadcast to
     @pytest.mark.parametrize(

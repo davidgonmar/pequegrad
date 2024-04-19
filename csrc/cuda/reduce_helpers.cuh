@@ -1,11 +1,13 @@
 #pragma once
 
 #include "dtype.hpp"
+#include "shape.hpp"
+
 namespace pg {
 namespace cuda {
 // operation and initial accumulator value
 template <typename Op, typename T>
-__device__ void reduce_base_fn(const T *in, T *out, const size_t *in_strides,
+__device__ void reduce_base_fn(const T *in, T *out, const stride_t *in_strides,
                                const size_t *in_shape, const size_t n_dims,
                                const size_t red_axis) {
   // the general explanation is:
@@ -96,21 +98,21 @@ template <typename T> struct MeanOp {
 };
 
 template <typename T>
-__global__ void sum_kernel(const T *in, T *out, const size_t *in_strides,
+__global__ void sum_kernel(const T *in, T *out, const stride_t *in_strides,
                            const size_t *in_shape, const size_t n_dims,
                            const size_t red_axis) {
   reduce_base_fn<SumOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
 }
 
 template <typename T>
-__global__ void max_kernel(const T *in, T *out, const size_t *in_strides,
+__global__ void max_kernel(const T *in, T *out, const stride_t *in_strides,
                            const size_t *in_shape, const size_t n_dims,
                            const size_t red_axis) {
   reduce_base_fn<MaxOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
 }
 
 template <typename T>
-__global__ void mean_kernel(const T *in, T *out, const size_t *in_strides,
+__global__ void mean_kernel(const T *in, T *out, const stride_t *in_strides,
                             const size_t *in_shape, const size_t n_dims,
                             const size_t red_axis) {
   reduce_base_fn<MeanOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
@@ -121,7 +123,7 @@ enum class ReduceKernelType { SUM, MAX, MEAN };
 template <typename T>
 void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
                                  dim3 threads, const T *in, T *out,
-                                 const size_t *in_strides,
+                                 const stride_t *in_strides,
                                  const size_t *in_shape, const size_t n_dims,
                                  const size_t red_axis) {
   if (type == ReduceKernelType::SUM) {
@@ -138,7 +140,7 @@ void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
 
 void launch_reduce_kernel(ReduceKernelType type, DType dtype, dim3 blocks,
                           dim3 threads, const void *in, void *out,
-                          const size_t *in_strides, const size_t *in_shape,
+                          const stride_t *in_strides, const size_t *in_shape,
                           const size_t n_dims, const size_t red_axis);
 } // namespace cuda
 } // namespace pg
