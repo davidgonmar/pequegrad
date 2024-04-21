@@ -141,5 +141,23 @@ PYBIND11_MODULE(pequegrad_c, m) {
              return Tensor::from_numpy(np_array, requires_grad, device);
            }),
            py::arg("np_array"), py::arg("requires_grad") = false,
-           py::arg("device") = device::DeviceKind::CPU);
+           py::arg("device") = device::DeviceKind::CPU)
+      .def("__add__", [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
+      .def("__sub__", [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); })
+      .def("__mul__", [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); })
+      .def("__truediv__", [](const Tensor &a, const Tensor &b) { return pg::div(a, b); })
+      .def("__neg__", [](const Tensor &a) { return pg::neg(a); })
+      .def("__matmul__", [](const Tensor &a, const Tensor &b) { return pg::matmul(a, b); })
+      .def("__pow__", [](const Tensor &a, const Tensor &b) { return pg::pow(a, b); })
+      .def("__eq__", [](const Tensor &a, const Tensor &b) { return pg::eq(a, b); })
+      .def("__ne__", [](const Tensor &a, const Tensor &b) { return pg::neq(a, b); })
+      .def("__lt__", [](const Tensor &a, const Tensor &b) { return pg::lt(a, b); })
+      .def("__gt__", [](const Tensor &a, const Tensor &b) { return pg::gt(a, b); })
+      .def("__repr__", [](const Tensor &t) {
+        std::stringstream ss;
+        ss << "Tensor(shape=" << vec_to_string(t.shape())
+           << ", dtype=" << dtype_to_string(t.dtype())
+           << ", device=" << t.device() << ", evaled=" << t.is_evaled() << ")";
+        return ss.str();
+      });
 };
