@@ -68,7 +68,10 @@ public:
   DType dtype() const;
 
   size_t ndim() const { return _shape.size(); }
-
+  size_t numel() const {
+    return std::accumulate(_shape.begin(), _shape.end(), 1,
+                           std::multiplies<size_t>());
+  }
   void set_device(device::DeviceKind device) { _device = device; }
   void set_shape(const shape_t &shape) { _shape = shape; }
 
@@ -195,7 +198,6 @@ Tensor t(const Tensor &t);
 class Tensor {
 
 public:
-
   Tensor detach() {
     if (!is_evaled()) {
       throw std::runtime_error("Cannot detach unevaluated tensor.");
@@ -299,7 +301,10 @@ public:
     }
     return static_cast<T *>(view().get_base_ptr());
   }
-  template <typename T> static Tensor from_numpy(py::array_t<T> np_array, bool requires_grad = false, device::DeviceKind device = device::DeviceKind::CPU) {
+  template <typename T>
+  static Tensor
+  from_numpy(py::array_t<T> np_array, bool requires_grad = false,
+             device::DeviceKind device = device::DeviceKind::CPU) {
     py::buffer_info buffer_info = np_array.request();
     auto size = buffer_info.size;
     shape_t shape;

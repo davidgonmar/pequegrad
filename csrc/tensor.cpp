@@ -137,7 +137,7 @@ void Tensor::backward(Tensor &tangent) {
 }
 DType Tensor::dtype() const {
   //_throw_if_not_initialized("dtype() called on uninitialized tensor, with
-  //primitive: " + _ad_node->primitive()->str());
+  // primitive: " + _ad_node->primitive()->str());
   return _view->dtype();
 }
 

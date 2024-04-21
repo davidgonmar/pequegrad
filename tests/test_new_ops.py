@@ -211,15 +211,16 @@ class TestNew:
             ((5, 2, 10), (5, 10, 6)),
         ],
     )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
-    def test_matmul(self, shapes, dtype):
+    def test_matmul(self, shapes, dtype, device):
         def pq_fn(a, b):
             return pg.matmul(a, b)
 
         def torch_fn(a, b):
             return torch.matmul(a, b)
 
-        _compare_fn_with_torch(shapes, pq_fn, torch_fn, backward=True)
+        _compare_fn_with_torch(shapes, pq_fn, torch_fn, backward=True, device=device)
 
     @pytest.mark.parametrize(
         "shape",
