@@ -195,6 +195,7 @@ Tensor t(const Tensor &t);
 class Tensor {
 
 public:
+
   Tensor detach() {
     if (!is_evaled()) {
       throw std::runtime_error("Cannot detach unevaluated tensor.");
@@ -286,6 +287,10 @@ public:
     return _view->device();
   }
 
+  void set_requires_grad(bool requires_grad) {
+    this->_requires_grad = requires_grad;
+  }
+
   template <typename T> T *get_casted_base_ptr() {
     _throw_if_not_initialized(
         "get_casted_base_ptr() called on uninitialized tensor.");
@@ -294,7 +299,7 @@ public:
     }
     return static_cast<T *>(view().get_base_ptr());
   }
-  template <typename T> static Tensor from_numpy(py::array_t<T> np_array) {
+  template <typename T> static Tensor from_numpy(py::array_t<T> np_array, bool requires_grad = false, device::DeviceKind device = device::DeviceKind::CPU) {
     py::buffer_info buffer_info = np_array.request();
     auto size = buffer_info.size;
     shape_t shape;
@@ -315,7 +320,7 @@ public:
     std::memcpy(_ptr.get(), buffer_info.ptr, size * sizeof(T));
     Tensor arr(buffer_info.size * dtype_to_size(dtype_from_pytype<T>()), shape,
                strides, _ptr, dtype_from_pytype<T>(), device::DeviceKind::CPU);
-    return arr;
+    return arr.to(device);
   }
   template <typename T> py::array_t<T> to_numpy() {
     if (!is_evaled()) {
@@ -387,6 +392,7 @@ public:
   }
 
 private:
+  bool _requires_grad = true;
   std::shared_ptr<View> _view = std::make_shared<View>();
 
   std::shared_ptr<ADNode> _ad_node =

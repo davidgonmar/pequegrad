@@ -135,5 +135,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); })
       .def_property_readonly("dtype", [](const Tensor &t) { return t.dtype(); })
       .def_property_readonly("device",
-                             [](const Tensor &t) { return t.device(); });
+                             [](const Tensor &t) { return t.device(); })
+      .def(py::init([](py::array_t<float> np_array, bool requires_grad, device::DeviceKind device) {
+        return Tensor::from_numpy(np_array, requires_grad,device);
+      }), py::arg("np_array"), py::arg("requires_grad") = false, py::arg("device") = device::DeviceKind::CPU);
 };
