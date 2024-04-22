@@ -1,7 +1,7 @@
 #include "view_helpers.hpp"
 
 // returns new strides + axes of the output that are 'broadcasted'
-static std::tuple<strides_t, axes_t>
+static std::tuple<strides_t, axes_t, axes_t>
 get_broadcasting_info(const shape_t shape_from, const strides_t strides_from,
                       const shape_t shape_to) {
 
@@ -16,6 +16,7 @@ get_broadcasting_info(const shape_t shape_from, const strides_t strides_from,
   int new_size = 1;
   strides_t new_strides(to_ndim, 0);
   axes_t broadcasted_axes;
+  axes_t created_axes;
   // reverse test if the dim is 1 or they are equal
   for (int i = to_ndim - 1, j = from_ndim - 1; i >= 0; --i, --j) {
     size_t dim_to = shape_to[i];
@@ -32,27 +33,31 @@ get_broadcasting_info(const shape_t shape_from, const strides_t strides_from,
     if (dim_from != 1 && dim_from != -1) {
       new_strides[i] = strides_from[j];
     } else {
-      broadcasted_axes.push_back(i);
+      if (dim_from == -1) {
+        created_axes.push_back(i);
+      } else {
+        broadcasted_axes.push_back(i);
+      }
     }
     new_size *= dim_to;
   }
 
-  return std::make_tuple(new_strides, broadcasted_axes);
+  return std::make_tuple(new_strides, broadcasted_axes, created_axes);
 }
 
 namespace pg {
 namespace view {
-std::tuple<View, axes_t> broadcasted_to(const View &view,
-                                        const shape_t &shape_to) {
+std::tuple<View, axes_t, axes_t> broadcasted_to(const View &view,
+                                                const shape_t &shape_to) {
   if (view.shape() == shape_to) {
-    return std::make_tuple(view, axes_t());
+    return std::make_tuple(view, axes_t(), axes_t());
   }
-  auto [new_strides, broadcasted_axes] =
+  auto [new_strides, broadcasted_axes, created_axes] =
       get_broadcasting_info(view.shape(), view.strides(), shape_to);
   return std::make_tuple(View(view.shared_ptr(), view.nbytes(), shape_to,
                               new_strides, view.offset(), view.dtype(),
                               view.device()),
-                         broadcasted_axes);
+                         broadcasted_axes, created_axes);
 }
 View squeeze(const View &orig, axis_t axis) {
   if (axis < 0) {
@@ -130,7 +135,7 @@ View unsqueeze(const View &orig, const axes_t &axes) {
   axes_t processed_nonnegative_axes;
   for (auto axis : axes) {
     if (axis < 0) {
-      axis = orig.shape().size() + axis;
+      axis = orig.shape().size() + axis + 1;
     }
     processed_nonnegative_axes.push_back(axis);
   }

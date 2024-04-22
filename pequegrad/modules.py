@@ -1,4 +1,4 @@
-from pequegrad.tensor import Tensor
+from pequegrad.backend.c import Tensor
 from pequegrad.backend import NumpyTensor, CudaTensor
 import numpy as np
 from typing import List, Union
@@ -13,7 +13,8 @@ class ModuleParam(Tensor):
 def kaiming_init(shape):
     fan_in = shape[0]
     bound = 1 / np.sqrt(fan_in)
-    return ModuleParam.uniform(shape, -bound, bound, requires_grad=True)
+    uniform = np.random.uniform(low=-bound, high=bound, size=shape)
+    return ModuleParam(uniform, requires_grad=True)
 
 
 class StatefulModule:
@@ -64,9 +65,11 @@ class StatefulModule:
                 )
 
     def to(self, backend):
-        for p in self.parameters():
-            p.to_(backend)
-        return self
+        for p in self.__dict__.values():
+            if isinstance(p, StatefulModule):
+                p.to(backend)
+            elif isinstance(p, ModuleParam):
+                p.to_(backend)
 
     def _search_parameters_and_submodules(self):
         params = []
@@ -98,7 +101,7 @@ class StatefulModule:
 
     def reset_grad(self):
         for p in self.parameters():
-            p.reset_grad()
+            p.detach()
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)

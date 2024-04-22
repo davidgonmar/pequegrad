@@ -57,6 +57,19 @@ void Log::dispatch_cpu(const std::vector<Tensor> &inputs,
       a.nbytes() / dtype_to_size(a.dtype())); // todo -- this assumes contiguity
 }
 
+void Exp::dispatch_cpu(const std::vector<Tensor> &inputs,
+                       std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &a = inputs[0];
+  outputs[0].init_view(
+      std::make_shared<View>(a.shape(), a.dtype(), device::CPU));
+  cpu::dispatch_unary_op(
+      a.dtype(), cpu::UnaryOpType::Exp, a.get_base_ptr(),
+      outputs[0].get_base_ptr(),
+      a.nbytes() / dtype_to_size(a.dtype())); // todo -- this assumes contiguity
+}
+
 #define DECL_REDUCE_OP(NAME, OP)                                               \
   void NAME::dispatch_cpu(const std::vector<Tensor> &inputs,                   \
                           std::vector<Tensor> &outputs) {                      \

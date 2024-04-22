@@ -1,4 +1,4 @@
-from .tensor import Tensor
+from pequegrad.backend.c import Tensor
 from typing import List
 
 
@@ -18,16 +18,17 @@ class SGD:
 
     def reset_grad(self):
         for p in self.params:
-            p.reset_grad()
+            p.detach()
 
     def step(self, reset_grad: bool = True):
         for i, p in enumerate(self.params):
-            gt = p.grad.data
+            gt = p.grad.eval()
+            assert gt is not None, "Gradient is None, param: {}".format(p)
             if self.weight_decay != 0:
-                gt += self.weight_decay * p.data
-            vt = self.momentum * self.vt_last[i] + gt
+                gt += self.weight_decay * p
+            vt = (self.momentum * self.vt_last[i] + gt).eval()
             self.vt_last[i] = vt
-            p.assign(p.data - self.lr * vt)
+            p.assign(p - self.lr * vt)
 
         if reset_grad:
             self.reset_grad()
@@ -48,18 +49,18 @@ class Adam:
 
     def reset_grad(self):
         for p in self.params:
-            p.reset_grad()
+            p.detach()
 
     def step(self, reset_grad: bool = True):
         for i, p in enumerate(self.params):
-            gt = p.grad.data
+            gt = p.grad
             mt = self.b1 * self.mt_last[i] + (1 - self.b1) * gt
             vt = self.b2 * self.vt_last[i] + (1 - self.b2) * (gt * gt)
             mt_hat = mt / (1 - self.b1**self.t)
             vt_hat = vt / (1 - self.b2**self.t)
             self.vt_last[i] = vt
             self.mt_last[i] = mt
-            p.assign(p.data - self.lr * mt_hat / (vt_hat**0.5 + self.eps))
+            p.assign(p - self.lr * mt_hat / (vt_hat**0.5 + self.eps))
             self.t += 1
         if reset_grad:
             self.reset_grad()

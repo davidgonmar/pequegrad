@@ -6,21 +6,42 @@
 
 namespace pg {
 
+Tensor fill(const shape_t &shape, DType dtype, double value,
+            device::DeviceKind device) {
+  Tensor t = Tensor(shape, dtype, device);
+  if (device == device::CPU) {
+    cpu::fill(t, value, shape);
+    return t;
+  } else {
+    cuda::fill(t, value, shape);
+  }
+  return t;
+}
+
 Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
   return Tensor::from_primitive(std::make_shared<BroadcastTo>(shape), {a});
 }
 
-static shape_t get_broadcasted_shapes(const shape_t &a, const shape_t &b) {
+static shape_t get_broadcasted_shapes(const shape_t &_a, const shape_t &_b) {
+  auto a = shape_t(_a);
+  auto b = shape_t(_b);
+  std::reverse(a.begin(), a.end());
+  std::reverse(b.begin(), b.end());
   size_t max_dim = std::max(a.size(), b.size());
+  size_t min_dim = std::min(a.size(), b.size());
   shape_t new_shape(max_dim);
   for (size_t i = 0; i < max_dim; i++) {
     size_t a_dim = i < a.size() ? a[i] : 1;
     size_t b_dim = i < b.size() ? b[i] : 1;
     if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
-      throw std::runtime_error("Shapes are not broadcastable");
+      throw std::runtime_error("Shapes are not broadcastable: " +
+                               vec_to_string(a) + " and " + vec_to_string(b));
     }
     new_shape[i] = std::max(a_dim, b_dim);
   }
+  std::reverse(new_shape.begin(), new_shape.end());
+  std::reverse(a.begin(), a.end());
+  std::reverse(b.begin(), b.end());
   return new_shape;
 }
 
@@ -33,13 +54,19 @@ static shape_t get_broadcasted_shapes(const shape_t &a, const shape_t &b,
     size_t b_dim = i < b.size() ? b[i] : 1;
     size_t c_dim = i < c.size() ? c[i] : 1;
     if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
-      throw std::runtime_error("Shapes are not broadcastable");
+      throw std::runtime_error(
+          "Shapes are not broadcastable: " + vec_to_string(a) + " and " +
+          vec_to_string(b) + " and " + vec_to_string(c));
     }
     if (a_dim != c_dim && a_dim != 1 && c_dim != 1) {
-      throw std::runtime_error("Shapes are not broadcastable");
+      throw std::runtime_error(
+          "Shapes are not broadcastable: " + vec_to_string(a) + " and " +
+          vec_to_string(b) + " and " + vec_to_string(c));
     }
     if (b_dim != c_dim && b_dim != 1 && c_dim != 1) {
-      throw std::runtime_error("Shapes are not broadcastable");
+      throw std::runtime_error(
+          "Shapes are not broadcastable: " + vec_to_string(b) + " and " +
+          vec_to_string(b) + " and " + vec_to_string(c));
     }
     new_shape[i] = std::max(a_dim, std::max(b_dim, c_dim));
   }
@@ -58,17 +85,38 @@ Tensor add(const Tensor &a, const Tensor &b) {
                                 broadcast_tensors(a, b));
 }
 
+Tensor add(const Tensor &a, double b) {
+  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
+  return add(a, t);
+}
+
 Tensor mul(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Mul>(),
                                 broadcast_tensors(a, b));
+}
+
+Tensor mul(const Tensor &a, double b) {
+  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
+  return mul(a, t);
 }
 Tensor sub(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Sub>(),
                                 broadcast_tensors(a, b));
 }
+
+Tensor sub(const Tensor &a, double b) {
+  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
+  return sub(a, t);
+}
+
 Tensor div(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Div>(),
                                 broadcast_tensors(a, b));
+}
+
+Tensor div(const Tensor &a, double b) {
+  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
+  return div(a, t);
 }
 
 Tensor gt(const Tensor &a, const Tensor &b) {
@@ -95,6 +143,12 @@ Tensor pow(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Pow>(),
                                 broadcast_tensors(a, b));
 }
+
+Tensor pow(const Tensor &a, double b) {
+  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
+  return pow(a, t);
+}
+
 Tensor max(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Max>(),
                                 broadcast_tensors(a, b));
@@ -102,18 +156,6 @@ Tensor max(const Tensor &a, const Tensor &b) {
 
 Tensor log(const Tensor &a) {
   return Tensor::from_primitive(std::make_shared<Log>(), {a});
-}
-
-Tensor fill(const shape_t &shape, DType dtype, double value,
-            device::DeviceKind device) {
-  Tensor t = Tensor(shape, dtype, device);
-  if (device == device::CPU) {
-    cpu::fill(t, value, shape);
-    return t;
-  } else {
-    cuda::fill(t, value, shape);
-  }
-  return t;
 }
 
 Tensor neg(const Tensor &a) {
@@ -276,6 +318,10 @@ Tensor matmul(const Tensor &a, const Tensor &b) {
 
 Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Where>(), {condition, a, b});
+}
+
+Tensor exp(const Tensor &a) {
+  return Tensor::from_primitive(std::make_shared<Exp>(), {a});
 }
 
 } // namespace pg

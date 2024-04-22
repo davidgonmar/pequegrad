@@ -7,10 +7,12 @@ void BroadcastTo::dispatch_cpu(const std::vector<Tensor> &inputs,
     outputs[0].init_view(std::make_shared<View>(inputs[0].view()));
     return;
   }
-  auto [view, broadcasted_axis] =
+
+  auto [view, broadcasted_axis, created_axes] =
       view::broadcasted_to(inputs[0].view(), _shape_to);
   outputs[0].init_view(std::make_shared<View>(view));
-  this->_axes_to_reduce_in_bw = broadcasted_axis;
+  this->_broadcasted_axes = broadcasted_axis;
+  this->_created_axes = created_axes;
 }
 
 void BroadcastTo::dispatch_cuda(const std::vector<Tensor> &inputs,
@@ -19,10 +21,11 @@ void BroadcastTo::dispatch_cuda(const std::vector<Tensor> &inputs,
     outputs[0].init_view(std::make_shared<View>(inputs[0].view()));
     return;
   }
-  auto [view, broadcasted_axis] =
+  auto [view, broadcasted_axis, created_axes] =
       view::broadcasted_to(inputs[0].view(), _shape_to);
   outputs[0].init_view(std::make_shared<View>(view));
-  this->_axes_to_reduce_in_bw = broadcasted_axis;
+  this->_broadcasted_axes = broadcasted_axis;
+  this->_created_axes = created_axes;
 }
 
 void Squeeze::dispatch_cpu(const std::vector<Tensor> &inputs,

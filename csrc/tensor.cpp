@@ -35,12 +35,7 @@ ADNode::ADNode(std::shared_ptr<ADPrimitive> primitive,
                std::vector<Tensor> children)
     : _primitive(std::move(primitive)), _children(std::move(children)) {}
 
-const std::shared_ptr<Tensor> ADNode::grad() const {
-  if (_grad == nullptr) {
-    throw std::runtime_error("Gradient not yet computed");
-  }
-  return _grad;
-}
+const std::shared_ptr<Tensor> ADNode::grad() const { return _grad; }
 
 void ADNode::accum_grad(Tensor &grad) {
   if (this->_grad == nullptr) {
@@ -53,7 +48,12 @@ void ADNode::accum_grad(Tensor &grad) {
 
 ADNode ADNode::create_leaf() { return ADNode(); }
 
-std::shared_ptr<ADPrimitive> ADNode::primitive() const { return _primitive; }
+std::shared_ptr<ADPrimitive> ADNode::primitive() const {
+  if (_primitive == nullptr) {
+    throw std::runtime_error("Primitive not yet set");
+  }
+  return _primitive;
+}
 
 std::vector<Tensor> ADNode::children() const { return _children; }
 
@@ -85,7 +85,9 @@ Tensor Tensor::eval() const {
   return *this;
 }
 
-void Tensor::backward(Tensor &tangent) {
+void Tensor::backward(std::optional<Tensor> _tangent) {
+  Tensor tangent = _tangent.has_value() ? _tangent.value()
+                                        : fill(shape(), dtype(), 1, device());
   if (!is_evaled()) {
     throw std::runtime_error("Cannot call backward on unevaluated tensor");
   }
@@ -118,6 +120,7 @@ void Tensor::backward(Tensor &tangent) {
   toposort(*this);
 
   auto nodes_reversed = std::vector<Tensor>(nodes.rbegin(), nodes.rend());
+
   for (auto node : nodes_reversed) {
     if (node._ad_node->is_leaf()) {
       continue;
@@ -158,4 +161,6 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
   this->_view->set_shape(shape[0]);
   this->_view->set_dtype(primitive_ptr->infer_output_dtypes(inputs)[0]);
 }
+
+ADNode &Tensor::ad_node() const { return *_ad_node; }
 } // namespace pg

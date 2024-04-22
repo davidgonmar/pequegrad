@@ -10,10 +10,16 @@
 
 namespace pg {
 Tensor add(const Tensor &a, const Tensor &b);
+Tensor add(const Tensor &a, double b);
 Tensor mul(const Tensor &a, const Tensor &b);
+Tensor mul(const Tensor &a, double b);
 Tensor sub(const Tensor &a, const Tensor &b);
+Tensor sub(const Tensor &a, double b);
 Tensor div(const Tensor &a, const Tensor &b);
+Tensor div(const Tensor &a, double b);
 Tensor pow(const Tensor &a, const Tensor &b);
+Tensor pow(const Tensor &a, double b);
+
 Tensor gt(const Tensor &a, const Tensor &b);
 Tensor lt(const Tensor &a, const Tensor &b);
 Tensor eq(const Tensor &a, const Tensor &b);
@@ -48,4 +54,6 @@ Tensor matmul(const Tensor &a, const Tensor &b);
 
 Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b);
 Tensor max(const Tensor &a, const Tensor &b);
+
+Tensor exp(const Tensor &a);
 } // namespace pg

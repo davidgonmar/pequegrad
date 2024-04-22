@@ -1,14 +1,17 @@
 from pequegrad.extra.mnist import get_mnist_dataset
 import numpy as np
-from pequegrad.optim import Adam
 from pequegrad.modules import Linear, StatefulModule
 from pequegrad.context import no_grad
 import argparse
 import time
+from pequegrad.backend.c import Tensor, device
+from pequegrad.optim import Adam
 
 np.random.seed(0)
 
 model_path = "mlp_mnist_model.pkl"
+
+device = device.cpu
 
 
 class MLP(StatefulModule):
@@ -28,11 +31,14 @@ def train(model, X_train, Y_train, epochs=14, batch_size=4096):
         indices = np.random.choice(len(X_train), batch_size)
         batch_X = X_train[indices]
         batch_Y = Y_train[indices]
+        batch_X = Tensor.from_numpy(batch_X).to(device)
+        batch_Y = Tensor.from_numpy(batch_Y).to(device)
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
         loss = prediction.cross_entropy_loss_indices(batch_Y)
-        loss.backward()
+        loss.eval()
+        loss.backward(Tensor.ones(loss.shape, device=device))
         # Update the weights
         optim.step()
         print(f"Epoch {epoch} | Loss {loss.numpy()}")
@@ -48,6 +54,8 @@ def test_model(model, X_test, Y_test):
             end_idx = min(i + batch_size, len(X_test))
             batch_X = X_test[i:end_idx]
             batch_Y = Y_test[i:end_idx]
+            batch_X = Tensor.from_numpy(batch_X).to(device)
+            batch_Y = Tensor.from_numpy(batch_Y).to(device)
             prediction = model.forward(batch_X)
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
         return correct, len(X_test)
@@ -68,14 +76,14 @@ if __name__ == "__main__":
     MODE = args.mode
     mlp = MLP()
     if USE_CUDA:
-        mlp.to("cuda")
         print("Using CUDA")
+        mlp.to(device.cuda)
+        device = device.cuda
     else:
-        mlp.to("np")
+        mlp.to(device.cpu)
         print("Using CPU")
-    X_train, y_train, X_test, y_test = get_mnist_dataset(
-        backend="np" if not USE_CUDA else "cuda"
-    )
+        device = device.cpu
+    X_train, y_train, X_test, y_test = get_mnist_dataset()
     if MODE == "train":
         print("Training the model")
         start = time.time()

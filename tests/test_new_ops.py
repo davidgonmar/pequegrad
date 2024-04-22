@@ -247,3 +247,44 @@ class TestNew:
         _compare_fn_with_torch(
             [shape, shape, shape], pq_fn, torch_fn, backward=do_backward, device=device
         )
+
+    @pytest.mark.parametrize(
+        "shape_and_dims",
+        [
+            ((2, 1, 3), 1),
+            ((2, 1, 1), (1, 2)),
+            ((2, 1, 1), 1),
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])
+    def test_squeeze(self, shape_and_dims, dtype):
+        shape, dims = shape_and_dims
+
+        def pq_fn(x):
+            return pg.squeeze(x, dims)
+
+        def torch_fn(x):
+            return torch.squeeze(x, dims)
+
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
+
+    @pytest.mark.parametrize(
+        "shape_and_dims",
+        [
+            ((2, 3), 1),
+            ((2, 3), 0),
+            ((2, 3), -1),
+            ((2, 3), -2),
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])
+    def test_unsqueeze(self, shape_and_dims, dtype):
+        shape, dims = shape_and_dims
+
+        def pq_fn(x):
+            return pg.unsqueeze(x, dims)
+
+        def torch_fn(x):
+            return torch.unsqueeze(x, dims)
+
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)

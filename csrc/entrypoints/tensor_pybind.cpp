@@ -32,21 +32,48 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .value("cpu", device::DeviceKind::CPU)
       .value("cuda", device::DeviceKind::CUDA);
 
-  // module functions
-  m.def("add", &add);
-  m.def("mul", &mul);
-  m.def("sub", &sub);
-  m.def("div", &pg::div);
+  // module functions. We need to do the pybind cast overload thing for add
+  // since it accepts scalars
+  m.def("add", [](const Tensor &a, const Tensor &b) { return pg::add(a, b); });
+  m.def("add", [](const Tensor &a, double b) { return pg::add(a, b); });
+  m.def("sub", [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); });
+  m.def("sub", [](const Tensor &a, double b) { return pg::sub(a, b); });
+  m.def("mul", [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); });
+  m.def("mul", [](const Tensor &a, double b) { return pg::mul(a, b); });
+  m.def("div", [](const Tensor &a, const Tensor &b) { return pg::div(a, b); });
+  m.def("div", [](const Tensor &a, double b) { return pg::div(a, b); });
   m.def("neg", &neg);
   m.def("fill", &fill);
   m.def("gt", &gt);
   m.def("lt", &lt);
   m.def("eq", &eq);
   m.def("neq", &neq);
-  m.def("pow", &pg::pow);
+  m.def("pow", [](const Tensor &a, const Tensor &b) { return pg::pow(a, b); });
+  m.def("pow", [](const Tensor &a, double b) { return pg::pow(a, b); });
   m.def("log", &pg::log);
+  m.def("exp", &pg::exp);
   m.def("max", &pg::max);
 
+  m.def("unsqueeze", [](const Tensor &a, py::object axes) {
+    if (py::isinstance<py::int_>(axes)) {
+      return unsqueeze(a, axes.cast<axis_t>());
+    } else if (py::isinstance<py::list>(axes) ||
+               py::isinstance<py::tuple>(axes)) {
+      return unsqueeze(a, axes.cast<axes_t>());
+    } else {
+      throw std::runtime_error("unsqueeze: axes must be an int, list or tuple");
+    }
+  });
+  m.def("squeeze", [](const Tensor &a, py::object axes) {
+    if (py::isinstance<py::int_>(axes)) {
+      return squeeze(a, axes.cast<axis_t>());
+    } else if (py::isinstance<py::list>(axes) ||
+               py::isinstance<py::tuple>(axes)) {
+      return squeeze(a, axes.cast<axes_t>());
+    } else {
+      throw std::runtime_error("squeeze: axes must be an int, list or tuple");
+    }
+  });
   m.def("broadcast_to", &broadcast_to);
   m.def("broadcast_as", &broadcast_as);
 
@@ -81,6 +108,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   // module classes
   py::class_<Tensor>(m, "Tensor")
+      .def("to_", &Tensor::to_)
+      .def("assign", &Tensor::assign)
       .def("detach", &Tensor::detach)
       .def("to", &Tensor::to)
       .def("from_numpy",
@@ -130,7 +159,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
                                         dtype_to_string(arr.dtype()));
              }
            })
-      .def("backward", &Tensor::backward)
+      .def("backward", [](Tensor &t, const Tensor &grad) { t.backward(grad); })
+      .def("backward", [](Tensor &t) { t.backward(); })
       .def_property_readonly("grad", [](const Tensor &t) { return t.grad(); })
       .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); })
       .def_property_readonly("dtype", [](const Tensor &t) { return t.dtype(); })
@@ -142,17 +172,47 @@ PYBIND11_MODULE(pequegrad_c, m) {
            }),
            py::arg("np_array"), py::arg("requires_grad") = false,
            py::arg("device") = device::DeviceKind::CPU)
-      .def("__add__", [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
-      .def("__sub__", [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); })
-      .def("__mul__", [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); })
-      .def("__truediv__", [](const Tensor &a, const Tensor &b) { return pg::div(a, b); })
+      .def("__add__",
+           [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
+      .def("__add__", [](const Tensor &a, double b) { return pg::add(a, b); })
+      .def("__add__", [](const Tensor &a, float b) { return pg::add(a, b); })
+      .def("__radd__", [](const Tensor &a, double b) { return pg::add(a, b); })
+      .def("__radd__", [](const Tensor &a, float b) { return pg::add(a, b); })
+      .def("__radd__",
+           [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
+      .def("__sub__",
+           [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); })
+      .def("__sub__", [](const Tensor &a, double b) { return pg::sub(a, b); })
+      .def("__sub__", [](const Tensor &a, float b) { return pg::sub(a, b); })
+      .def("__sub__", [](const Tensor &a, int b) { return pg::sub(a, b); })
+      .def("__mul__",
+           [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); })
+      .def("__mul__", [](const Tensor &a, double b) { return pg::mul(a, b); })
+      .def("__mul__", [](const Tensor &a, float b) { return pg::mul(a, b); })
+      .def("__mul__", [](const Tensor &a, int b) { return pg::mul(a, b); })
+      .def("__rmul__", [](const Tensor &a, double b) { return pg::mul(a, b); })
+      .def("__rmul__", [](const Tensor &a, float b) { return pg::mul(a, b); })
+      .def("__rmul__", [](const Tensor &a, int b) { return pg::mul(a, b); })
+      .def("__truediv__",
+           [](const Tensor &a, const Tensor &b) { return pg::div(a, b); })
+      .def("__truediv__",
+           [](const Tensor &a, double b) { return pg::div(a, b); })
       .def("__neg__", [](const Tensor &a) { return pg::neg(a); })
-      .def("__matmul__", [](const Tensor &a, const Tensor &b) { return pg::matmul(a, b); })
-      .def("__pow__", [](const Tensor &a, const Tensor &b) { return pg::pow(a, b); })
-      .def("__eq__", [](const Tensor &a, const Tensor &b) { return pg::eq(a, b); })
-      .def("__ne__", [](const Tensor &a, const Tensor &b) { return pg::neq(a, b); })
-      .def("__lt__", [](const Tensor &a, const Tensor &b) { return pg::lt(a, b); })
-      .def("__gt__", [](const Tensor &a, const Tensor &b) { return pg::gt(a, b); })
+      .def("__matmul__",
+           [](const Tensor &a, const Tensor &b) { return pg::matmul(a, b); })
+      .def("__pow__",
+           [](const Tensor &a, const Tensor &b) { return pg::pow(a, b); })
+      .def("__pow__", [](const Tensor &a, double b) { return pg::pow(a, b); })
+      .def("__pow__", [](const Tensor &a, float b) { return pg::pow(a, b); })
+      .def("__pow__", [](const Tensor &a, int b) { return pg::pow(a, b); })
+      .def("__eq__",
+           [](const Tensor &a, const Tensor &b) { return pg::eq(a, b); })
+      .def("__ne__",
+           [](const Tensor &a, const Tensor &b) { return pg::neq(a, b); })
+      .def("__lt__",
+           [](const Tensor &a, const Tensor &b) { return pg::lt(a, b); })
+      .def("__gt__",
+           [](const Tensor &a, const Tensor &b) { return pg::gt(a, b); })
       .def("__repr__", [](const Tensor &t) {
         std::stringstream ss;
         ss << "Tensor(shape=" << vec_to_string(t.shape())

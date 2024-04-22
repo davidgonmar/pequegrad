@@ -69,6 +69,15 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
+class Exp : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Exp)
+  DEFINE_INFER_OUTPUT_SHAPES
+};
+
 class Add : public ADPrimitive {
 public:
   DEFINE_DISPATCH_CPU
@@ -239,7 +248,9 @@ public:
 class BroadcastTo : public ADPrimitive {
 protected:
   shape_t _shape_to;
-  axes_t _axes_to_reduce_in_bw; // will be populated when the op is run
+  axes_t _broadcasted_axes;
+  axes_t _created_axes;
+
 public:
   explicit BroadcastTo(shape_t shape_to) : _shape_to(shape_to) {}
   DEFINE_DISPATCH_CPU

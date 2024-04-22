@@ -63,6 +63,25 @@ void Log::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CUDA_KERNEL_END;
 }
 
+void Exp::dispatch_cuda(const std::vector<Tensor> &inputs,
+                        std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &a = inputs[0];
+  outputs[0].init_view(
+      std::make_shared<View>(a.shape(), a.dtype(), device::CUDA));
+  dim3 blocksize(DEFAULT_BLOCK_SIZE);
+  dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
+  auto d_strides_a =
+      cuda_unique_ptr_from_host<stride_t>(a.ndim(), a.strides().data());
+  auto d_shape = cuda_unique_ptr_from_host(a.ndim(), a.shape().data());
+  cuda::dispatch_unary_kernel(cuda::UnaryKernelType::EXP, a.dtype(), gridsize,
+                              blocksize, d_strides_a.get(), d_shape.get(),
+                              a.ndim(), a.get_base_ptr(),
+                              outputs[0].get_base_ptr());
+  PG_CUDA_KERNEL_END;
+}
+
 void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
                         std::vector<Tensor> &outputs) {
   CHECK_INPUTS_LENGTH(inputs, 1);

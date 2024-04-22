@@ -136,6 +136,17 @@ Log::infer_output_shapes(const std::vector<Tensor> &inputs) {
 }
 
 std::vector<shape_t>
+Exp::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  return {inputs[0].shape()};
+}
+
+std::vector<Tensor> Exp::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  return {mul(tangents[0], exp(primals[0]))};
+}
+
+std::vector<shape_t>
 BroadcastTo::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {_shape_to};
 }
@@ -168,6 +179,7 @@ Unsqueeze::infer_output_shapes(const std::vector<Tensor> &inputs) {
     }
     new_shape.insert(new_shape.begin() + axis, 1);
   }
+
   return {new_shape};
 }
 
@@ -246,11 +258,16 @@ std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> MaxReduce::backward(const std::vector<Tensor> &primals,
                                         const std::vector<Tensor> &tangents,
                                         const std::vector<Tensor> &outputs) {
-  Tensor max_val = outputs[0];
-  Tensor argmax = primals[1];
-  Tensor tangent = tangents[0];
-  Tensor mask = eq(argmax, max_val);
-  return {mul(mask, tangent)};
+
+  bool cond = !_keepdims && _axes.size() != primals[0].shape().size();
+  // now, instead of a sum, it is max reduce
+  Tensor g =
+      cond ? broadcast_to(unsqueeze(tangents[0], _axes), primals[0].shape())
+           : broadcast_to(tangents[0], primals[0].shape());
+  Tensor a = primals[0];
+  Tensor b = outputs[0];
+  Tensor mask = eq(a, b);
+  return {where(mask, g, zeros_like(a))};
 }
 
 std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
@@ -260,9 +277,15 @@ std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
   for (auto &axis : _axes) {
     total_els_reduced *= primals[0].shape()[axis];
   }
+  if (!_keepdims && _axes.size() != primals[0].shape().size()) {
+    Tensor g = broadcast_to(unsqueeze(tangents[0], _axes), primals[0].shape());
+    return {broadcast_to(
+        div(g, fill(g.shape(), g.dtype(), total_els_reduced, g.device())),
+        primals[0].shape())};
+  }
+  Tensor g = broadcast_to(tangents[0], primals[0].shape());
   return {broadcast_to(
-      div(tangents[0], fill(primals[0].shape(), primals[0].dtype(),
-                            total_els_reduced, primals[0].device())),
+      div(g, fill(g.shape(), g.dtype(), total_els_reduced, g.device())),
       primals[0].shape())};
 }
 
@@ -275,11 +298,19 @@ std::vector<Tensor> Log::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor> &primals,
                                           const std::vector<Tensor> &tangents,
                                           const std::vector<Tensor> &outputs) {
-  if (_axes_to_reduce_in_bw.size() == 0) { // means we did not broadcast
+  if (_broadcasted_axes.empty() && _created_axes.empty()) { // no broadcast
     return {tangents[0]};
   }
-  return {broadcast_to(sum(tangents[0], _axes_to_reduce_in_bw, false),
-                       primals[0].shape())};
+  Tensor t = tangents[0];
+  Tensor s = _broadcasted_axes.empty()
+                 ? t
+                 : sum(t, _broadcasted_axes,
+                       true); // sum along broadcasted axes, keeping the dims
+  return {
+      _created_axes.empty()
+          ? s
+          : sum(s, _created_axes,
+                false)}; // then sum along created axes, not keeping the dims
 }
 
 std::vector<Tensor> Permute::backward(const std::vector<Tensor> &primals,
@@ -326,7 +357,8 @@ static shape_t get_broadcasted_shapes(const shape_t &a, const shape_t &b) {
     size_t a_dim = i < a.size() ? a[i] : 1;
     size_t b_dim = i < b.size() ? b[i] : 1;
     if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
-      throw std::runtime_error("Shapes are not broadcastable");
+      throw std::runtime_error("Shapes are not broadcastabls: " +
+                               vec_to_string(a) + " and " + vec_to_string(b));
     }
     new_shape[i] = std::max(a_dim, b_dim);
   }

@@ -50,7 +50,7 @@ class View {
 
 public:
   void *get_base_ptr() const;
-
+  void set_ptr(const std::shared_ptr<void> &ptr) { _ptr = ptr; }
   std::shared_ptr<void> shared_ptr() const;
   shape_t shape() const;
   void set_dtype(DType dtype) { _dtype = dtype; }
@@ -198,6 +198,20 @@ Tensor t(const Tensor &t);
 class Tensor {
 
 public:
+  ADNode &ad_node() const;
+  void assign(const Tensor &other) {
+    if (!other.is_evaled()) {
+      other.eval();
+    }
+    PG_CHECK_RUNTIME(other.device() == device(),
+                     "Cannot assign tensors on different devices.");
+    PG_CHECK_RUNTIME(other.dtype() == dtype(),
+                     "Cannot assign tensors of different dtypes.");
+    PG_CHECK_RUNTIME(other.shape() == shape(),
+                     "Cannot assign tensors of different shapes.");
+    _view = other._view;
+    _ad_node = std::make_shared<ADNode>(); // reset gradient information
+  }
   Tensor detach() {
     if (!is_evaled()) {
       throw std::runtime_error("Cannot detach unevaluated tensor.");
@@ -206,7 +220,14 @@ public:
     detached._ad_node = std::make_shared<ADNode>(); // creates a leaf node
     return detached;
   }
-  const Tensor &grad() const { return *(_ad_node->grad().get()); }
+  const Tensor &grad() const {
+    if (_ad_node->grad() == nullptr) {
+      throw std::runtime_error(
+          "No gradient available for this tensor. Shape: " +
+          vec_to_string(shape()));
+    }
+    return *(_ad_node->grad().get());
+  }
   Tensor T() const { return t(*this); }
 
   size_t numel() const {
@@ -349,6 +370,36 @@ public:
     throw std::runtime_error("Unsupported device type.");
   }
 
+  Tensor to_(device::DeviceKind _device) {
+    // TODO -- Make this safer
+    if (device() == _device) {
+      std::cout << "Already on device" << std::endl;
+      return *this;
+    }
+    if (!is_initialized()) {
+      throw std::runtime_error(
+          "Cannot move uninitialized tensor. Eval it first.");
+    }
+    if (device() == device::DeviceKind::CUDA) {
+      std::cout << "Moving tensor from CUDA to CPU" << std::endl;
+      size_t nbytes = this->nbytes();
+      auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
+      copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
+      this->_view->set_device(device::DeviceKind::CPU);
+      this->_view->set_ptr(new_ptr);
+    } else if (device() == device::DeviceKind::CPU) {
+      std::cout << "Moving tensor from CPU to CUDA" << std::endl;
+      size_t nbytes = this->nbytes();
+      std::cout << "Nbytes: " << nbytes << std::endl;
+      auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
+      std::cout << "Allocated new ptr" << std::endl;
+      copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
+      this->_view->set_device(device::DeviceKind::CUDA);
+      this->_view->set_ptr(new_ptr);
+    }
+    return *this;
+  }
+
   Tensor to_cpu() {
     if (device() == device::DeviceKind::CPU) {
       return *this;
@@ -381,12 +432,13 @@ public:
 
   static Tensor from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
                                std::vector<Tensor> inputs) {
+
     return Tensor(primitive, inputs);
   }
 
   Tensor eval() const;
 
-  void backward(Tensor &tangent);
+  void backward(std::optional<Tensor> tangent = std::nullopt);
 
   bool is_evaled() const { return is_initialized(); }
 
