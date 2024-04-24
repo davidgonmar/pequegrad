@@ -304,14 +304,34 @@ class TestNew:
     def test_im2col(self, info, dtype, device):
         shape, kernel_size, stride, dilation = info
 
+        im2col_out_shape = None
+
         def pq_fn(x):
             return pg.im2col(
                 x, kernel_size, stride, (), dilation
             )  # padding is not implemented yet
 
         def torch_fn(x):
-            return torch.nn.functional.unfold(
+            nonlocal im2col_out_shape
+            a = torch.nn.functional.unfold(
                 x, kernel_size, dilation=dilation, stride=stride, padding=0
             )
+            im2col_out_shape = a.shape
+            return a
 
         _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=False, device=device)
+
+        print("col2im test pass!. im2col_out_shape: ", im2col_out_shape)
+
+        # Now col2im
+        def pq_fn(x):
+            return pg.col2im(x, shape[2:], kernel_size, stride, (), dilation)
+
+        def torch_fn(x):
+            return torch.nn.functional.fold(
+                x, shape[2:], kernel_size, dilation=dilation, stride=stride, padding=0
+            )
+
+        _compare_fn_with_torch(
+            [im2col_out_shape], pq_fn, torch_fn, backward=False, device=device
+        )

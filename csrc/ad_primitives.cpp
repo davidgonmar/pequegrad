@@ -525,4 +525,33 @@ Im2Col::infer_output_shapes(const std::vector<Tensor> &inputs) {
   shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
   return {out_shape};
 }
+
+std::vector<shape_t>
+Col2Im::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  PG_CHECK_ARG(inputs.size() == 1, "Col2Im expects 1 input, got ",
+               inputs.size());
+  PG_CHECK_ARG(_kernel_shape.size() == 2, "kernel shape size must be 2, got ",
+               _kernel_shape.size());
+  const Tensor &a = inputs[0];
+  size_t k_h = _kernel_shape[0];
+  size_t k_w = _kernel_shape[1];
+  size_t stride_y = _strides[0];
+  size_t stride_x = _strides[1];
+  size_t dilation_y = _dilation[0];
+  size_t dilation_x = _dilation[1];
+  size_t batch_size = a.shape()[0];
+  size_t in_h = a.shape()[1];
+  size_t in_w = a.shape()[2];
+
+  size_t out_h = _output_shape[0];
+  size_t out_w = _output_shape[1];
+  size_t out_channels = a.shape()[1] / (k_h * k_w);
+
+  PG_CHECK_RUNTIME(out_h > 0 && out_w > 0,
+                   "output height and width should be > 0, got out_h=", out_h,
+                   " and out_w=", out_w);
+
+  shape_t out_shape = {batch_size, out_channels, out_h, out_w};
+  return {out_shape};
+}
 } // namespace pg

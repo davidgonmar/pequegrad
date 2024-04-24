@@ -60,4 +60,7 @@ Tensor exp(const Tensor &a);
 Tensor im2col(const Tensor &a, const shape_t &kernel_shape,
               const shape_t &stride, const shape_t &padding,
               const shape_t &dilation);
+Tensor col2im(const Tensor &a, const shape_t &output_shape,
+              const shape_t &kernel_shape, const shape_t &stride,
+              const shape_t &padding, const shape_t &dilation);
 } // namespace pg

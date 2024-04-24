@@ -327,4 +327,22 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
+class Col2Im : public ADPrimitive {
+protected:
+  shape_t _output_shape;
+  shape_t _kernel_shape;
+  shape_t _strides;
+  shape_t _padding;
+  shape_t _dilation;
+
+public:
+  explicit Col2Im(shape_t output_shape, shape_t kernel_shape, shape_t strides,
+                  shape_t padding, shape_t dilation)
+      : _output_shape(output_shape), _kernel_shape(kernel_shape),
+        _strides(strides), _padding(padding), _dilation(dilation) {}
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Col2Im)
+  DEFINE_INFER_OUTPUT_SHAPES
+};
+
 } // namespace pg

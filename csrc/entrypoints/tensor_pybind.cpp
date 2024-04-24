@@ -54,6 +54,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("exp", &pg::exp);
   m.def("max", &pg::max);
   m.def("im2col", &pg::im2col);
+  m.def("col2im", &pg::col2im);
 
   m.def("unsqueeze", [](const Tensor &a, py::object axes) {
     if (py::isinstance<py::int_>(axes)) {

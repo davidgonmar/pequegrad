@@ -330,4 +330,13 @@ Tensor im2col(const Tensor &a, const shape_t &kernel_shape,
   return Tensor::from_primitive(
       std::make_shared<Im2Col>(kernel_shape, stride, padding, dilation), {a});
 }
+
+Tensor col2im(const Tensor &a, const shape_t &output_shape,
+              const shape_t &kernel_shape, const shape_t &stride,
+              const shape_t &padding, const shape_t &dilation) {
+  return Tensor::from_primitive(std::make_shared<Col2Im>(output_shape,
+                                                         kernel_shape, stride,
+                                                         padding, dilation),
+                                {a});
+}
 } // namespace pg
