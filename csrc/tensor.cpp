@@ -50,7 +50,7 @@ ADNode ADNode::create_leaf() { return ADNode(); }
 
 std::shared_ptr<ADPrimitive> ADNode::primitive() const {
   if (_primitive == nullptr) {
-    throw std::runtime_error("Primitive not yet set");
+    return std::make_shared<ADPrimitive>();
   }
   return _primitive;
 }

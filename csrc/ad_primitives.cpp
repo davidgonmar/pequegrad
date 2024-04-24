@@ -258,7 +258,6 @@ std::vector<Tensor> Sum::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> MaxReduce::backward(const std::vector<Tensor> &primals,
                                         const std::vector<Tensor> &tangents,
                                         const std::vector<Tensor> &outputs) {
-
   bool cond = !_keepdims && _axes.size() != primals[0].shape().size();
   // now, instead of a sum, it is max reduce
   Tensor g =
@@ -266,8 +265,9 @@ std::vector<Tensor> MaxReduce::backward(const std::vector<Tensor> &primals,
            : broadcast_to(tangents[0], primals[0].shape());
   Tensor a = primals[0];
   Tensor b = outputs[0];
-  Tensor mask = eq(a, b);
-  return {where(mask, g, zeros_like(a))};
+  Tensor mask = eq(a, _keepdims ? b : unsqueeze(b, _axes));
+  Tensor r = where(mask, g, zeros_like(a));
+  return {r};
 }
 
 std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
@@ -316,6 +316,7 @@ std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> Permute::backward(const std::vector<Tensor> &primals,
                                       const std::vector<Tensor> &tangents,
                                       const std::vector<Tensor> &outputs) {
+
   // we need to compute the 'inverse' permutation
   auto argsort = [](const axes_t &v) {
     axes_t idx(v.size());
@@ -324,7 +325,6 @@ std::vector<Tensor> Permute::backward(const std::vector<Tensor> &primals,
               [&v](size_t i1, size_t i2) { return v[i1] < v[i2]; });
     return idx;
   };
-
   axes_t inv_permutation = argsort(_axes);
 
   return {permute(tangents[0], inv_permutation)};
@@ -350,18 +350,28 @@ static bool is_vec_vec(const std::vector<Tensor> &t) {
   return is_vec(t[0]) && is_vec(t[1]);
 }
 
-static shape_t get_broadcasted_shapes(const shape_t &a, const shape_t &b) {
+static shape_t get_broadcasted_shapes(const shape_t &_a, const shape_t &_b,
+                                      std::string caller_info = "") {
+  auto a = shape_t(_a);
+  auto b = shape_t(_b);
+  std::reverse(a.begin(), a.end());
+  std::reverse(b.begin(), b.end());
   size_t max_dim = std::max(a.size(), b.size());
+  size_t min_dim = std::min(a.size(), b.size());
   shape_t new_shape(max_dim);
   for (size_t i = 0; i < max_dim; i++) {
     size_t a_dim = i < a.size() ? a[i] : 1;
     size_t b_dim = i < b.size() ? b[i] : 1;
     if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
-      throw std::runtime_error("Shapes are not broadcastabls: " +
+      throw std::runtime_error(caller_info +
+                               " -> shapes are not broadcastable: " +
                                vec_to_string(a) + " and " + vec_to_string(b));
     }
     new_shape[i] = std::max(a_dim, b_dim);
   }
+  std::reverse(new_shape.begin(), new_shape.end());
+  std::reverse(a.begin(), a.end());
+  std::reverse(b.begin(), b.end());
   return new_shape;
 }
 
@@ -420,8 +430,8 @@ static std::vector<Tensor> prepare_shapes_for_matmul(const Tensor &_a,
     batch_shape_b.pop_back();
     batch_shape_b.pop_back();
     // now, we need to try to broadcast the batch shapes
-    shape_t new_batch_shape =
-        get_broadcasted_shapes(batch_shape_a, batch_shape_b);
+    shape_t new_batch_shape = get_broadcasted_shapes(
+        batch_shape_a, batch_shape_b, "MatMul<mat, mat>");
     // now, we need to append the last two dims
     new_shape_a = new_batch_shape;
     new_shape_a.push_back(shape_a[shape_a.size() - 2]);
@@ -570,4 +580,36 @@ std::vector<Tensor> Col2Im::backward(const std::vector<Tensor> &primals,
                                      const std::vector<Tensor> &outputs) {
   return {im2col(tangents[0], _kernel_shape, _strides, _padding, _dilation)};
 }
+
+std::vector<shape_t>
+Reshape::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  // we need to get -1 elements to 'infer' the shape
+  shape_t new_shape = shape_t(_shape_to.size());
+  size_t neg_idx = 0;
+  size_t total = 1;
+  for (size_t i = 0; i < _shape_to.size(); i++) {
+    if (_shape_to[i] == -1) {
+      neg_idx = i;
+    } else {
+      total *= _shape_to[i];
+    }
+  }
+  PG_CHECK_ARG(total > 0, "Reshape: total elements must be > 0");
+  size_t neg_val = inputs[0].numel() / total;
+  new_shape[neg_idx] = neg_val;
+  for (size_t i = 0; i < _shape_to.size(); i++) {
+    if (_shape_to[i] == -1) {
+      continue;
+    }
+    new_shape[i] = _shape_to[i];
+  }
+  return {new_shape};
+}
+
+std::vector<Tensor> Reshape::backward(const std::vector<Tensor> &primals,
+                                      const std::vector<Tensor> &tangents,
+                                      const std::vector<Tensor> &outputs) {
+  return {reshape(tangents[0], primals[0].shape())};
+}
+
 } // namespace pg

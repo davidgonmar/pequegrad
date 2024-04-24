@@ -35,7 +35,7 @@ static shape_t get_broadcasted_shapes(const shape_t &_a, const shape_t &_b) {
     size_t b_dim = i < b.size() ? b[i] : 1;
     if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
       throw std::runtime_error("Shapes are not broadcastable: " +
-                               vec_to_string(a) + " and " + vec_to_string(b));
+                               vec_to_string(_a) + " and " + vec_to_string(_b));
     }
     new_shape[i] = std::max(a_dim, b_dim);
   }
@@ -338,5 +338,13 @@ Tensor col2im(const Tensor &a, const shape_t &output_shape,
                                                          kernel_shape, stride,
                                                          padding, dilation),
                                 {a});
+}
+
+// We can allow negative shapes like (-1, 2) to mean "2" and "whatever is left"
+Tensor reshape(const Tensor &a, const axes_t &shape) {
+  return Tensor::from_primitive(std::make_shared<Reshape>(shape), {a});
+}
+Tensor reshape(const Tensor &a, const shape_t &shape) {
+  return reshape(a, axes_t(shape.begin(), shape.end()));
 }
 } // namespace pg

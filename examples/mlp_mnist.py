@@ -24,7 +24,7 @@ class MLP(StatefulModule):
         return self.fc2.forward(input)
 
 
-def train(model, X_train, Y_train, epochs=14, batch_size=4096):
+def train(model, X_train, Y_train, epochs=40, batch_size=4096):
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.021)
     for epoch in range(epochs):

@@ -1,4 +1,5 @@
 #include "view_helpers.hpp"
+#include "shape.hpp"
 
 // returns new strides + axes of the output that are 'broadcasted'
 static std::tuple<strides_t, axes_t, axes_t>
@@ -167,5 +168,26 @@ View permute(const View &orig, const axes_t &axes) {
   return View(orig.shared_ptr(), orig.nbytes(), new_shape, new_strides,
               orig.offset(), orig.dtype(), orig.device());
 }
+
+strides_t compute_natural_strides_n(const shape_t &shape, const DType dtype) {
+  if (shape.size() == 0) {
+    return strides_t(); // if scalar, return empty strides
+  }
+  strides_t strides(shape.size());
+  size_t dtype_size = dtype_to_size(dtype);
+  strides[shape.size() - 1] = dtype_size;
+  for (int i = shape.size() - 2; i >= 0; --i) {
+    strides[i] = strides[i + 1] * shape[i + 1];
+  }
+  return strides;
+}
+
+View nocopy_reshape_nocheck(const View &orig, const shape_t &shape) {
+  // TODO -- checks here
+  return View(orig.shared_ptr(), orig.nbytes(), shape,
+              compute_natural_strides_n(shape, orig.dtype()), orig.offset(),
+              orig.dtype(), orig.device());
+}
+
 } // namespace view
 } // namespace pg

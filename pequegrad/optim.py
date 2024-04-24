@@ -18,11 +18,11 @@ class SGD:
 
     def reset_grad(self):
         for p in self.params:
-            p.detach()
+            p.reset_grad()
 
     def step(self, reset_grad: bool = True):
         for i, p in enumerate(self.params):
-            gt = p.grad.eval()
+            gt = p.grad.eval().detach()
             assert gt is not None, "Gradient is None, param: {}".format(p)
             if self.weight_decay != 0:
                 gt += self.weight_decay * p
@@ -49,11 +49,11 @@ class Adam:
 
     def reset_grad(self):
         for p in self.params:
-            p.detach()
+            p.reset_grad()
 
     def step(self, reset_grad: bool = True):
         for i, p in enumerate(self.params):
-            gt = p.grad
+            gt = p.grad.eval().detach()
             mt = self.b1 * self.mt_last[i] + (1 - self.b1) * gt
             vt = self.b2 * self.vt_last[i] + (1 - self.b2) * (gt * gt)
             mt_hat = mt / (1 - self.b1**self.t)

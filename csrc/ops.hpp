@@ -63,4 +63,7 @@ Tensor im2col(const Tensor &a, const shape_t &kernel_shape,
 Tensor col2im(const Tensor &a, const shape_t &output_shape,
               const shape_t &kernel_shape, const shape_t &stride,
               const shape_t &padding, const shape_t &dilation);
+Tensor reshape(const Tensor &a, const axes_t &shape);
+Tensor reshape(const Tensor &a, const shape_t &shape);
+
 } // namespace pg

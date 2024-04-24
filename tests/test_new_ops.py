@@ -188,6 +188,7 @@ class TestNew:
             ((2, 3), (1, 0)),
             ((2, 3, 4), (2, 0, 1)),
             ((2, 3, 4), (0, 1, 2)),
+            ((4, 8, 15, 12, 3), (4, 0, 2, 1, 3)),
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])

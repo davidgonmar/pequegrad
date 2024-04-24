@@ -69,10 +69,18 @@ class StatefulModule:
 
     def to(self, backend):
         for p in self.__dict__.values():
-            if isinstance(p, StatefulModule):
+            if isinstance(p, StatefulModule) or isinstance(p, NonStatefulModule):
                 p.to(backend)
             elif isinstance(p, ModuleParam):
                 p.to_(backend)
+            elif isinstance(p, (list, tuple)):
+                for pp in p:
+                    if isinstance(pp, StatefulModule) or isinstance(
+                        pp, NonStatefulModule
+                    ):
+                        pp.to(backend)
+                    elif isinstance(pp, ModuleParam):
+                        pp.to_(backend)
 
     def _search_parameters_and_submodules(self):
         params = []
@@ -104,7 +112,7 @@ class StatefulModule:
 
     def reset_grad(self):
         for p in self.parameters():
-            p.detach()
+            p.reset_grad()
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -134,7 +142,8 @@ class Conv2d(StatefulModule):
             (out_channels, in_channels, kernel_size, kernel_size)
         )
         self.bias = ModuleParam.zeros(out_channels, requires_grad=True)
-
+        assert isinstance(self.kernel, ModuleParam)
+        assert isinstance(self.bias, ModuleParam)
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
@@ -152,6 +161,13 @@ class Conv2d(StatefulModule):
 class NonStatefulModule:
     def forward(self, input):
         raise NotImplementedError
+
+    def to(self, backend):
+        for p in self.__dict__.values():
+            if isinstance(p, StatefulModule) or isinstance(p, NonStatefulModule):
+                p.to(backend)
+            elif isinstance(p, ModuleParam):
+                p.to_(backend)
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)

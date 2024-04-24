@@ -185,6 +185,7 @@ public:
   const std::shared_ptr<Tensor> grad() const;
   void accum_grad(Tensor &grad);
   shape_t inferred_shape() const { return _inferred_shape; }
+  void reset_grad() { _grad = nullptr; }
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
@@ -219,6 +220,13 @@ public:
     Tensor detached = *this;
     detached._ad_node = std::make_shared<ADNode>(); // creates a leaf node
     return detached;
+  }
+  Tensor detach_() {
+    if (!is_evaled()) {
+      throw std::runtime_error("Cannot detach unevaluated tensor.");
+    }
+    _ad_node = std::make_shared<ADNode>(); // creates a leaf node
+    return *this;
   }
   const Tensor &grad() const {
     if (_ad_node->grad() == nullptr) {
@@ -361,6 +369,14 @@ public:
     return np_array;
   }
 
+  void reset_grad() {
+    if (_ad_node->grad() != nullptr) {
+      _ad_node->reset_grad();
+    }
+  }
+
+  // destructor
+  ~Tensor();
   Tensor to(device::DeviceKind device) {
     if (device == device::DeviceKind::CPU) {
       return to_cpu();

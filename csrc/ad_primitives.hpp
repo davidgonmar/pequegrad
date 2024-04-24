@@ -347,4 +347,16 @@ public:
   DEFINE_BACKWARD
 };
 
+class Reshape : public ADPrimitive {
+protected:
+  axes_t _shape_to;
+
+public:
+  explicit Reshape(axes_t shape_to) : _shape_to(shape_to) {}
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Reshape)
+  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_BACKWARD
+};
+
 } // namespace pg

@@ -53,8 +53,16 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("log", &pg::log);
   m.def("exp", &pg::exp);
   m.def("max", &pg::max);
-  m.def("im2col", &pg::im2col);
-  m.def("col2im", &pg::col2im);
+  m.def("im2col", &pg::im2col, py::arg("a"), py::arg("kernel_shape"),
+        py::arg("stride") = std::vector<int>{1, 1},
+        py::arg("padding") = std::vector<int>{0, 0},
+        py::arg("dilation") = std::vector<int>{1, 1});
+  m.def("col2im", &pg::col2im, py::arg("a"), py::arg("output_shape"),
+        py::arg("kernel_shape"), py::arg("stride") = std::vector<int>{1, 1},
+        py::arg("padding") = std::vector<int>{0, 0},
+        py::arg("dilation") = std::vector<int>{1, 1});
+  m.def("reshape", py::overload_cast<const Tensor &, const axes_t &>(&reshape),
+        py::arg("a"), py::arg("shape"));
 
   m.def("unsqueeze", [](const Tensor &a, py::object axes) {
     if (py::isinstance<py::int_>(axes)) {
@@ -113,6 +121,10 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("to_", &Tensor::to_)
       .def("assign", &Tensor::assign)
       .def("detach", &Tensor::detach)
+      .def("detach_", &Tensor::detach_)
+      .def("reset_grad", &Tensor::reset_grad)
+      .def("ad_context",
+           [](const Tensor &t) { return t.ad_node().primitive()->str(); })
       .def("to", &Tensor::to)
       .def("from_numpy",
            [](py::array_t<float> np_array) {

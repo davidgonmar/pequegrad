@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 from typing import Optional
+from typing import Tuple, Union
 
 
 def bind_method(cls, existing, new):
@@ -32,6 +33,8 @@ bind_method(
     classmethod(lambda cls, shape, **kwargs: cls(np.ones(shape), **kwargs)),
 )
 bind_method(Tensor, "relu", lambda x: max(x, Tensor(0, device=x.device)))
+bind_method(Tensor, "unfold", lambda *args, **kwargs: pg.im2col(*args, **kwargs))
+bind_method(Tensor, "fold", lambda *args, **kwargs: pg.col2im(*args, **kwargs))
 
 
 def one_hot(
@@ -144,3 +147,145 @@ bind_method(Tensor, "log", lambda self: pg.log(self))
 bind_method(
     Tensor, "mean", lambda self, dim=None, keepdim=False: pg.mean(self, dim, keepdim)
 )
+bind_method(
+    Tensor,
+    "reshape",
+    lambda self, shape: pg.reshape(self, shape),
+)
+
+
+def conv2d(
+    self,
+    filter: "Tensor",
+    bias: "Tensor" = None,
+    stride: Union[int, Tuple[int, int]] = 1,
+    dilation: Union[int, Tuple[int, int]] = 1,
+    padding: Union[int, Tuple[int, int]] = 0,
+) -> "Tensor":
+    """Returns the 2d convolution of the tensor with the given filter"""
+    s_y, s_x = (stride, stride) if isinstance(stride, int) else stride
+    d_y, d_x = (dilation, dilation) if isinstance(dilation, int) else dilation
+    p_y, p_x = (padding, padding) if isinstance(padding, int) else padding
+
+    # tensor is always of shape (batch, channels, height, width)
+    # filter is always of shape (out_channels, in_channels, height, width)
+    assert self.dim == 4, "conv2d is only supported for tensors with 4 dimensions"
+    assert filter.dim == 4, "conv2d is only supported for filters with 4 dimensions"
+
+    if p_y > 0 or p_x > 0:
+        self = self.pad_constant((p_y, p_x, p_y, p_x))
+
+    inp_unf = self.unfold(filter.shape[-2:], stride=(s_y, s_x), dilation=(d_y, d_x))
+    out_unf = (
+        inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T
+    ).transpose(1, 2)
+    after_conv_size = (
+        (self.shape[-2] - (filter.shape[-2] - 1) * d_y - 1) // s_y + 1,
+        (self.shape[-1] - (filter.shape[-1] - 1) * d_x - 1) // s_x + 1,
+    )
+
+    out = out_unf.fold(
+        kernel_shape=(1, 1), output_shape=after_conv_size
+    )  # dilation and strides are implicitly 1
+
+    if bias is not None:
+        assert (
+            bias.shape[0] == out.shape[1]
+        ), "bias shape must match output shape. Got {} but expected {}".format(
+            bias.shape, (out.shape)
+        )
+        out += bias.reshape((1, -1, 1, 1))  # so we add the bias to each channel
+    return out
+
+
+def max_pool2d(
+    self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
+) -> "Tensor":
+    """Returns the 2d maxpooling of the tensor with the given kernel size"""
+    assert self.dim == 4, "max_pool2d is only supported for tensors with 4 dimensions"
+    kernel_size = (
+        (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+    )
+    stride = (
+        kernel_size
+        if stride is None
+        else (stride, stride)
+        if isinstance(stride, int)
+        else stride
+    )
+    assert stride[0] == stride[1], "kernel size must be square"
+
+    new_shape = (
+        self.shape[0],
+        self.shape[1],
+        (self.shape[2] - kernel_size[0]) // stride[0] + 1,
+        (self.shape[3] - kernel_size[1]) // stride[1] + 1,
+    )
+    unfolded = self.unfold(kernel_size, stride=stride)
+    # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
+    # concatenation of the channels, so we need to reshape to 'divide' the channels
+    unfolded = unfolded.reshape(
+        (
+            unfolded.shape[0],
+            self.shape[1],
+            kernel_size[0] * kernel_size[1],
+            unfolded.shape[-1],
+        )
+    )
+    maxed = unfolded.max(2)
+    return maxed.reshape(new_shape)
+
+
+def avg_pool2d(
+    self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
+) -> "Tensor":
+    """Returns the 2d average pooling of the tensor with the given kernel size"""
+    assert self.dim == 4, "avg_pool2d is only supported for tensors with 4 dimensions"
+    kernel_size = (
+        (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+    )
+    stride = (
+        kernel_size
+        if stride is None
+        else (stride, stride)
+        if isinstance(stride, int)
+        else stride
+    )
+    assert stride[0] == stride[1], "kernel size must be square"
+
+    new_shape = (
+        self.shape[0],
+        self.shape[1],
+        (self.shape[2] - kernel_size[0]) // stride[0] + 1,
+        (self.shape[3] - kernel_size[1]) // stride[1] + 1,
+    )
+    unfolded = self.unfold(kernel_size, stride=stride)
+    # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
+    # concatenation of the channels, so we need to reshape to 'divide' the channels
+    unfolded = unfolded.reshape(
+        (
+            unfolded.shape[0],  # batch
+            self.shape[1],  # channels
+            kernel_size[0] * kernel_size[1],  # kernel size 1 * kernel size 2
+            unfolded.shape[-1],  # unfolded shape ('number of windows')
+        )
+    )
+    maxed = unfolded.mean(2)
+    return maxed.reshape(
+        new_shape
+    )  # once we have the mean, we reshape to the new shape
+
+
+bind_method(Tensor, "conv2d", conv2d)
+bind_method(Tensor, "max_pool2d", max_pool2d)
+bind_method(Tensor, "avg_pool2d", avg_pool2d)
+
+
+def transpose(self, dim0, dim1):
+    axes = list(range(self.dim))
+    axes[dim0], axes[dim1] = axes[dim1], axes[dim0]
+    return pg.permute(self, axes)
+
+
+bind_method(Tensor, "transpose", lambda self, dim0, dim1: transpose(self, dim0, dim1))
+bind_method_property(Tensor, "T", lambda self: transpose(self, 0, 1))

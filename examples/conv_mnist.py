@@ -13,8 +13,11 @@ from pequegrad.modules import (
 from pequegrad.context import no_grad
 import argparse
 import time
+from pequegrad.backend.c import device, Tensor
 
 np.random.seed(0)
+
+dev = None
 
 
 class ConvNet(StatefulModule):
@@ -49,7 +52,9 @@ def test_model(model, X_test, Y_test):
         for i in range(0, len(X_test), batch_size):
             end_idx = min(i + batch_size, len(X_test))
             batch_X = X_test[i:end_idx]
+            batch_X = Tensor(batch_X, requires_grad=False, device=dev)
             batch_Y = Y_test[i:end_idx]
+            batch_Y = Tensor(batch_Y, requires_grad=False, device=dev)
             prediction = model.forward(batch_X)
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
         return correct, len(X_test)
@@ -61,13 +66,17 @@ def train(model, X_train, Y_train, epochs=13, batch_size=512):
     for epoch in range(epochs):
         indices = np.random.choice(len(X_train), batch_size)
         batch_X = X_train[indices]
+        batch_X = Tensor(batch_X, requires_grad=False, device=dev)
         batch_Y = Y_train[indices]
+        batch_Y = Tensor(batch_Y, requires_grad=False, device=dev)
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
         loss = prediction.cross_entropy_loss_indices(batch_Y)
+        loss.eval()
         loss.backward()
         # Update the weights
+
         optim.step()
         print(
             f"Epoch {epoch} | Loss {loss.numpy()}",
@@ -90,27 +99,25 @@ if __name__ == "__main__":
     MODE = args.mode
     model = ConvNet()
     if CUDA:
-        model.to("cuda")
+        dev = device.cuda
+
         print("Using CUDA for computations")
     else:
-        model.to("np")
+        dev = device.cpu
         print("Using CPU for computations")
 
+    model.to(dev)
     if MODE == "eval":
         model.load("conv_mnist_model.pkl")
         print("Model loaded from conv_mnist_model.pkl")
-        X_train, y_train, X_test, y_test = get_mnist_dataset(
-            backend="cuda" if CUDA else "np"
-        )
+        X_train, y_train, X_test, y_test = get_mnist_dataset()
         correct, total = test_model(model, X_test, y_test)
         print(f"Test accuracy: {correct / total}")
 
     else:
-        X_train, y_train, X_test, y_test = get_mnist_dataset(
-            backend="cuda" if CUDA else "np"
-        )
+        X_train, y_train, X_test, y_test = get_mnist_dataset()
         start = time.time()
-        train(model, X_train, y_train, epochs=13, batch_size=512)
+        train(model, X_train, y_train, epochs=45, batch_size=512)
         print(f"Time taken to train: {(time.time() - start):.2f}s")
 
         print("Evaluating model...", end="\r")
