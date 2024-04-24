@@ -310,4 +310,21 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
+class Im2Col : public ADPrimitive {
+protected:
+  shape_t _kernel_shape;
+  shape_t _strides;
+  shape_t _padding;
+  shape_t _dilation;
+
+public:
+  explicit Im2Col(shape_t kernel_shape, shape_t strides, shape_t padding,
+                  shape_t dilation)
+      : _kernel_shape(kernel_shape), _strides(strides), _padding(padding),
+        _dilation(dilation) {}
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Im2Col)
+  DEFINE_INFER_OUTPUT_SHAPES
+};
+
 } // namespace pg

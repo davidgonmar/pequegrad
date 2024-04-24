@@ -56,4 +56,8 @@ Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b);
 Tensor max(const Tensor &a, const Tensor &b);
 
 Tensor exp(const Tensor &a);
+
+Tensor im2col(const Tensor &a, const shape_t &kernel_shape,
+              const shape_t &stride, const shape_t &padding,
+              const shape_t &dilation);
 } // namespace pg

@@ -7,7 +7,10 @@ from pequegrad.context import pequegrad_context
 
 
 class ModuleParam(Tensor):
-    pass
+    def __init__(self, data, requires_grad=None):
+        super().__init__(
+            data, requires_grad=True if requires_grad is None else requires_grad
+        )
 
 
 def kaiming_init(shape):

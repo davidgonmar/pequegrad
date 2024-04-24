@@ -145,7 +145,8 @@ DType Tensor::dtype() const {
 }
 
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-               std::vector<Tensor> inputs) {
+               std::vector<Tensor> inputs)
+    : _requires_grad(true) {
   _ad_node = std::make_shared<ADNode>(primitive, inputs);
   device::DeviceKind device = inputs[0].device();
   for (const Tensor &input : inputs) {

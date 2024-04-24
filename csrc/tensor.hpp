@@ -449,7 +449,7 @@ public:
   }
 
 private:
-  bool _requires_grad = true;
+  bool _requires_grad = false;
   std::shared_ptr<View> _view = std::make_shared<View>();
 
   std::shared_ptr<ADNode> _ad_node =

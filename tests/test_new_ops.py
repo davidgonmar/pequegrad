@@ -288,3 +288,30 @@ class TestNew:
             return torch.unsqueeze(x, dims)
 
         _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
+
+    # test im2col
+    @pytest.mark.parametrize(
+        "info",  # shape, kernel_size, stride, dilation
+        [
+            ((2, 3, 20, 20), (3, 3), (1, 1), (1, 1)),
+            ((2, 3, 20, 20), (3, 3), (2, 2), (1, 1)),
+            ((2, 3, 20, 20), (3, 3), (1, 1), (2, 2)),
+            ((2, 3, 20, 20), (3, 3), (2, 2), (2, 2)),
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("device", [device.cuda])
+    def test_im2col(self, info, dtype, device):
+        shape, kernel_size, stride, dilation = info
+
+        def pq_fn(x):
+            return pg.im2col(
+                x, kernel_size, stride, (), dilation
+            )  # padding is not implemented yet
+
+        def torch_fn(x):
+            return torch.nn.functional.unfold(
+                x, kernel_size, dilation=dilation, stride=stride, padding=0
+            )
+
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=False, device=device)
