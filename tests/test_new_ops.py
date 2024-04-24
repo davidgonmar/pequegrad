@@ -319,7 +319,7 @@ class TestNew:
             im2col_out_shape = a.shape
             return a
 
-        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=False, device=device)
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True, device=device)
 
         print("col2im test pass!. im2col_out_shape: ", im2col_out_shape)
 
@@ -333,5 +333,5 @@ class TestNew:
             )
 
         _compare_fn_with_torch(
-            [im2col_out_shape], pq_fn, torch_fn, backward=False, device=device
+            [im2col_out_shape], pq_fn, torch_fn, backward=True, device=device
         )

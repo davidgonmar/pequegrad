@@ -554,4 +554,20 @@ Col2Im::infer_output_shapes(const std::vector<Tensor> &inputs) {
   shape_t out_shape = {batch_size, out_channels, out_h, out_w};
   return {out_shape};
 }
+
+std::vector<Tensor> Im2Col::backward(const std::vector<Tensor> &primals,
+                                     const std::vector<Tensor> &tangents,
+                                     const std::vector<Tensor> &outputs) {
+  // For output shape, we need primals[0].shape()[-2:]
+  shape_t out_shape = {primals[0].shape()[2], primals[0].shape()[3]};
+
+  return {col2im(tangents[0], out_shape, _kernel_shape, _strides, _padding,
+                 _dilation)};
+}
+
+std::vector<Tensor> Col2Im::backward(const std::vector<Tensor> &primals,
+                                     const std::vector<Tensor> &tangents,
+                                     const std::vector<Tensor> &outputs) {
+  return {im2col(tangents[0], _kernel_shape, _strides, _padding, _dilation)};
+}
 } // namespace pg
