@@ -13,7 +13,7 @@ from pequegrad.modules import (
 from pequegrad.context import no_grad
 import argparse
 import time
-from pequegrad.backend.c import device, Tensor
+from pequegrad.backend.c import device, Tensor, grads
 
 np.random.seed(0)
 
@@ -74,10 +74,8 @@ def train(model, X_train, Y_train, epochs=13, batch_size=512):
         # Compute loss and backpropagate
         loss = prediction.cross_entropy_loss_indices(batch_Y)
         loss.eval()
-        loss.backward()
-        # Update the weights
-
-        optim.step()
+        g = grads(model.parameters(), loss)
+        optim.step(g)
         print(
             f"Epoch {epoch} | Loss {loss.numpy()}",
             end="\r" if epoch < epochs - 1 else "\n",
@@ -117,7 +115,7 @@ if __name__ == "__main__":
     else:
         X_train, y_train, X_test, y_test = get_mnist_dataset()
         start = time.time()
-        train(model, X_train, y_train, epochs=45, batch_size=512)
+        train(model, X_train, y_train, epochs=100, batch_size=512)
         print(f"Time taken to train: {(time.time() - start):.2f}s")
 
         print("Evaluating model...", end="\r")

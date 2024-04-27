@@ -116,13 +116,21 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   m.def("permute", &permute);
 
+  m.def("grads", [](std::vector<Tensor> required_tensors, const Tensor &output,
+                    std::optional<Tensor> tangent) {
+    return grads(required_tensors, output, tangent);
+  });
+  m.def("grads",
+        [](std::vector<Tensor> required_tensors, const Tensor &output) {
+          return grads(required_tensors, output);
+        });
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def("to_", &Tensor::to_)
       .def("assign", &Tensor::assign)
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
-      .def("reset_grad", &Tensor::reset_grad)
+      .def("children", &Tensor::children)
       .def("ad_context",
            [](const Tensor &t) { return t.ad_node().primitive()->str(); })
       .def("to", &Tensor::to)
@@ -173,9 +181,6 @@ PYBIND11_MODULE(pequegrad_c, m) {
                                         dtype_to_string(arr.dtype()));
              }
            })
-      .def("backward", [](Tensor &t, const Tensor &grad) { t.backward(grad); })
-      .def("backward", [](Tensor &t) { t.backward(); })
-      .def_property_readonly("grad", [](const Tensor &t) { return t.grad(); })
       .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); })
       .def_property_readonly("dtype", [](const Tensor &t) { return t.dtype(); })
       .def_property_readonly("device",

@@ -60,7 +60,6 @@ public:
     shape_t s = shape();
     return std::accumulate(s.begin(), s.end(), 1, std::multiplies<size_t>());
   }
-
   size_t offset() const;
 
   size_t nbytes() const;
@@ -182,15 +181,27 @@ public:
   bool is_leaf() { return _primitive == nullptr || _children.empty(); };
   std::shared_ptr<ADPrimitive> primitive() const;
   std::vector<Tensor> children() const;
-  const std::shared_ptr<Tensor> grad() const;
-  void accum_grad(Tensor &grad);
   shape_t inferred_shape() const { return _inferred_shape; }
-  void reset_grad() { _grad = nullptr; }
+
+  // Copy and move constructors
+  ADNode(const ADNode &other) {
+    _primitive = other._primitive;
+    _children = other._children;
+    _grad = other._grad;
+    _inferred_shape = other._inferred_shape;
+  }
+
+  ADNode(ADNode &&other) {
+    _primitive = std::move(other._primitive);
+    _children = std::move(other._children);
+    _grad = std::move(other._grad);
+    _inferred_shape = std::move(other._inferred_shape);
+  }
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children;
-  std::shared_ptr<Tensor> _grad = nullptr;
+  std::weak_ptr<Tensor> _grad;
   shape_t _inferred_shape;
 };
 
@@ -199,6 +210,8 @@ Tensor t(const Tensor &t);
 class Tensor {
 
 public:
+  std::vector<Tensor> children() const { return _ad_node->children(); }
+  bool requires_grad() const { return _requires_grad; }
   ADNode &ad_node() const;
   void assign(const Tensor &other) {
     if (!other.is_evaled()) {
@@ -221,20 +234,20 @@ public:
     detached._ad_node = std::make_shared<ADNode>(); // creates a leaf node
     return detached;
   }
+
+  Tensor copy_but_lose_grad_info() {
+    Tensor copy = *this;
+    copy._ad_node = std::make_shared<ADNode>(copy._ad_node->primitive(),
+                                             copy._ad_node->children());
+
+    return copy;
+  }
   Tensor detach_() {
     if (!is_evaled()) {
       throw std::runtime_error("Cannot detach unevaluated tensor.");
     }
     _ad_node = std::make_shared<ADNode>(); // creates a leaf node
     return *this;
-  }
-  const Tensor &grad() const {
-    if (_ad_node->grad() == nullptr) {
-      throw std::runtime_error(
-          "No gradient available for this tensor. Shape: " +
-          vec_to_string(shape()));
-    }
-    return *(_ad_node->grad().get());
   }
   Tensor T() const { return t(*this); }
 
@@ -262,15 +275,37 @@ public:
     return true;
   }
 
+  long long get_next_id() {
+    static long long id = 0;
+    return id++;
+  }
+
+  long long id = get_next_id();
   // Copy and move constructors
   Tensor(const Tensor &other) {
     _view = other._view;
     _ad_node = other._ad_node;
+    id = other.id;
   }
 
   Tensor(Tensor &&other) {
     _view = std::move(other._view);
     _ad_node = std::move(other._ad_node);
+    id = other.id;
+  }
+
+  Tensor &operator=(const Tensor &other) {
+    _view = other._view;
+    _ad_node = other._ad_node;
+    id = other.id;
+    return *this;
+  }
+
+  Tensor &operator=(Tensor &&other) {
+    _view = std::move(other._view);
+    _ad_node = std::move(other._ad_node);
+    id = other.id;
+    return *this;
   }
 
   View view() const {
@@ -369,14 +404,6 @@ public:
     return np_array;
   }
 
-  void reset_grad() {
-    if (_ad_node->grad() != nullptr) {
-      _ad_node->reset_grad();
-    }
-  }
-
-  // destructor
-  ~Tensor();
   Tensor to(device::DeviceKind device) {
     if (device == device::DeviceKind::CPU) {
       return to_cpu();
@@ -389,7 +416,6 @@ public:
   Tensor to_(device::DeviceKind _device) {
     // TODO -- Make this safer
     if (device() == _device) {
-      std::cout << "Already on device" << std::endl;
       return *this;
     }
     if (!is_initialized()) {
@@ -397,24 +423,22 @@ public:
           "Cannot move uninitialized tensor. Eval it first.");
     }
     if (device() == device::DeviceKind::CUDA) {
-      std::cout << "Moving tensor from CUDA to CPU" << std::endl;
       size_t nbytes = this->nbytes();
       auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
       copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
       this->_view->set_device(device::DeviceKind::CPU);
       this->_view->set_ptr(new_ptr);
     } else if (device() == device::DeviceKind::CPU) {
-      std::cout << "Moving tensor from CPU to CUDA" << std::endl;
       size_t nbytes = this->nbytes();
-      std::cout << "Nbytes: " << nbytes << std::endl;
       auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
-      std::cout << "Allocated new ptr" << std::endl;
       copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
       this->_view->set_device(device::DeviceKind::CUDA);
       this->_view->set_ptr(new_ptr);
     }
     return *this;
   }
+
+  std::string str() const;
 
   Tensor to_cpu() {
     if (device() == device::DeviceKind::CPU) {
@@ -454,8 +478,7 @@ public:
 
   Tensor eval() const;
 
-  void backward(std::optional<Tensor> tangent = std::nullopt);
-
+  Tensor() { throw std::runtime_error("Cannot create empty tensor."); }
   bool is_evaled() const { return is_initialized(); }
 
   bool is_initialized() const { return _view->is_initialized(); }
@@ -480,5 +503,9 @@ private:
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs);
 };
+
+std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
+                          const Tensor output,
+                          const std::optional<Tensor> &tangent = std::nullopt);
 
 } // namespace pg

@@ -16,22 +16,17 @@ class SGD:
         self.vt_last = [0] * len(parameters)
         self.momentum = momentum
 
-    def reset_grad(self):
-        for p in self.params:
-            p.reset_grad()
-
-    def step(self, reset_grad: bool = True):
+    def step(self, g):
+        assert len(g) == len(self.params)
         for i, p in enumerate(self.params):
-            gt = p.grad.eval().detach()
+            gt = g[i].eval().detach()
             assert gt is not None, "Gradient is None, param: {}".format(p)
             if self.weight_decay != 0:
                 gt += self.weight_decay * p
             vt = (self.momentum * self.vt_last[i] + gt).eval()
             self.vt_last[i] = vt
             p.assign(p - self.lr * vt)
-
-        if reset_grad:
-            self.reset_grad()
+            del gt
 
 
 class Adam:
@@ -47,13 +42,10 @@ class Adam:
         self.t = 1
         self.eps = eps
 
-    def reset_grad(self):
-        for p in self.params:
-            p.reset_grad()
-
-    def step(self, reset_grad: bool = True):
+    def step(self, grads):
+        assert len(grads) == len(self.params)
         for i, p in enumerate(self.params):
-            gt = p.grad.eval().detach()
+            gt = grads[i].eval().detach()
             mt = self.b1 * self.mt_last[i] + (1 - self.b1) * gt
             vt = self.b2 * self.vt_last[i] + (1 - self.b2) * (gt * gt)
             mt_hat = mt / (1 - self.b1**self.t)
@@ -62,5 +54,3 @@ class Adam:
             self.mt_last[i] = mt
             p.assign(p - self.lr * mt_hat / (vt_hat**0.5 + self.eps))
             self.t += 1
-        if reset_grad:
-            self.reset_grad()

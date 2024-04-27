@@ -35,17 +35,6 @@ ADNode::ADNode(std::shared_ptr<ADPrimitive> primitive,
                std::vector<Tensor> children)
     : _primitive(std::move(primitive)), _children(std::move(children)) {}
 
-const std::shared_ptr<Tensor> ADNode::grad() const { return _grad; }
-
-void ADNode::accum_grad(Tensor &grad) {
-  if (this->_grad == nullptr) {
-    this->_grad = std::make_shared<Tensor>(grad);
-    return;
-  }
-  Tensor tmp = add(*(this->grad().get()), grad);
-  this->_grad = std::make_shared<Tensor>(tmp);
-}
-
 ADNode ADNode::create_leaf() { return ADNode(); }
 
 std::shared_ptr<ADPrimitive> ADNode::primitive() const {
@@ -85,30 +74,54 @@ Tensor Tensor::eval() const {
   return *this;
 }
 
-void Tensor::backward(std::optional<Tensor> _tangent) {
+std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
+                          const Tensor output,
+                          const std::optional<Tensor> &_tangent) {
   Tensor tangent = _tangent.has_value() ? _tangent.value()
-                                        : fill(shape(), dtype(), 1, device());
-  if (!is_evaled()) {
-    throw std::runtime_error("Cannot call backward on unevaluated tensor");
-  }
-  if (tangent.shape() != shape()) {
-    throw std::runtime_error("Tangent shape does not match tensor shape");
-  }
-  this->_ad_node->accum_grad(tangent);
-  if (this->_ad_node->is_leaf()) {
-    return;
-  }
+                                        : fill(output.shape(), output.dtype(),
+                                               1, output.device());
   auto tensorComparator = [](const Tensor &lhs, const Tensor &rhs) {
     // ??? weird but works. todo figure this out
-    return lhs._ad_node < rhs._ad_node;
+    return lhs.id < rhs.id;
   };
+
+  if (tangent.shape() != output.shape()) {
+    throw std::runtime_error("Tangent shape does not match tensor shape");
+  }
+  std::map<Tensor, Tensor, decltype(tensorComparator)> tangents_map(
+      tensorComparator);
+  tangents_map.insert({output, tangent});
+  auto accum_grad = [&](Tensor ten, Tensor tan) {
+    bool has_grad = tangents_map.count(ten) == 1;
+    if (!has_grad) {
+      tangents_map.insert({ten, tan});
+    } else {
+      Tensor tmp = add(tangents_map[ten], tan);
+      tangents_map.insert_or_assign(ten, tmp);
+    }
+  };
+  auto flatten_tangents =
+      [&](std::map<Tensor, Tensor, decltype(tensorComparator)> tangents) {
+        std::vector<Tensor> flattened_tangents;
+        for (auto tensor : required_tensors) {
+          PG_CHECK_RUNTIME(
+              tangents.count(tensor) == 1,
+              "Tangent not found for required tensor: ", tensor.str());
+          flattened_tangents.push_back(tangents.at(tensor));
+        }
+        return flattened_tangents;
+      };
+  accum_grad(output, tangent);
+  if (output.ad_node().is_leaf()) {
+    return flatten_tangents(tangents_map);
+  }
 
   std::set<Tensor, decltype(tensorComparator)> visited(tensorComparator);
   std::vector<Tensor> nodes;
 
   std::function<void(Tensor)> toposort = [&](Tensor t) -> void {
     visited.insert(t);
-    for (auto child : t._ad_node->children()) {
+    for (auto child : t.ad_node().children()) {
       if (!visited.count(child)) {
         // Calling the lambda function recursively
         toposort(child);
@@ -117,26 +130,39 @@ void Tensor::backward(std::optional<Tensor> _tangent) {
     nodes.push_back(t);
   };
 
-  toposort(*this);
+  toposort(output);
 
   auto nodes_reversed = std::vector<Tensor>(nodes.rbegin(), nodes.rend());
-
   for (auto node : nodes_reversed) {
-    if (node._ad_node->is_leaf()) {
+    if (node.ad_node().is_leaf()) {
       continue;
     }
-    ADPrimitive *primitive = node._ad_node->primitive().get();
-    std::vector<Tensor> children = node._ad_node->children();
+    ADPrimitive *primitive = node.ad_node().primitive().get();
+    std::vector<Tensor> children = node.ad_node().children();
     std::vector<Tensor> outputs = {node};
+    PG_CHECK_RUNTIME(tangents_map.count(node) == 1,
+                     "Tangent not found for node: ", node.str());
     std::vector<Tensor> tangents =
-        primitive->backward(children, {node.grad()}, outputs);
+        primitive->backward(children, {tangents_map.at(node)}, outputs);
     PG_CHECK_RUNTIME(tangents.size() == children.size(),
                      "ADPrimitive::backward must return the same number of "
                      "tangents as inputs");
     for (size_t i = 0; i < children.size(); i++) {
-      children[i]._ad_node->accum_grad(tangents[i]);
+      accum_grad(children[i], tangents[i]);
     }
   }
+
+  return flatten_tangents(tangents_map);
+}
+
+std::string Tensor::str() const {
+  std::stringstream ss;
+  ss << "Tensor(shape=" << vec_to_string(shape())
+     << ", dtype=" << dtype_to_string(dtype()) << ", device=" << device()
+     << ", evaled=" << is_evaled()
+     << ", primitive=" << _ad_node->primitive()->str() << ", id=" << this->id
+     << ")";
+  return ss.str();
 }
 DType Tensor::dtype() const {
   //_throw_if_not_initialized("dtype() called on uninitialized tensor, with
