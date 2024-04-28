@@ -1,5 +1,5 @@
 import pequegrad.backend.c as pg
-from pequegrad.backend.c import Tensor, dt, device
+from pequegrad.backend.c import Tensor, dt, device, grads
 import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
@@ -49,14 +49,18 @@ def _compare_fn_with_torch(
     _compare(peq_res, torch_res, tol)
 
     if backward:
-        # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
         nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
-        peq_res.backward(Tensor.from_numpy(nparr.astype(np.float64)).to(device))
+        peq_grads = grads(
+            tensors, peq_res, Tensor.from_numpy(nparr.astype(np.float64)).to(device)
+        )
         torch_res.backward(torch_tensor(nparr, dtype=torch.float64))
-
-        for i, (t, torch_t) in enumerate(zip(tensors, torch_tensors)):
+        torch_grads = [t.grad for t in torch_tensors]
+        print("peq_grads: ", peq_grads[0].to_numpy())
+        print("torch_grads: ", torch_grads[0].detach().numpy())
+        assert len(peq_grads) == len(torch_grads)
+        for i, (t, torch_t) in enumerate(zip(peq_grads, torch_grads)):
             print("Comparing position: ", i)
-            _compare(t.grad, torch_t.grad, tol)
+            _compare(t, torch_t, tol)
 
 
 class TestNew:

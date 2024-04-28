@@ -322,6 +322,7 @@ public:
                   shape_t dilation)
       : _kernel_shape(kernel_shape), _strides(strides), _padding(padding),
         _dilation(dilation) {}
+  DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Im2Col)
   DEFINE_INFER_OUTPUT_SHAPES
@@ -341,6 +342,7 @@ public:
                   shape_t padding, shape_t dilation)
       : _output_shape(output_shape), _kernel_shape(kernel_shape),
         _strides(strides), _padding(padding), _dilation(dilation) {}
+  DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Col2Im)
   DEFINE_INFER_OUTPUT_SHAPES
@@ -354,6 +356,7 @@ protected:
 public:
   explicit Reshape(axes_t shape_to) : _shape_to(shape_to) {}
   DEFINE_DISPATCH_CUDA
+  DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(Reshape)
   DEFINE_INFER_OUTPUT_SHAPES
   DEFINE_BACKWARD
