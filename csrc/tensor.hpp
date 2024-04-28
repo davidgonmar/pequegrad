@@ -49,6 +49,23 @@ namespace py = pybind11;
 class View {
 
 public:
+  bool is_contiguous() const {
+    if (offset() != 0) {
+      return false;
+    }
+    if (strides().size() == 0) { // scalar
+      return true;
+    }
+    strides_t expected_strides(shape().size());
+    expected_strides[shape().size() - 1] = dtype_to_size(dtype());
+    for (int i = shape().size() - 2; i >= 0; --i) {
+      expected_strides[i] = expected_strides[i + 1] * shape()[i + 1];
+    }
+    if (expected_strides != strides()) {
+      return false;
+    }
+    return true;
+  }
   void *get_base_ptr() const;
   void set_ptr(const std::shared_ptr<void> &ptr) { _ptr = ptr; }
   std::shared_ptr<void> shared_ptr() const;

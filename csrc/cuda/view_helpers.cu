@@ -5,6 +5,9 @@ namespace pg {
 namespace cuda {
 namespace view {
 View as_contiguous(const View &view) {
+  if (view.is_contiguous()) {
+    return view;
+  }
   View contiguous_view = View(view.shape(), view.dtype(), view.device());
   auto d_shape =
       cuda_unique_ptr_from_host(view.shape().size(), view.shape().data());

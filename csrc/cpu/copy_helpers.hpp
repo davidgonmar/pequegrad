@@ -14,7 +14,7 @@ void copy_ker(const shape_t &shape, const T *in, T *out,
   for (size_t dim : shape) {
     total_elements *= dim;
   }
-#pragma omp parallel for
+#pragma omp parallel for collapse(1)
   for (int index = 0; index < total_elements; index++) {
     size_t offset_in = 0;
     size_t offset_out = 0;

@@ -6,7 +6,8 @@
 template <typename T>
 void matmul_ker(const T *lhs, const T *rhs, T *result, size_t M, size_t N,
                 size_t K, size_t B) {
-  for (size_t b = 0; b < B; b++) {
+#pragma omp parallel for collapse(3)
+  for (int b = 0; b < B; b++) {
     for (size_t i = 0; i < M; i++) {
       for (size_t j = 0; j < N; j++) {
         T sum = 0;

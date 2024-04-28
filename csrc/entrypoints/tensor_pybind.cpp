@@ -116,11 +116,15 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   m.def("permute", &permute);
 
-  m.def("grads", [](std::vector<Tensor> required_tensors, const Tensor &output,
-                    std::optional<Tensor> tangent) {
-    return grads(required_tensors, output, tangent);
-  }, py::arg("required_tensors"), py::arg("output"), py::arg("tangent") = std::nullopt);
-  
+  m.def(
+      "grads",
+      [](std::vector<Tensor> required_tensors, const Tensor &output,
+         std::optional<Tensor> tangent) {
+        return grads(required_tensors, output, tangent);
+      },
+      py::arg("required_tensors"), py::arg("output"),
+      py::arg("tangent") = std::nullopt);
+
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def("to_", &Tensor::to_)

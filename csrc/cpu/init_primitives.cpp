@@ -10,7 +10,8 @@ template <typename T> void fill(Tensor &t, T value, const shape_t &shape) {
     total_elements *= dim;
   }
   T *data = t.get_casted_base_ptr<T>();
-  for (size_t i = 0; i < total_elements; i++) {
+#pragma omp parallel for
+  for (int i = 0; i < total_elements; i++) {
     data[i] = value;
   }
 }

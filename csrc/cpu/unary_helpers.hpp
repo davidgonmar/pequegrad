@@ -16,7 +16,7 @@ namespace cpu {
 #define UNARY_OP_FLOAT(fn_name, avx_fn, fb_fn)                                 \
   static inline void fn_name(float *ptr, float *result, int size) {            \
     int i;                                                                     \
-    for (i = 0; i < size - 7; i += 8) {                                        \
+    _Pragma("omp parallel for") for (i = 0; i < size - 7; i += 8) {            \
       _mm256_storeu_ps(result + i, avx_fn(_mm256_loadu_ps(ptr + i)));          \
     }                                                                          \
     for (; i < size; i++) {                                                    \
@@ -27,7 +27,7 @@ namespace cpu {
 #define UNARY_OP_DOUBLE(fn_name, avx_fn, fb_fn)                                \
   static inline void fn_name(double *ptr, double *result, int size) {          \
     int i;                                                                     \
-    for (i = 0; i < size - 3; i += 4) {                                        \
+    _Pragma("omp parallel for") for (i = 0; i < size - 3; i += 4) {            \
       _mm256_storeu_pd(result + i, avx_fn(_mm256_loadu_pd(ptr + i)));          \
     }                                                                          \
     for (; i < size; i++) {                                                    \
@@ -38,14 +38,14 @@ namespace cpu {
 // Fallback implementation for non-AVX architectures
 #define UNARY_OP_FLOAT(fn_name, avx_fn, fb_fn)                                 \
   static inline void fn_name(float *ptr, float *result, int size) {            \
-    for (int i = 0; i < size; i++) {                                           \
+    _Pragma("omp parallel for") for (int i = 0; i < size; i++) {               \
       result[i] = fb_fn(ptr[i]);                                               \
     }                                                                          \
   }
 
 #define UNARY_OP_DOUBLE(fn_name, avx_fn, fb_fn)                                \
   static inline void fn_name(double *ptr, double *result, int size) {          \
-    for (int i = 0; i < size; i++) {                                           \
+    _Pragma("omp parallel for") for (int i = 0; i < size; i++) {               \
       result[i] = fb_fn(ptr[i]);                                               \
     }                                                                          \
   }

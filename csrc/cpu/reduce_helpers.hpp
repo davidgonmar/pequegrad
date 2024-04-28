@@ -23,8 +23,8 @@ void reduce_base_fn(const T *in, T *out, const strides_t &in_strides,
       total_out_elements *= in_shape[i];
     }
   }
-
-  for (size_t i = 0; i < total_out_elements; i++) {
+#pragma omp parallel for
+  for (int i = 0; i < total_out_elements; i++) {
     int idx = i;
 
     int red_elements = in_shape[red_axis];
