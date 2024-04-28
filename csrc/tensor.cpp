@@ -90,7 +90,6 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
   }
   std::map<Tensor, Tensor, decltype(tensorComparator)> tangents_map(
       tensorComparator);
-  tangents_map.insert({output, tangent});
   auto accum_grad = [&](Tensor ten, Tensor tan) {
     bool has_grad = tangents_map.count(ten) == 1;
     if (!has_grad) {
@@ -100,6 +99,7 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
       tangents_map.insert_or_assign(ten, tmp);
     }
   };
+  accum_grad(output, tangent);
   auto flatten_tangents =
       [&](std::map<Tensor, Tensor, decltype(tensorComparator)> tangents) {
         std::vector<Tensor> flattened_tangents;
@@ -111,7 +111,6 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
         }
         return flattened_tangents;
       };
-  accum_grad(output, tangent);
   if (output.ad_node().is_leaf()) {
     return flatten_tangents(tangents_map);
   }

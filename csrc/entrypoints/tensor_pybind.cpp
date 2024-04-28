@@ -120,10 +120,6 @@ PYBIND11_MODULE(pequegrad_c, m) {
                     std::optional<Tensor> tangent) {
     return grads(required_tensors, output, tangent);
   });
-  m.def("grads",
-        [](std::vector<Tensor> required_tensors, const Tensor &output) {
-          return grads(required_tensors, output);
-        });
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def("to_", &Tensor::to_)
