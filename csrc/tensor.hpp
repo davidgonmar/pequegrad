@@ -374,7 +374,7 @@ public:
     this->_requires_grad = requires_grad;
   }
 
-  template <typename T> T *get_casted_base_ptr() {
+  template <typename T> T *get_casted_base_ptr() const {
     _throw_if_not_initialized(
         "get_casted_base_ptr() called on uninitialized tensor.");
     if (dtype_from_cpptype<T>() != this->dtype()) {

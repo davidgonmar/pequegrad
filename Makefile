@@ -32,3 +32,6 @@ testbe:
 
 testnew:
 	python -m pytest tests/test_new_ops.py tests/test_new_device.py
+
+testops:
+	python -m pytest tests/test_ops.py

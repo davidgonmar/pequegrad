@@ -362,4 +362,59 @@ public:
   DEFINE_BACKWARD
 };
 
+// SLICING
+
+// Of the form [start:stop:step]
+struct SelectWithSlice {
+  int start;
+  int stop;
+  int step;
+  SelectWithSlice(int start, int stop, int step)
+      : start(start), stop(stop), step(step) {}
+  SelectWithSlice(int start, int stop) : start(start), stop(stop), step(1) {}
+  SelectWithSlice(int start) : start(start), stop(-1), step(1) {}
+};
+
+/*
+Of the form
+t = Tensor([1, 2, 3, 4, 5])
+tidx = Tensor([0, 2, 4])
+t[tidx] -> Tensor([1, 3, 5])
+*/
+// It is actually just a placeholder. Tensors will be passed as inputs lazily
+// This just means 'expect a tensor here'
+struct SelectWithTensor {
+};
+
+/*
+Of the form
+t = Tensor([1, 2, 3, 4, 5])
+tidx = 2
+t[tidx] -> Tensor([3])
+*/
+struct SelectWithSingleIdx {
+  long index;
+  SelectWithSingleIdx(long index) : index(index) {}
+};
+
+/*
+Keeps the dimension
+*/
+struct SelectKeepDim {
+   SelectKeepDim() {}
+};
+
+using select_item_t = std::variant<SelectWithSlice, SelectWithTensor,
+                                    SelectWithSingleIdx, SelectKeepDim>;
+using select_t = std::vector<select_item_t>;
+class Select : public ADPrimitive {
+protected:
+  select_t _items;
+
+public:
+  explicit Select(select_t items) : _items(items) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_INFER_OUTPUT_SHAPES
+};
+
 } // namespace pg

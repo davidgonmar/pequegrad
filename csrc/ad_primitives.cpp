@@ -612,4 +612,45 @@ std::vector<Tensor> Reshape::backward(const std::vector<Tensor> &primals,
   return {reshape(tangents[0], primals[0].shape())};
 }
 
+
+std::vector<shape_t> Select::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  // 1st input -> src tensor
+  // 2nd..nth input -> indices
+  select_t items = _items;
+  shape_t orig_shape = inputs[0].shape();
+  shape_t new_shape;
+
+  size_t n_tensor_indices = 0;
+  for (size_t i = 0; i < items.size(); i++) {
+    if (std::holds_alternative<SelectWithSlice>(items[i])) {
+      SelectWithSlice sss = std::get<SelectWithSlice>(items[i]);
+      int start = sss.start;
+      int stop = sss.stop;
+      int step = sss.step;
+      if (start < 0) {
+        start += orig_shape[i];
+      }
+      if (stop < 0) {
+        stop += orig_shape[i];
+      }
+      if (step < 0) {
+        step += orig_shape[i];
+      }
+      new_shape.push_back((stop - start) / step);
+    } else if (std::holds_alternative<SelectWithTensor>(items[i])) {
+      SelectWithTensor swt = std::get<SelectWithTensor>(items[i]);
+      Tensor t = inputs[n_tensor_indices];
+      PG_CHECK_ARG(t.ndim() == 1, "Select: tensor indices must be 1D");
+      new_shape.push_back(t.numel());
+      n_tensor_indices++;
+    } else if (std::holds_alternative<SelectWithSingleIdx>(items[i])) {
+      // Deletes the dimension
+    } else if (std::holds_alternative<SelectKeepDim>(items[i])) {
+      new_shape.push_back(orig_shape[i]);
+    }
+  }
+
+  return {new_shape};
+}
+
 } // namespace pg

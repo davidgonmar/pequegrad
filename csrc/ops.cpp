@@ -3,6 +3,7 @@
 #include "ad_primitives.hpp"
 #include "init_primitives.hpp"
 #include "tensor.hpp"
+#include "ops.hpp"
 
 namespace pg {
 
@@ -346,5 +347,31 @@ Tensor reshape(const Tensor &a, const axes_t &shape) {
 }
 Tensor reshape(const Tensor &a, const shape_t &shape) {
   return reshape(a, axes_t(shape.begin(), shape.end()));
+}
+
+
+Tensor select(const Tensor& a, const std::vector<hl_select_t>& _items) {
+    select_t items;
+    std::vector<Tensor> t_indices;
+    for (auto& item : _items) {
+        if (std::holds_alternative<SelectKeepDim>(item)) {
+            items.push_back(std::get<SelectKeepDim>(item));
+        }
+        else if (std::holds_alternative<SelectWithSlice>(item)) {
+            auto _item = std::get<SelectWithSlice>(item);
+            items.push_back(_item);
+        }
+        else if (std::holds_alternative<SelectWithSingleIdx>(item)) {
+            items.push_back(std::get<SelectWithSingleIdx>(item));
+        }
+        else if (std::holds_alternative<Tensor>(item)) {
+            t_indices.push_back(std::get<Tensor>(item));
+            items.push_back(SelectWithTensor());
+        }
+        
+    }
+    std::vector<Tensor> inputs = { a };
+        inputs.insert(inputs.end(), t_indices.begin(), t_indices.end());
+    return Tensor::from_primitive(std::make_shared<Select>(items), inputs);
 }
 } // namespace pg

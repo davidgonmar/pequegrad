@@ -1,16 +1,16 @@
 
-#include "pybind_utils.hpp"
+#include "npybind_utils.hpp"
 #include "utils.hpp"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <variant>
 #include <vector>
-
-
+#include "ops.hpp"
+namespace pg{
 namespace pybind_utils {
 
-slice_item_t parse_pybind_slice_item(const pybind_slice_item_t &item,
+hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
                                      const int shape_in_dim) {
   if (std::holds_alternative<py::slice>(item)) {
     py::slice s = std::get<py::slice>(item);
@@ -19,18 +19,17 @@ slice_item_t parse_pybind_slice_item(const pybind_slice_item_t &item,
     if (!s.compute(shape_in_dim, &start, &stop, &step, &slicelength)) {
       throw std::runtime_error("Error during slices parsing");
     }
-    return SliceFromSSS(start, stop, step);
+    return SelectWithSlice(start, stop, step);
   } else if (std::holds_alternative<int>(item)) {
-    return SliceFromSingleIdx(std::get<int>(item));
-  } else if (std::holds_alternative<std::vector<int>>(item)) {
-    std::vector<int> idxs = std::get<std::vector<int>>(item);
-    return SliceFromIdxArray(idxs);
+    return SelectWithSingleIdx(std::get<int>(item));
+  } else if (std::holds_alternative<Tensor>(item)) {
+    return std::get<Tensor>(item);
   } else {
     throw std::runtime_error("Invalid slice");
   }
 }
-slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
-  slice_t parsed_slices;
+std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
+  std::vector<hl_select_t> parsed_slices;
 
   // If user passed a single slice, convert it to a vector of slices
   std::vector<pybind_slice_item_t> items;
@@ -41,8 +40,8 @@ slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
       items.push_back(slice.cast<py::slice>());
     } else if (py::isinstance<py::int_>(slice)) {
       items.push_back(slice.cast<int>());
-    } else if (py::isinstance<py::list>(slice)) {
-      items.push_back(slice.cast<std::vector<int>>());
+    } else if (py::isinstance<Tensor>(slice)) {
+      items.push_back(slice.cast<Tensor>());
     } else {
       throw std::runtime_error("Invalid slice");
     }
@@ -57,4 +56,6 @@ slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
 
   return parsed_slices;
 }
+
+} // namespace pybind_utils
 }

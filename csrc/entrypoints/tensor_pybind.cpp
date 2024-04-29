@@ -1,6 +1,6 @@
 #include "dtype.hpp"
 #include "ops.hpp"
-#include "pybind_utils.hpp"
+#include "npybind_utils.hpp"
 #include "shape.hpp"
 #include "tensor.hpp"
 #include <iostream>
@@ -239,5 +239,23 @@ PYBIND11_MODULE(pequegrad_c, m) {
            << ", dtype=" << dtype_to_string(t.dtype())
            << ", device=" << t.device() << ", evaled=" << t.is_evaled() << ")";
         return ss.str();
-      });
+      })
+      .def(
+          "__getitem__",
+          [](const Tensor &arr, const py::tuple slices) {
+            std::vector<hl_select_t> parsed =
+                pybind_utils::parse_pybind_slices(slices, arr.shape());
+            return pg::select(arr, parsed);
+          },
+          py::arg("slices").noconvert())
+      .def(
+          "__getitem__",
+          [](const Tensor &arr,
+             const pybind_utils::pybind_slice_item_t sl) {
+            auto _tuple = py::make_tuple(sl);
+            std::vector<hl_select_t> parsed =
+                pybind_utils::parse_pybind_slices(_tuple, arr.shape());
+            return pg::select(arr, parsed);
+             },
+          py::arg("item").noconvert());
 };

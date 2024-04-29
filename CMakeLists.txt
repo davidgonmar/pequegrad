@@ -144,6 +144,7 @@ file(GLOB PG_SOURCES
         csrc/cuda/*.cu
         csrc/cuda/*.cpp
         csrc/entrypoints/tensor_pybind.cpp
+        csrc/entrypoints/npybind_utils.cpp
         csrc/*.cpp
     )
 
@@ -168,8 +169,8 @@ endif()
 
 # add max optimization
 if (MSVC)
-    set(cxx_flags "/O0")
-    set(cu_flags "-O0")
+    set(cxx_flags "/Ox")
+    set(cu_flags "-O3")
 else()
     set(cxx_flags "-O3")
     set(cu_flags "-O3")
