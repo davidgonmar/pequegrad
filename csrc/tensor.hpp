@@ -45,6 +45,8 @@ namespace pg {
 class ADPrimitive; // forward declaration
 class Tensor;
 
+Tensor as_contiguous(const Tensor &t); // forward declaration
+
 namespace py = pybind11;
 class View {
 
@@ -408,6 +410,22 @@ public:
                strides, _ptr, dtype_from_pytype<T>(), device::DeviceKind::CPU);
     return arr.to(device);
   }
+
+  bool is_dense() const {
+    // dense means that it might not be contiguous, but
+    // there are no holes in the array
+    // that is, the total number of elements is equal to
+    // the size of the underlying storage
+    size_t total_in_storage = nbytes();
+    size_t total_size_in_bytes = numel() * dtype_to_size(dtype());
+    if (!is_evaled()) {
+      throw std::runtime_error("Cannot check if unevaluated tensor is dense.");
+    }
+    return total_in_storage == total_size_in_bytes;
+  }
+
+  Tensor contiguous() const { return as_contiguous(*this); }
+
   template <typename T> py::array_t<T> to_numpy() {
     if (!is_evaled()) {
       eval();
@@ -416,8 +434,7 @@ public:
     if (device() != device::DeviceKind::CPU) {
       return to_cpu().to_numpy<T>();
     }
-    py::array_t<T> np_array(shape(), strides());
-    std::memcpy(np_array.mutable_data(), get_base_ptr(), nbytes());
+    py::array_t<T> np_array(shape(), strides(), get_casted_base_ptr<T>());
     return np_array;
   }
 

@@ -7,7 +7,6 @@
 #include <variant>
 #include <vector>
 
-
 namespace pybind_utils {
 
 slice_item_t parse_pybind_slice_item(const pybind_slice_item_t &item,
@@ -57,4 +56,4 @@ slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
 
   return parsed_slices;
 }
-}
+} // namespace pybind_utils

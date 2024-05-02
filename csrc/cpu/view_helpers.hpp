@@ -5,7 +5,7 @@
 namespace pg {
 namespace cpu {
 namespace view {
-View as_contiguous(const View &view);
+View as_contiguous(const View &view, bool force = false);
 }
 } // namespace cpu
 } // namespace pg

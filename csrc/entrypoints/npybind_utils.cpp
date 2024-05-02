@@ -1,17 +1,17 @@
 
 #include "npybind_utils.hpp"
+#include "ops.hpp"
 #include "utils.hpp"
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <variant>
 #include <vector>
-#include "ops.hpp"
-namespace pg{
+namespace pg {
 namespace pybind_utils {
 
 hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
-                                     const int shape_in_dim) {
+                                    const int shape_in_dim) {
   if (std::holds_alternative<py::slice>(item)) {
     py::slice s = std::get<py::slice>(item);
 
@@ -28,7 +28,8 @@ hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
     throw std::runtime_error("Invalid slice");
   }
 }
-std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
+std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
+                                             const shape_t &arr_shape) {
   std::vector<hl_select_t> parsed_slices;
 
   // If user passed a single slice, convert it to a vector of slices
@@ -42,6 +43,18 @@ std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices, const shap
       items.push_back(slice.cast<int>());
     } else if (py::isinstance<Tensor>(slice)) {
       items.push_back(slice.cast<Tensor>());
+    } else if (py::isinstance<py::list>(slice)) {
+      // To numpy array -> to tensor
+      // check if the list contains only integers
+      try {
+        py::array_t<int> arr = slice.cast<py::array_t<int>>();
+        Tensor t = Tensor::from_numpy(arr);
+        items.push_back(t);
+      } catch (...) {
+        throw std::runtime_error("Tried to parse array as slice, but it "
+                                 "contains non-integer values");
+      }
+
     } else {
       throw std::runtime_error("Invalid slice");
     }
@@ -58,4 +71,4 @@ std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices, const shap
 }
 
 } // namespace pybind_utils
-}
+} // namespace pg

@@ -612,8 +612,8 @@ std::vector<Tensor> Reshape::backward(const std::vector<Tensor> &primals,
   return {reshape(tangents[0], primals[0].shape())};
 }
 
-
-std::vector<shape_t> Select::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<shape_t>
+Select::infer_output_shapes(const std::vector<Tensor> &inputs) {
   // 1st input -> src tensor
   // 2nd..nth input -> indices
   select_t items = _items;
@@ -639,8 +639,10 @@ std::vector<shape_t> Select::infer_output_shapes(const std::vector<Tensor> &inpu
       new_shape.push_back((stop - start) / step);
     } else if (std::holds_alternative<SelectWithTensor>(items[i])) {
       SelectWithTensor swt = std::get<SelectWithTensor>(items[i]);
-      Tensor t = inputs[n_tensor_indices];
-      PG_CHECK_ARG(t.ndim() == 1, "Select: tensor indices must be 1D");
+      Tensor t = inputs[n_tensor_indices + 1];
+      PG_CHECK_ARG(t.ndim() == 1,
+                   "Select: tensor indices must be 1D, got shape ",
+                   vec_to_string(t.shape()));
       new_shape.push_back(t.numel());
       n_tensor_indices++;
     } else if (std::holds_alternative<SelectWithSingleIdx>(items[i])) {
@@ -651,6 +653,17 @@ std::vector<shape_t> Select::infer_output_shapes(const std::vector<Tensor> &inpu
   }
 
   return {new_shape};
+}
+
+std::vector<shape_t>
+AsContiguous::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  return {inputs[0].shape()};
+}
+
+std::vector<Tensor> AsContiguous::backward(const std::vector<Tensor> &primals,
+                                           const std::vector<Tensor> &tangents,
+                                           const std::vector<Tensor> &outputs) {
+  return {tangents[0]};
 }
 
 } // namespace pg

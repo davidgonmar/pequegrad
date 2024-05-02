@@ -1,9 +1,10 @@
 #include "select_helpers.hpp"
 #include "ad_primitives.hpp"
 
-
-namespace pg{
-void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items, std::vector<Tensor> &idxs) {
+namespace pg {
+void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
+                         std::vector<Tensor> &idxs) {
+  std::cout << "inside _select_with_tensor" << std::endl;
   shape_t new_shape;
   int curr_tensor_idx = 0;
   for (int i = 0; i < items.size(); i++) {
@@ -19,13 +20,18 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items, std::v
     } else if (std::holds_alternative<SelectWithTensor>(item)) {
       auto _item = std::get<SelectWithTensor>(item);
       new_shape.push_back(idxs[curr_tensor_idx].shape()[0]);
-    curr_tensor_idx++;
+      curr_tensor_idx++;
+    } else if (std::holds_alternative<SelectKeepDim>(item)) {
+      new_shape.push_back(inp.shape()[i]);
     }
   }
 
   // also pad device_slices KeepDim
   // 'pad' the shape with same if the slices are less than the original shape
+  std::cout << "items and dims: " << items.size() << " " << inp.ndim()
+            << std::endl;
   if (items.size() < inp.ndim()) {
+    std::cout << "items.size(): " << items.size() << std::endl;
     for (int i = items.size(); i < inp.ndim(); i++) {
       new_shape.push_back(inp.shape()[i]);
       items.push_back(SelectKeepDim());
@@ -38,15 +44,35 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items, std::v
   outp.init_view(std::make_shared<View>(new_shape, inp.dtype(), device::CPU));
 
   std::vector<int *> tensor_indices;
-    for (int i = 0; i < idxs.size(); i++) {
-        PG_CHECK_ARG(idxs[i].dtype() == DType::Int32, "Index must be of type int32");
-        tensor_indices.push_back(idxs[i].get_casted_base_ptr<int>());
-    }
+  for (int i = 0; i < idxs.size(); i++) {
+    PG_CHECK_ARG(idxs[i].dtype() == DType::Int32,
+                 "Index must be of type int32");
+    PG_CHECK_ARG(idxs[i].ndim() == 1, "Index must be 1D");
+    PG_CHECK_ARG(idxs[i].is_contiguous(), "Index must be contiguous");
+    tensor_indices.push_back(idxs[i].get_casted_base_ptr<int>());
+  }
   switch (inp.dtype()) {
   case DType::Float32:
     _slice_and_assign_with_array_kernel<float>(
         inp.get_casted_base_ptr<float>(), outp.get_casted_base_ptr<float>(),
-        tensor_indices, inp.shape(), new_shape, inp.strides(), outp.strides(), items);
+        tensor_indices, inp.shape(), new_shape, inp.strides(), outp.strides(),
+        items);
+    break;
+  case DType::Int32:
+    _slice_and_assign_with_array_kernel<int>(
+        inp.get_casted_base_ptr<int>(), outp.get_casted_base_ptr<int>(),
+        tensor_indices, inp.shape(), new_shape, inp.strides(), outp.strides(),
+        items);
+    break;
+  case DType::Float64:
+    _slice_and_assign_with_array_kernel<double>(
+        inp.get_casted_base_ptr<double>(), outp.get_casted_base_ptr<double>(),
+        tensor_indices, inp.shape(), new_shape, inp.strides(), outp.strides(),
+        items);
+    break;
+  default:
+    throw std::runtime_error("Unsupported dtype for select with tensor: " +
+                             dtype_to_string(inp.dtype()));
   }
 
   // now we need to squeeze the array to remove the dimensions that are 1, where
@@ -57,20 +83,21 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items, std::v
       squeeze_dims.push_back(i);
     }
   }
-  //return out.squeeze(squeeze_dims);
+  // return out.squeeze(squeeze_dims);
 }
 
-
-
-
-void Select::dispatch_cpu(const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs) {
+void Select::dispatch_cpu(const std::vector<Tensor> &inputs,
+                          std::vector<Tensor> &outputs) {
   shape_t new_shape;
   strides_t new_strides;
   int _offset = 0;
   bool select_with_tensor = false;
   Tensor inp = inputs[0];
-  std::vector<Tensor> idxs = std::vector<Tensor>(inputs.begin() + 1, inputs.end());
-    std::cout << "idxs.size(): " << idxs.size() << std::endl;
+  PG_CHECK_ARG(inp.ndim() == _items.size(),
+               "Number of slices must match number of dimensions");
+  std::vector<Tensor> idxs =
+      std::vector<Tensor>(inputs.begin() + 1, inputs.end());
+  std::cout << "idxs.size(): " << idxs.size() << std::endl;
   for (int i = 0; i < _items.size(); i++) {
     select_item_t item = _items[i];
     if (std::holds_alternative<SelectWithSlice>(item)) {
@@ -108,20 +135,20 @@ void Select::dispatch_cpu(const std::vector<Tensor> &inputs, std::vector<Tensor>
     }
   }
   if (select_with_tensor) {
-    return _select_with_tensor(inp, outputs[0], _items, idxs);
+    _select_with_tensor(inp, outputs[0], _items, idxs);
+    return;
   }
 
-  // handle the case where we dont index over ALL dimensions
-  if (_items.size() < inp.shape().size()) {
-    for (int i = _items.size(); i < inp.shape().size(); i++) {
-      new_shape.push_back(inp.shape()[i]);
-      new_strides.push_back(inp.strides()[i]);
-    }
-  }
+  int total_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
+                                   std::multiplies<int>());
 
-    int total_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                     std::multiplies<int>());
-    std::cout << "total_size: " << total_size << std::endl;
-    outputs[0].init_view(std::make_shared<View>(inp.view().shared_ptr(), inp.nbytes(), new_shape, new_strides, (size_t) _offset, inp.dtype(), inp.device()));
+  outputs[0].init_view(std::make_shared<View>(
+      inp.view().shared_ptr(), inp.nbytes(), new_shape, new_strides,
+      (size_t)_offset, inp.dtype(), inp.device()));
+  std::cout << "total_size: " << total_size << std::endl;
+  std::cout << "new_shape: " << vec_to_string(new_shape) << std::endl;
+  std::cout << "new_strides: " << vec_to_string(new_strides) << std::endl;
+  std::cout << "offset: " << _offset << std::endl;
+  std::cout << "dtype: " << dtype_to_string(inp.dtype()) << std::endl;
 }
 } // namespace pg

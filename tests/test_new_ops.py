@@ -5,6 +5,13 @@ import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
 import pytest
 
+dtypemapnp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+dtypemapt = {
+    dt.float32: torch.float32,
+    dt.float64: torch.float64,
+    dt.int32: torch.int32,
+}
+
 
 def _compare_fn_with_torch(
     shapes,
@@ -13,6 +20,7 @@ def _compare_fn_with_torch(
     tol: float = 1e-5,
     backward=True,
     device: device = device.cpu,
+    dtype=dt.float64,
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
@@ -24,11 +32,11 @@ def _compare_fn_with_torch(
     # Use a uniform distribution to initialize the arrays with 'good numbers' so that there are no numerical stability issues
     np_arr = [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
     tensors = [
-        Tensor.from_numpy(arr.astype(np.float64)).to(device) for arr in np_arr
+        Tensor.from_numpy(arr.astype(dtypemapnp[dtype])).to(device) for arr in np_arr
     ]  # Using double precision
 
     torch_tensors = [
-        torch_tensor(arr, dtype=torch.float64, requires_grad=True) for arr in np_arr
+        torch_tensor(arr, dtype=dtypemapt[dtype], requires_grad=True) for arr in np_arr
     ]  # Using double precision
 
     torch_res = torch_fn(*torch_tensors)
@@ -51,9 +59,11 @@ def _compare_fn_with_torch(
     if backward:
         nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
         peq_grads = grads(
-            tensors, peq_res, Tensor.from_numpy(nparr.astype(np.float64)).to(device)
+            tensors,
+            peq_res,
+            Tensor.from_numpy(nparr.astype(dtypemapnp[dtype])).to(device),
         )
-        torch_res.backward(torch_tensor(nparr, dtype=torch.float64))
+        torch_res.backward(torch_tensor(nparr, dtype=dtypemapt[dtype]))
         torch_grads = [t.grad for t in torch_tensors]
         print("peq_grads: ", peq_grads[0].to_numpy())
         print("torch_grads: ", torch_grads[0].detach().numpy())
@@ -107,7 +117,12 @@ class TestNew:
     def test_binary_ops(self, shape, dtype, lambdaop, device):
         pq_fn, torch_fn, do_backward = lambdaop
         _compare_fn_with_torch(
-            [shape, shape], pq_fn, torch_fn, backward=do_backward, device=device
+            [shape, shape],
+            pq_fn,
+            torch_fn,
+            backward=do_backward,
+            device=device,
+            dtype=dtype,
         )
 
     # unary ops
@@ -339,4 +354,36 @@ class TestNew:
 
         _compare_fn_with_torch(
             [im2col_out_shape], pq_fn, torch_fn, backward=True, device=device
+        )
+
+        # test slice + slice autograd
+
+    @pytest.mark.parametrize(
+        "data",  # tensor_shape, slices(arr of slices)
+        [
+            [(3, 3), (slice(0, 2), slice(0, 2))],
+            # stepped slices
+            [(9, 11), (slice(0, 9, 2), slice(0, 11, 3))],
+            # slice with array
+            [(3, 3), (slice(0, 2), [0, 1])],
+            # mix
+            [(3, 10, 5), (slice(0, 2), slice(0, 10), [0, 1])],
+            [(7, 5, 8), (1, slice(0, 5), slice(0, 8))],
+            # slice len < tensor ndim
+            [(3, 3), (slice(0, 2))],
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
+    @pytest.mark.parametrize("device", [device.cpu])
+    def test_slice(self, data, dtype, device):
+        tensor_shape, slices = data
+
+        def torch_fn(x):
+            return x[slices]
+
+        def peq_fn(x):
+            return x[slices]
+
+        _compare_fn_with_torch(
+            [tensor_shape], peq_fn, torch_fn, backward=False, device=device
         )

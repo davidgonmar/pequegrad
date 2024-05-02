@@ -4,8 +4,8 @@
 namespace pg {
 namespace cpu {
 namespace view {
-View as_contiguous(const View &view) {
-  if (view.is_contiguous()) {
+View as_contiguous(const View &view, bool force) {
+  if (view.is_contiguous() && !force) {
     return view;
   }
   View new_view = View(view.shape(), view.dtype(), device::CPU);

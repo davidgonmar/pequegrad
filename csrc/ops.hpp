@@ -9,8 +9,9 @@
   Tensor name(const Tensor &a, axis_t axis, bool keepdims);
 
 namespace pg {
-using hl_select_t = std::variant<SelectKeepDim, SelectWithSlice, SelectWithSingleIdx, Tensor>;
-Tensor select(const Tensor& a, const std::vector<hl_select_t>& _items);
+using hl_select_t =
+    std::variant<SelectKeepDim, SelectWithSlice, SelectWithSingleIdx, Tensor>;
+Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items);
 
 Tensor add(const Tensor &a, const Tensor &b);
 Tensor add(const Tensor &a, double b);
@@ -68,5 +69,7 @@ Tensor col2im(const Tensor &a, const shape_t &output_shape,
               const shape_t &padding, const shape_t &dilation);
 Tensor reshape(const Tensor &a, const axes_t &shape);
 Tensor reshape(const Tensor &a, const shape_t &shape);
+
+Tensor as_contiguous(const Tensor &a);
 
 } // namespace pg

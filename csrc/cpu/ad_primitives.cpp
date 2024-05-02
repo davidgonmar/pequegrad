@@ -300,4 +300,12 @@ void Reshape::dispatch_cpu(const std::vector<Tensor> &inputs,
     return;
   }
 }
+
+void AsContiguous::dispatch_cpu(const std::vector<Tensor> &inputs,
+                                std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  outputs[0].init_view(
+      std::make_shared<View>(cpu::view::as_contiguous(inputs[0].view(), true)));
+}
 } // namespace pg

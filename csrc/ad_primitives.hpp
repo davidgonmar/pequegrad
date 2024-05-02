@@ -383,8 +383,7 @@ t[tidx] -> Tensor([1, 3, 5])
 */
 // It is actually just a placeholder. Tensors will be passed as inputs lazily
 // This just means 'expect a tensor here'
-struct SelectWithTensor {
-};
+struct SelectWithTensor {};
 
 /*
 Of the form
@@ -401,11 +400,11 @@ struct SelectWithSingleIdx {
 Keeps the dimension
 */
 struct SelectKeepDim {
-   SelectKeepDim() {}
+  SelectKeepDim() {}
 };
 
 using select_item_t = std::variant<SelectWithSlice, SelectWithTensor,
-                                    SelectWithSingleIdx, SelectKeepDim>;
+                                   SelectWithSingleIdx, SelectKeepDim>;
 using select_t = std::vector<select_item_t>;
 class Select : public ADPrimitive {
 protected:
@@ -415,6 +414,15 @@ public:
   explicit Select(select_t items) : _items(items) {}
   DEFINE_DISPATCH_CPU
   DEFINE_INFER_OUTPUT_SHAPES
+};
+
+class AsContiguous : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(AsContiguous)
+  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_BACKWARD
 };
 
 } // namespace pg
