@@ -245,8 +245,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def(
           "__getitem__",
           [](const Tensor &arr, const py::tuple slices) {
-            std::vector<hl_select_t> parsed =
-                pybind_utils::parse_pybind_slices(slices, arr.shape());
+            std::vector<hl_select_t> parsed = pybind_utils::parse_pybind_slices(
+                slices, arr.shape(), arr.device());
             return pg::select(arr, parsed);
           },
           py::arg("slices").noconvert())
@@ -254,8 +254,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
           "__getitem__",
           [](const Tensor &arr, const pybind_utils::pybind_slice_item_t sl) {
             auto _tuple = py::make_tuple(sl);
-            std::vector<hl_select_t> parsed =
-                pybind_utils::parse_pybind_slices(_tuple, arr.shape());
+            std::vector<hl_select_t> parsed = pybind_utils::parse_pybind_slices(
+                _tuple, arr.shape(), arr.device());
             return pg::select(arr, parsed);
           },
           py::arg("item").noconvert());

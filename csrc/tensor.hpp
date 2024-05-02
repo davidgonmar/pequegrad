@@ -485,7 +485,12 @@ public:
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
     copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
-    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(),
+    std::cout << "offset: " << offset() << std::endl;
+    std::cout << "nbytes: " << nbytes << std::endl;
+    std::cout << "shape: " << vec_to_string(shape()) << std::endl;
+    std::cout << "strides: " << vec_to_string(strides()) << std::endl;
+
+    return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
                   device::DeviceKind::CPU);
   }
 
@@ -533,7 +538,11 @@ private:
          device::DeviceKind device)
       : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype,
                                      device)) {}
-
+  Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
+         size_t offset, const std::shared_ptr<void> &ptr, DType dtype,
+         device::DeviceKind device)
+      : _view(std::make_shared<View>(ptr, nbytes, shape, strides, offset, dtype,
+                                     device)) {}
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs);
 };

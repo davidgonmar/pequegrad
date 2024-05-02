@@ -29,7 +29,8 @@ hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
   }
 }
 std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
-                                             const shape_t &arr_shape) {
+                                             const shape_t &arr_shape,
+                                             device::DeviceKind inp_device) {
   std::vector<hl_select_t> parsed_slices;
 
   // If user passed a single slice, convert it to a vector of slices
@@ -48,7 +49,7 @@ std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
       // check if the list contains only integers
       try {
         py::array_t<int> arr = slice.cast<py::array_t<int>>();
-        Tensor t = Tensor::from_numpy(arr);
+        Tensor t = Tensor::from_numpy(arr, false, inp_device);
         items.push_back(t);
       } catch (...) {
         throw std::runtime_error("Tried to parse array as slice, but it "

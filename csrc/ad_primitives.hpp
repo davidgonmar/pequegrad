@@ -413,6 +413,7 @@ protected:
 public:
   explicit Select(select_t items) : _items(items) {}
   DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
   DEFINE_INFER_OUTPUT_SHAPES
 };
 

@@ -97,7 +97,6 @@ void Select::dispatch_cpu(const std::vector<Tensor> &inputs,
                "Number of slices must match number of dimensions");
   std::vector<Tensor> idxs =
       std::vector<Tensor>(inputs.begin() + 1, inputs.end());
-  std::cout << "idxs.size(): " << idxs.size() << std::endl;
   for (int i = 0; i < _items.size(); i++) {
     select_item_t item = _items[i];
     if (std::holds_alternative<SelectWithSlice>(item)) {
@@ -135,20 +134,13 @@ void Select::dispatch_cpu(const std::vector<Tensor> &inputs,
     }
   }
   if (select_with_tensor) {
+    std::cout << "calling _select_with_tensor" << std::endl;
     _select_with_tensor(inp, outputs[0], _items, idxs);
     return;
   }
 
-  int total_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                                   std::multiplies<int>());
-
   outputs[0].init_view(std::make_shared<View>(
       inp.view().shared_ptr(), inp.nbytes(), new_shape, new_strides,
       (size_t)_offset, inp.dtype(), inp.device()));
-  std::cout << "total_size: " << total_size << std::endl;
-  std::cout << "new_shape: " << vec_to_string(new_shape) << std::endl;
-  std::cout << "new_strides: " << vec_to_string(new_strides) << std::endl;
-  std::cout << "offset: " << _offset << std::endl;
-  std::cout << "dtype: " << dtype_to_string(inp.dtype()) << std::endl;
 }
 } // namespace pg

@@ -16,7 +16,8 @@ using pybind_slice_item_t = std::variant<py::slice, int, Tensor>;
 hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
                                     const int shape_in_dim);
 std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
-                                             const shape_t &arr_shape);
+                                             const shape_t &arr_shape,
+                                             device::DeviceKind inp_device);
 
 } // namespace pybind_utils
 } // namespace pg
