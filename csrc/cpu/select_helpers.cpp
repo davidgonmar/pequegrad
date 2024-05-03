@@ -186,19 +186,24 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
     if (std::holds_alternative<SelectWithTensor>(item)) {
       // we cant work with memory views here, so we just run through a kernel to
       // copy the values into a new array
-      outputs[0].init_view(std::make_shared<View>(
-          dst.view().shared_ptr(), dst.nbytes(), dst.shape(), dst.strides(), 0,
-          dst.dtype(), dst.device()));
-      return _assign_with_array(dst, src, _items, idxs);
+      // instead of sharing the memory, we just copy the values
+      outputs[0].init_view(
+          std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));
+      // copy dst into outputs[0]
+      copy::dispatch_copy(dst.shape(), dst.strides(), dst.strides(),
+                          dst.get_base_ptr(), outputs[0].get_base_ptr(),
+                          dst.dtype());
+      return _assign_with_array(outputs[0], src, _items, idxs);
     }
   }
 
-  // First, out = dst -- TODO -- this modifies the original tensor. Maybe add
-  // option to copy
+  // First, out = dst
   outputs[0].init_view(
-      std::make_shared<View>(dst.view().shared_ptr(), dst.nbytes(), dst.shape(),
-                             dst.strides(), 0, dst.dtype(), dst.device()));
-
+      std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));
+  // copy dst into outputs[0]
+  copy::dispatch_copy(dst.shape(), dst.strides(), dst.strides(),
+                      dst.get_base_ptr(), outputs[0].get_base_ptr(),
+                      dst.dtype());
   // Now select from out into tmp
   Tensor tmp = Tensor();
   std::vector<Tensor> _inputs = {outputs[0]};

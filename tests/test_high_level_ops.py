@@ -321,3 +321,31 @@ class TestNew:
             torch_fn,
             device=device,
         )
+
+    # test padding + padding autograd
+    @pytest.mark.parametrize(
+        "data",  # tensor_shape, padding, constant
+        [
+            [(3, 3), (1, 1, 1, 1), 0],  # padding all sides equally
+            [(4, 4), (2, 2, 2, 2), 1],  # larger padding, constant 1
+            [(5, 5), (0, 1, 2, 3), -1],  # asymmetric padding, negative constant
+            [(6, 3), (0, 2, 0, 2), 0],  # padding left and right only
+            [(7, 7), (1, 2, 3, 4), 2],  # different padding for each side, constant 2
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu])
+    def test_pad_constant(self, data, device):
+        tensor_shape, padding, constant = data
+
+        def torch_fn(x):
+            return torch.nn.functional.pad(x, padding, value=constant)
+
+        def peq_fn(x):
+            return x.pad_constant(padding, constant)
+
+        _compare_fn_with_torch(
+            [tensor_shape],
+            peq_fn,
+            torch_fn,
+            device=device,
+        )
