@@ -127,6 +127,45 @@ void select(const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs,
       (size_t)_offset, inp.dtype(), inp.device()));
 }
 
+void _assign_with_array(const Tensor &dst, Tensor &src, select_t items,
+                        std::vector<Tensor> &idxs) {
+  if (src.dtype() != dst.dtype()) {
+    throw std::runtime_error(
+        "Dtype mismatch on assign, got: " + dtype_to_string(src.dtype()) +
+        ", expected: " + dtype_to_string(dst.dtype()));
+  }
+
+  int total_size = std::accumulate(dst.shape().begin(), dst.shape().end(), 1,
+                                   std::multiplies<int>());
+  std::vector<int *> _idxs(idxs.size());
+  for (int i = 0; i < idxs.size(); i++) {
+    PG_CHECK_ARG(idxs[i].dtype() == DType::Int32,
+                 "Index must be of type int32");
+    PG_CHECK_ARG(idxs[i].ndim() == 1, "Index must be 1D");
+    PG_CHECK_ARG(idxs[i].is_contiguous(), "Index must be contiguous");
+    _idxs[i] = idxs[i].get_casted_base_ptr<int>();
+  }
+  switch (dst.dtype()) {
+  case DType::Float32:
+    _slice_and_assign_with_array_kernel<float>(
+        (float *)dst.get_base_ptr(), (float *)src.get_base_ptr(), _idxs,
+        dst.shape(), src.shape(), dst.strides(), src.strides(), items, true);
+    break;
+  case DType::Int32:
+    _slice_and_assign_with_array_kernel<int>(
+        (int *)dst.get_base_ptr(), (int *)src.get_base_ptr(), _idxs,
+        dst.shape(), src.shape(), dst.strides(), src.strides(), items, true);
+    break;
+  case DType::Float64:
+    _slice_and_assign_with_array_kernel<double>(
+        (double *)dst.get_base_ptr(), (double *)src.get_base_ptr(), _idxs,
+        dst.shape(), src.shape(), dst.strides(), src.strides(), items, true);
+    break;
+  default:
+    throw std::runtime_error("Unsupported dtype");
+  }
+}
+
 void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
                             std::vector<Tensor> &outputs) {
 
@@ -147,7 +186,10 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
     if (std::holds_alternative<SelectWithTensor>(item)) {
       // we cant work with memory views here, so we just run through a kernel to
       // copy the values into a new array
-      throw std::runtime_error("Assigning with tensor not supported");
+      outputs[0].init_view(std::make_shared<View>(
+          dst.view().shared_ptr(), dst.nbytes(), dst.shape(), dst.strides(), 0,
+          dst.dtype(), dst.device()));
+      return _assign_with_array(dst, src, _items, idxs);
     }
   }
 

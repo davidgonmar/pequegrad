@@ -65,8 +65,6 @@ def _compare_fn_with_torch(
         )
         torch_res.backward(torch_tensor(nparr, dtype=dtypemapt[dtype]))
         torch_grads = [t.grad for t in torch_tensors]
-        print("peq_grads: ", peq_grads[0].to_numpy())
-        print("torch_grads: ", torch_grads[0].detach().numpy())
         assert len(peq_grads) == len(torch_grads)
         for i, (t, torch_t) in enumerate(zip(peq_grads, torch_grads)):
             print("Comparing position: ", i)
@@ -375,7 +373,7 @@ class TestNew:
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
     @pytest.mark.parametrize("device", [device.cpu, device.cuda])
-    def test_slice(self, data, dtype, device):
+    def test_select(self, data, dtype, device):
         tensor_shape, slices = data
 
         def torch_fn(x):
@@ -385,7 +383,11 @@ class TestNew:
             return x[slices]
 
         _compare_fn_with_torch(
-            [tensor_shape], peq_fn, torch_fn, backward=False, device=device
+            [tensor_shape],
+            peq_fn,
+            torch_fn,
+            backward=True if device == device.cpu else False,
+            device=device,
         )
 
     @pytest.mark.parametrize(
@@ -395,17 +397,17 @@ class TestNew:
             # stepped slices
             [(9, 11), (slice(0, 9, 2), slice(0, 11, 3)), (5, 4)],
             # slice with array
-            # [(3, 3), (slice(0, 2), [0, 1])],
+            [(3, 3), (slice(0, 2), [0, 1]), (2, 2)],
             # mix
-            # [(3, 10, 5), (slice(0, 2), slice(0, 10), [0, 1])],
-            # [(7, 5, 8), (1, slice(0, 5), slice(0, 8))],
+            [(3, 10, 5), (slice(0, 2), slice(0, 10), [0, 1]), (2, 10, 2)],
+            [(7, 5, 8), (1, slice(0, 5), slice(0, 8)), (5, 8)],
             # slice len < tensor ndim
             [(3, 3), (slice(0, 2)), (2, 3)],
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
     @pytest.mark.parametrize("device", [device.cpu])
-    def test_slice(self, data, dtype, device):
+    def test_assign_at(self, data, dtype, device):
         tensor_shape, slices, assign_at_shape = data
 
         def torch_fn(x, y):

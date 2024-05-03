@@ -669,11 +669,18 @@ std::vector<Tensor> AsContiguous::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> Select::backward(const std::vector<Tensor> &primals,
                                      const std::vector<Tensor> &tangents,
                                      const std::vector<Tensor> &outputs) {
-  std::vector<Tensor> ret;
-  for (auto prim : primals) {
-    ret.push_back(zeros_like(prim));
+
+  std::vector<hl_select_t> st = convert_from_select_t_to_hl_select_t(
+      _items, std::vector<Tensor>{primals.begin() + 1, primals.end()});
+  Tensor g =
+      fill(primals[0].shape(), primals[0].dtype(), 0, primals[0].device());
+  std::vector<Tensor> gs = {assign_at(g, tangents[0], st)};
+  // Now fill with 0s the rest of the tensors (indices are not differentiable)
+  for (size_t i = 1; i < primals.size(); i++) {
+    gs.push_back(
+        fill(primals[i].shape(), primals[i].dtype(), 0, primals[i].device()));
   }
-  return ret; // TODO -- implement this
+  return gs;
 }
 
 std::vector<shape_t>
