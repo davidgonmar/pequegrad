@@ -3,6 +3,7 @@ import gzip
 from urllib.request import urlretrieve
 import numpy as np
 from typing import Tuple
+from pequegrad.backend.c import Tensor
 
 mnist_url = "http://yann.lecun.com/exdb/mnist/"
 
@@ -23,7 +24,9 @@ def _download_mnist(path):
         urlretrieve(mnist_url + name, os.path.join(mnist_path, name))
 
 
-def get_mnist_dataset() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def get_mnist_dataset(
+    tensor_device=None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Get MNIST dataset from path"""
 
     # first, check if the dataset exists in path
@@ -66,4 +69,13 @@ def get_mnist_dataset() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     ) as f:
         y_test = np.frombuffer(f.read(), np.uint8, offset=8).astype(np.int32)
 
-    return (X_train, y_train, X_test, y_test)
+    return (
+        (X_train, y_train, X_test, y_test)
+        if tensor_device is None
+        else (
+            Tensor(X_train, device=tensor_device),
+            Tensor(y_train, device=tensor_device),
+            Tensor(X_test, device=tensor_device),
+            Tensor(y_test, device=tensor_device),
+        )
+    )

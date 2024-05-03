@@ -49,26 +49,24 @@ def test_model(model, X_test, Y_test):
         batch_size = 512
         # Evaluate the model
         correct = 0
-        for i in range(0, len(X_test), batch_size):
-            end_idx = min(i + batch_size, len(X_test))
+        for i in range(0, X_test.shape[0], batch_size):
+            end_idx = min(i + batch_size, X_test.shape[0])
             batch_X = X_test[i:end_idx]
-            batch_X = Tensor(batch_X, requires_grad=False, device=dev)
             batch_Y = Y_test[i:end_idx]
-            batch_Y = Tensor(batch_Y, requires_grad=False, device=dev)
             prediction = model.forward(batch_X)
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
-        return correct, len(X_test)
+        return correct, X_test.shape[0]
 
 
 def train(model, X_train, Y_train, epochs=13, batch_size=512):
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.033)
     for epoch in range(epochs):
-        indices = np.random.choice(len(X_train), batch_size)
-        batch_X = X_train[indices]
-        batch_X = Tensor(batch_X, requires_grad=False, device=dev)
-        batch_Y = Y_train[indices]
-        batch_Y = Tensor(batch_Y, requires_grad=False, device=dev)
+        indices = np.random.choice(X_train.shape[0], batch_size)
+        batch_X = X_train[
+            Tensor(indices, device=dev), :
+        ]  # todo - : should not be needed
+        batch_Y = Y_train[Tensor(indices, device=dev)]
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
@@ -113,9 +111,10 @@ if __name__ == "__main__":
         print(f"Test accuracy: {correct / total}")
 
     else:
-        X_train, y_train, X_test, y_test = get_mnist_dataset()
+        X_train, y_train, X_test, y_test = get_mnist_dataset(tensor_device=dev)
+
         start = time.time()
-        train(model, X_train, y_train, epochs=100, batch_size=512)
+        train(model, X_train, y_train, epochs=13, batch_size=512)
         print(f"Time taken to train: {(time.time() - start):.2f}s")
 
         print("Evaluating model...", end="\r")

@@ -25,7 +25,9 @@ import pequegrad_c as pg
 bind_method(
     Tensor,
     "zeros",
-    classmethod(lambda cls, shape, **kwargs: cls(np.zeros(shape), **kwargs)),
+    classmethod(
+        lambda cls, shape, **kwargs: cls(np.zeros(shape).astype(np.float32), **kwargs)
+    ),
 )
 bind_method(
     Tensor,
@@ -51,7 +53,7 @@ def one_hot(
         list(filter(lambda x: x >= num_classes, indices))
     )
 
-    np_one_hot = np.zeros((indices.shape[0], num_classes))
+    np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(np.float32)
 
     np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
@@ -289,3 +291,4 @@ def transpose(self, dim0, dim1):
 
 bind_method(Tensor, "transpose", lambda self, dim0, dim1: transpose(self, dim0, dim1))
 bind_method_property(Tensor, "T", lambda self: transpose(self, 0, 1))
+bind_method(Tensor, "__len__", lambda self: self.shape[0])

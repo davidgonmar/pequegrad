@@ -4,7 +4,6 @@
 namespace pg {
 void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
                          std::vector<Tensor> &idxs) {
-  std::cout << "inside _select_with_tensor" << std::endl;
   shape_t new_shape;
   int curr_tensor_idx = 0;
   for (int i = 0; i < items.size(); i++) {
@@ -26,12 +25,7 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
     }
   }
 
-  // also pad device_slices KeepDim
-  // 'pad' the shape with same if the slices are less than the original shape
-  std::cout << "items and dims: " << items.size() << " " << inp.ndim()
-            << std::endl;
   if (items.size() < inp.ndim()) {
-    std::cout << "items.size(): " << items.size() << std::endl;
     for (int i = items.size(); i < inp.ndim(); i++) {
       new_shape.push_back(inp.shape()[i]);
       items.push_back(SelectKeepDim());
@@ -134,7 +128,6 @@ void Select::dispatch_cpu(const std::vector<Tensor> &inputs,
     }
   }
   if (select_with_tensor) {
-    std::cout << "calling _select_with_tensor" << std::endl;
     _select_with_tensor(inp, outputs[0], _items, idxs);
     return;
   }

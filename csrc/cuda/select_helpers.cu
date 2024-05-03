@@ -57,10 +57,14 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
       auto _item = std::get<SelectWithTensor>(item);
       new_shape.push_back(idxs[visited_tensors].numel());
       visited_tensors++;
+    } else if (std::holds_alternative<SelectKeepDim>(item)) {
+      new_shape.push_back(inp.shape()[i]);
     }
   }
 
-  CudaSelect *cuda_select_items = new CudaSelect[items.size()];
+  std::unique_ptr<CudaSelect[]> cuda_select_items_u =
+      std::make_unique<CudaSelect[]>(items.size());
+  CudaSelect *cuda_select_items = cuda_select_items_u.get();
   visited_tensors = 0;
   for (int i = 0; i < items.size(); i++) {
     std::shared_ptr<Tensor> tensor;
@@ -106,27 +110,6 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
   }
 
   PG_CUDA_KERNEL_END;
-
-  /*// now we need to squeeze the array to remove the dimensions that are 1,
-  where
-  // a single index was used (like [:, 1])
-  axes_t squeeze_dims;
-  for (int i = 0; i < new_shape.size(); i++) {
-    if (std::holds_alternative<SliceFromSingleIdx>(slices[i])) {
-      squeeze_dims.push_back(i);
-    }
-  }
-
-  // cleanup the device slices
-  for (int i = 0; i < slices.size(); i++) {
-    if (std::holds_alternative<SliceFromIdxArray>(slices[i])) {
-      CHECK_CUDA(cudaFree(device_slices[i].indices));
-    }
-  }
-
-  delete[] device_slices;
-
-  return out.squeeze(squeeze_dims);*/
 }
 } // namespace cuda
 
@@ -176,7 +159,6 @@ void Select::dispatch_cuda(const std::vector<Tensor> &inputs,
     }
   }
   if (slice_with_array) {
-    std::cout << "Using slice with array" << std::endl;
     std::vector<Tensor> idxs =
         std::vector<Tensor>(inputs.begin() + 1, inputs.end());
     cuda::_select_with_tensor(inp, outputs[0], _items, idxs);
@@ -186,18 +168,6 @@ void Select::dispatch_cuda(const std::vector<Tensor> &inputs,
   outputs[0].init_view(std::make_shared<View>(
       inp.view().shared_ptr(), inp.nbytes(), new_shape, new_strides,
       (size_t)_offset, inp.dtype(), inp.device()));
-
-  /*// handle the case where we dont index over ALL dimensions
-  if (slices.size() < shape.size()) {
-    for (int i = slices.size(); i < shape.size(); i++) {
-      new_shape.push_back(shape[i]);
-      new_strides.push_back(strides[i]);
-    }
-  }
-  // nbytes is the original one, not computed
-  CudaTensor out(nbytes, new_shape, new_strides, ptr, dtype, _offset);
-
-  return out;*/
 }
 
 } // namespace pg

@@ -415,6 +415,8 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_STR_NAME(Select)
+  DEFINE_BACKWARD
 };
 
 class AsContiguous : public ADPrimitive {

@@ -666,4 +666,13 @@ std::vector<Tensor> AsContiguous::backward(const std::vector<Tensor> &primals,
   return {tangents[0]};
 }
 
+std::vector<Tensor> Select::backward(const std::vector<Tensor> &primals,
+                                     const std::vector<Tensor> &tangents,
+                                     const std::vector<Tensor> &outputs) {
+  std::vector<Tensor> ret;
+  for (auto prim : primals) {
+    ret.push_back(zeros_like(prim));
+  }
+  return ret; // TODO -- implement this
+}
 } // namespace pg

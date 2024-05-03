@@ -4,7 +4,7 @@ from pequegrad.modules import Linear, StatefulModule
 from pequegrad.context import no_grad
 import argparse
 import time
-from pequegrad.backend.c import Tensor, device, grads
+from pequegrad.backend.c import device, grads
 from pequegrad.optim import Adam
 
 np.random.seed(0)
@@ -24,15 +24,14 @@ class MLP(StatefulModule):
         return self.fc2.forward(input)
 
 
-def train(model, X_train, Y_train, epochs=1000, batch_size=4096):
+def train(model, X_train, Y_train, epochs=30, batch_size=4096):
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.021)
     for epoch in range(epochs):
         indices = np.random.choice(len(X_train), batch_size)
         batch_X = X_train[indices]
         batch_Y = Y_train[indices]
-        batch_X = Tensor(batch_X, device=device, requires_grad=False)
-        batch_Y = Tensor(batch_Y, device=device, requires_grad=False)
+
         # Forward pass
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
@@ -57,8 +56,6 @@ def test_model(model, X_test, Y_test):
             end_idx = min(i + batch_size, len(X_test))
             batch_X = X_test[i:end_idx]
             batch_Y = Y_test[i:end_idx]
-            batch_X = Tensor.from_numpy(batch_X).to(device)
-            batch_Y = Tensor.from_numpy(batch_Y).to(device)
             prediction = model.forward(batch_X)
             correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
         return correct, len(X_test)
@@ -86,7 +83,7 @@ if __name__ == "__main__":
         mlp.to(device.cpu)
         print("Using CPU")
         device = device.cpu
-    X_train, y_train, X_test, y_test = get_mnist_dataset()
+    X_train, y_train, X_test, y_test = get_mnist_dataset(tensor_device=device)
     if MODE == "train":
         print("Training the model")
         start = time.time()

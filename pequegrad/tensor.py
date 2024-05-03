@@ -320,7 +320,7 @@ class Tensor:
             list(filter(lambda x: x >= num_classes, indices))
         )
 
-        np_one_hot = np.zeros((indices.shape[0], num_classes))
+        np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(np.float32)
 
         np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
@@ -415,6 +415,16 @@ class Tensor:
         # If there is a minibatch, we'll sum over dim 1, which is the classes dimension, and reduce the minibatch
         # by taking the mean
         c_idx = 0 if self.dim == 1 else 1
+        print(
+            "xd",
+            target.dtype,
+            self.dtype,
+            target.shape,
+            self.shape,
+            c_idx,
+            target,
+            self,
+        )
         return -(target * self.log_softmax(dim=c_idx)).sum(c_idx).mean()
 
     def cross_entropy_loss_indices(self, target: "Tensor") -> "Tensor":

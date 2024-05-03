@@ -148,6 +148,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
              return Tensor::from_numpy(np_array);
            })
       .def("eval", &Tensor::eval)
+      .def("numel", &Tensor::numel)
       .def("to_numpy",
            [](Tensor &arr) -> NpArrayVariant {
              if (!arr.is_evaled())
@@ -192,6 +193,19 @@ PYBIND11_MODULE(pequegrad_c, m) {
            }),
            py::arg("np_array"), py::arg("requires_grad") = false,
            py::arg("device") = device::DeviceKind::CPU)
+      .def(py::init([](py::array_t<int> np_array, bool requires_grad,
+                       device::DeviceKind device) {
+             return Tensor::from_numpy(np_array, requires_grad, device);
+           }),
+           py::arg("np_array"), py::arg("requires_grad") = false,
+           py::arg("device") = device::DeviceKind::CPU)
+      .def(py::init([](py::array_t<double> np_array, bool requires_grad,
+                       device::DeviceKind device) {
+             return Tensor::from_numpy(np_array, requires_grad, device);
+           }),
+           py::arg("np_array"), py::arg("requires_grad") = false,
+           py::arg("device") = device::DeviceKind::CPU)
+
       .def("__add__",
            [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
       .def("__add__", [](const Tensor &a, double b) { return pg::add(a, b); })

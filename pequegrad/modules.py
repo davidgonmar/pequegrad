@@ -16,7 +16,7 @@ class ModuleParam(Tensor):
 def kaiming_init(shape):
     fan_in = shape[0]
     bound = 1 / np.sqrt(fan_in)
-    uniform = np.random.uniform(low=-bound, high=bound, size=shape)
+    uniform = np.random.uniform(low=-bound, high=bound, size=shape).astype(np.float32)
     return ModuleParam(uniform, requires_grad=True)
 
 
@@ -127,10 +127,6 @@ class Linear(StatefulModule):
     def forward(self, input):
         a = (input @ self.weights) + self.bias
         return a
-
-    def backward(self, output_grad: Tensor):
-        self.weights.backward(output_grad)
-        self.bias.backward(output_grad)
 
 
 class Conv2d(StatefulModule):

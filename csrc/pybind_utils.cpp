@@ -25,7 +25,7 @@ slice_item_t parse_pybind_slice_item(const pybind_slice_item_t &item,
     std::vector<int> idxs = std::get<std::vector<int>>(item);
     return SliceFromIdxArray(idxs);
   } else {
-    throw std::runtime_error("Invalid slice");
+    throw std::runtime_error("[parse_pybind_slice_item] Invalid slice");
   }
 }
 slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
@@ -43,7 +43,7 @@ slice_t parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape) {
     } else if (py::isinstance<py::list>(slice)) {
       items.push_back(slice.cast<std::vector<int>>());
     } else {
-      throw std::runtime_error("Invalid slice");
+      throw std::runtime_error("[parse_pybind_slices] Invalid slice");
     }
   }
 

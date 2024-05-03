@@ -369,14 +369,10 @@ Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items) {
   }
   // now pad With SelectKeepDim until ndim == _items.size()
   while (items.size() < a.ndim()) {
-
     items.push_back(SelectKeepDim());
-    std::cout << "items.size(): " << items.size() << std::endl;
   }
-  PG_CHECK_ARG(items.size() == a.ndim(), "Invalid number of select items");
   std::vector<Tensor> inputs = {a};
   inputs.insert(inputs.end(), t_indices.begin(), t_indices.end());
-  std::cout << "number of tensor_indices: " << t_indices.size() << std::endl;
   return Tensor::from_primitive(std::make_shared<Select>(items), inputs);
 }
 

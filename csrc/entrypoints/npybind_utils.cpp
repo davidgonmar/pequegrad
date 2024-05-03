@@ -25,7 +25,7 @@ hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
   } else if (std::holds_alternative<Tensor>(item)) {
     return std::get<Tensor>(item);
   } else {
-    throw std::runtime_error("Invalid slice");
+    throw std::runtime_error("[parse_pybind_slice_item] Invalid slice");
   }
 }
 std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
@@ -44,7 +44,8 @@ std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
       items.push_back(slice.cast<int>());
     } else if (py::isinstance<Tensor>(slice)) {
       items.push_back(slice.cast<Tensor>());
-    } else if (py::isinstance<py::list>(slice)) {
+    } else if (py::isinstance<py::list>(slice) ||
+               py::isinstance<py::array_t<int>>(slice)) {
       // To numpy array -> to tensor
       // check if the list contains only integers
       try {
@@ -57,7 +58,7 @@ std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
       }
 
     } else {
-      throw std::runtime_error("Invalid slice");
+      throw std::runtime_error("[parse_pybind_slices] Invalid slice");
     }
   }
 

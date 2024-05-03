@@ -485,11 +485,6 @@ public:
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
     copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
-    std::cout << "offset: " << offset() << std::endl;
-    std::cout << "nbytes: " << nbytes << std::endl;
-    std::cout << "shape: " << vec_to_string(shape()) << std::endl;
-    std::cout << "strides: " << vec_to_string(strides()) << std::endl;
-
     return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
                   device::DeviceKind::CPU);
   }
