@@ -31,7 +31,7 @@ testbe:
 	python -m pytest tests/test_backend.py
 
 testnew:
-	python -m pytest tests/test_new_ops.py tests/test_new_device.py
+	python -m pytest tests/test_new_ops.py tests/test_new_device.py tests/test_high_level_ops.py
 
 testops:
 	python -m pytest tests/test_ops.py

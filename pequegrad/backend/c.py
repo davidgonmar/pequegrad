@@ -3,6 +3,7 @@ import sys
 import numpy as np
 from typing import Optional
 from typing import Tuple, Union
+from typing import List
 
 
 def bind_method(cls, existing, new):
@@ -11,6 +12,10 @@ def bind_method(cls, existing, new):
 
 def bind_method_property(cls, existing, new):
     setattr(cls, existing, property(new))
+
+
+_ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
+_Shape = Union[int, Tuple[int, ...]]
 
 
 build_path = os.path.join(os.path.dirname(__file__), "..", "..", "build")
@@ -40,7 +45,12 @@ bind_method(Tensor, "fold", lambda *args, **kwargs: pg.col2im(*args, **kwargs))
 
 
 def one_hot(
-    cls, num_classes: int, indices: "Tensor", requires_grad=False, device=device.cpu
+    cls,
+    num_classes: int,
+    indices: "Tensor",
+    requires_grad=False,
+    device=device.cpu,
+    dtype=dt.float32,
 ) -> "Tensor":
     indices = indices.numpy().astype(int)
     assert indices.ndim == 1, "indices must be a vector"
@@ -52,8 +62,8 @@ def one_hot(
     ), "indices must be smaller than num_classes, got {}".format(
         list(filter(lambda x: x >= num_classes, indices))
     )
-
-    np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(np.float32)
+    dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+    np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])
 
     np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
@@ -77,8 +87,9 @@ def cross_entropy_loss_indices(self, target: Tensor) -> Tensor:
         self.shape, target.shape
     )
 
-    one_hot_target = Tensor.one_hot(self.shape[1], target, device=self.device)
-
+    one_hot_target = Tensor.one_hot(
+        self.shape[1], target, device=self.device, dtype=self.dtype
+    )
     return self.cross_entropy_loss_probs(one_hot_target)
 
 
@@ -292,3 +303,148 @@ def transpose(self, dim0, dim1):
 bind_method(Tensor, "transpose", lambda self, dim0, dim1: transpose(self, dim0, dim1))
 bind_method_property(Tensor, "T", lambda self: transpose(self, 0, 1))
 bind_method(Tensor, "__len__", lambda self: self.shape[0])
+
+
+def var(self, dim=None, keepdim=True, correction=1):
+    # keep dim on mean so that we can broadcast
+    mean = self.mean(dim=dim, keepdim=True)
+
+    # only dim of type positive int, tuple or None are supported
+    assert (
+        dim >= 0
+        if isinstance(dim, int)
+        else all(d >= 0 for d in dim)
+        if dim is not None
+        else True
+    ), "only positive dims supported by now. Got {}".format(dim)
+
+    N = (
+        np.prod(self.shape)
+        if dim is None
+        else (
+            self.shape[dim]
+            if isinstance(dim, int)
+            else np.prod([self.shape[i] for i in dim])
+        )
+    )
+    variance = ((self - mean) ** 2).sum(dim=dim, keepdim=keepdim) / (N - correction)
+    return variance
+
+
+def std(self, dim=None, keepdim=True, correction=1):
+    return self.var(dim=dim, keepdim=keepdim, correction=correction) ** 0.5
+
+
+def sqrt(self):
+    return self**0.5
+
+
+def layer_norm(self, normalized_shape: _Shape, eps=1e-05):
+    """Applies Layer Normalization over a mini-batch of inputs"""
+
+    # calculate mean/std over last dims
+    ns_l = len(normalized_shape)
+    assert (
+        self.dim >= ns_l
+    ), "normalized_shape should be smaller than the number of dimensions of input tensor"
+    assert list(self.shape[-ns_l:]) == list(
+        normalized_shape
+    ), "normalized_shape should be the last dimensions of input tensor"
+
+    last_d_dims = tuple(range(self.dim - ns_l, self.dim))
+
+    mean = self.mean(dim=last_d_dims, keepdim=True)
+    variance = self.var(
+        dim=last_d_dims, keepdim=True, correction=0
+    )  # unbiased variance is used
+    # for numerical stability, we add eps before sqrt
+    std = (variance + eps).sqrt()
+
+    return (self - mean) / std
+
+
+bind_method(Tensor, "var", var)
+bind_method(Tensor, "std", std)
+bind_method(Tensor, "sqrt", sqrt)
+
+
+def max_pool2d(
+    self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
+) -> "Tensor":
+    """Returns the 2d maxpooling of the tensor with the given kernel size"""
+    assert self.dim == 4, "max_pool2d is only supported for tensors with 4 dimensions"
+    kernel_size = (
+        (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+    )
+    stride = (
+        kernel_size
+        if stride is None
+        else (stride, stride)
+        if isinstance(stride, int)
+        else stride
+    )
+    assert stride[0] == stride[1], "kernel size must be square"
+
+    new_shape = (
+        self.shape[0],
+        self.shape[1],
+        (self.shape[2] - kernel_size[0]) // stride[0] + 1,
+        (self.shape[3] - kernel_size[1]) // stride[1] + 1,
+    )
+    unfolded = self.unfold(kernel_size, stride=stride)
+    # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
+    # concatenation of the channels, so we need to reshape to 'divide' the channels
+    unfolded = unfolded.reshape(
+        (
+            unfolded.shape[0],
+            self.shape[1],
+            kernel_size[0] * kernel_size[1],
+            unfolded.shape[-1],
+        )
+    )
+    maxed = unfolded.max(2)
+    return maxed.reshape(new_shape)
+
+
+def avg_pool2d(
+    self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
+) -> "Tensor":
+    """Returns the 2d average pooling of the tensor with the given kernel size"""
+    assert self.dim == 4, "avg_pool2d is only supported for tensors with 4 dimensions"
+    kernel_size = (
+        (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+    )
+    stride = (
+        kernel_size
+        if stride is None
+        else (stride, stride)
+        if isinstance(stride, int)
+        else stride
+    )
+    assert stride[0] == stride[1], "kernel size must be square"
+
+    new_shape = (
+        self.shape[0],
+        self.shape[1],
+        (self.shape[2] - kernel_size[0]) // stride[0] + 1,
+        (self.shape[3] - kernel_size[1]) // stride[1] + 1,
+    )
+    unfolded = self.unfold(kernel_size, stride=stride)
+    # if there are multiple channels, each column of the unfolded tensor will be a flattened version of the
+    # concatenation of the channels, so we need to reshape to 'divide' the channels
+    unfolded = unfolded.reshape(
+        (
+            unfolded.shape[0],  # batch
+            self.shape[1],  # channels
+            kernel_size[0] * kernel_size[1],  # kernel size 1 * kernel size 2
+            unfolded.shape[-1],  # unfolded shape ('number of windows')
+        )
+    )
+    maxed = unfolded.mean(2)
+    return maxed.reshape(
+        new_shape
+    )  # once we have the mean, we reshape to the new shape
+
+
+bind_method(Tensor, "max_pool2d", max_pool2d)
+bind_method(Tensor, "avg_pool2d", avg_pool2d)

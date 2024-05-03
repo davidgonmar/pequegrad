@@ -19,7 +19,7 @@
         inputs[0].dtype() == inputs[1].dtype(),                                \
         "Binary operation expects inputs to have the same dtype, got ",        \
         dtype_to_string(inputs[0].dtype()), " and ",                           \
-        dtype_to_string(inputs[1].dtype()));                                   \
+        dtype_to_string(inputs[1].dtype()), " for ", #NAME);                   \
     const Tensor &a = inputs[0];                                               \
     const Tensor &b = inputs[1];                                               \
     CHECK_SAME_SHAPE(a, b);                                                    \
@@ -78,9 +78,6 @@ void Exp::dispatch_cpu(const std::vector<Tensor> &inputs,
     CHECK_OUTPUTS_LENGTH(outputs, 1);                                          \
     const Tensor &a = inputs[0];                                               \
     const axes_t &axes = _axes;                                                \
-    if (axes.size() == 0) {                                                    \
-      throw std::runtime_error("Reduce expects at least one axis");            \
-    }                                                                          \
     const bool keepdims = _keepdims;                                           \
     const bool is_sum = OP == cpu::ReduceOp::Sum;                              \
     View old_view = inputs[0].view();                                          \
@@ -89,7 +86,7 @@ void Exp::dispatch_cpu(const std::vector<Tensor> &inputs,
       const shape_t new_shape =                                                \
           _reduce_single_shape_assuming_keepdims(old_view, axes[i]);           \
       new_view = View(new_shape, a.dtype(), device::CPU);                      \
-      axis_t axis = axes[i];                                                   \
+      axis_t axis = axes[i] < 0 ? old_view.ndim() + axes[i] : axes[i];         \
       cpu::dispatch_reduce(old_view.get_base_ptr(), new_view.get_base_ptr(),   \
                            old_view.strides(), old_view.shape(), axis,         \
                            old_view.dtype(), OP);                              \

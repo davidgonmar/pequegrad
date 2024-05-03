@@ -89,9 +89,6 @@ void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
   const axes_t &axes = _axes;
-  if (axes.size() == 0) {
-    throw std::runtime_error("Reduce expects at least one axis");
-  }
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
   View new_view;
@@ -99,7 +96,7 @@ void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
     const shape_t new_shape =
         _reduce_single_shape_assuming_keepdims(old_view, axes[i]);
     new_view = View(new_shape, a.dtype(), device::CUDA);
-    axis_t axis = axes[i];
+    axis_t axis = axes[i] < 0 ? old_view.ndim() + axes[i] : axes[i];
     auto d_strides = cuda_unique_ptr_from_host<stride_t>(
         old_view.ndim(), old_view.strides().data());
     auto d_shape =
@@ -125,9 +122,6 @@ void Mean::dispatch_cuda(const std::vector<Tensor> &inputs,
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
   const axes_t &axes = _axes;
-  if (axes.size() == 0) {
-    throw std::runtime_error("Reduce expects at least one axis");
-  }
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
   View new_view;
@@ -135,7 +129,7 @@ void Mean::dispatch_cuda(const std::vector<Tensor> &inputs,
     const shape_t new_shape =
         _reduce_single_shape_assuming_keepdims(old_view, axes[i]);
     new_view = View(new_shape, a.dtype(), device::CUDA);
-    axis_t axis = axes[i];
+    axis_t axis = axes[i] < 0 ? old_view.ndim() + axes[i] : axes[i];
     auto d_strides = cuda_unique_ptr_from_host<stride_t>(
         old_view.ndim(), old_view.strides().data());
     auto d_shape =
@@ -161,9 +155,6 @@ void MaxReduce::dispatch_cuda(const std::vector<Tensor> &inputs,
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
   const axes_t &axes = _axes;
-  if (axes.size() == 0) {
-    throw std::runtime_error("Reduce expects at least one axis");
-  }
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
   View new_view;
@@ -171,7 +162,7 @@ void MaxReduce::dispatch_cuda(const std::vector<Tensor> &inputs,
     const shape_t new_shape =
         _reduce_single_shape_assuming_keepdims(old_view, axes[i]);
     new_view = View(new_shape, a.dtype(), device::CUDA);
-    axis_t axis = axes[i];
+    axis_t axis = axes[i] < 0 ? old_view.ndim() + axes[i] : axes[i];
     auto d_strides = cuda_unique_ptr_from_host<stride_t>(
         old_view.ndim(), old_view.strides().data());
     auto d_shape =

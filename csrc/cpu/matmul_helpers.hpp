@@ -45,7 +45,8 @@ void matmul_ker<double>(const double *lhs, const double *rhs, double *result,
 template <typename T>
 void dot_ker(const T *lhs, const T *rhs, T *result, size_t S) {
   T sum = 0;
-  for (size_t i = 0; i < S; i++) {
+#pragma omp parallel for reduction(+ : sum)
+  for (int i = 0; i < S; i++) {
     sum += lhs[i] * rhs[i];
   }
   *result = sum;

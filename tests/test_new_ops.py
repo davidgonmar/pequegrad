@@ -30,13 +30,18 @@ def _compare_fn_with_torch(
     torch.manual_seed(1337)
 
     # Use a uniform distribution to initialize the arrays with 'good numbers' so that there are no numerical stability issues
-    np_arr = [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
+    np_arr = (
+        [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
+        if dtype in [dt.float32, dt.float64]
+        else [np.random.randint(1, 4, size=shape) for shape in shapes]
+    )
     tensors = [
         Tensor.from_numpy(arr.astype(dtypemapnp[dtype])).to(device) for arr in np_arr
     ]  # Using double precision
 
     torch_tensors = [
-        torch_tensor(arr, dtype=dtypemapt[dtype], requires_grad=True) for arr in np_arr
+        torch_tensor(arr, dtype=dtypemapt[dtype], requires_grad=backward)
+        for arr in np_arr
     ]  # Using double precision
 
     torch_res = torch_fn(*torch_tensors)
@@ -76,7 +81,6 @@ class TestNew:
         a = pg.fill((2, 3), dt.float32, 1, device.cpu)
         assert np.allclose(a.to_numpy(), np.ones((2, 3)))
 
-    @pytest.mark.skip(reason="Not implemented")
     def test_custom(self):
         def torch_fn(a, b, c, d):
             return (a * b + c * d) * d
@@ -96,36 +100,42 @@ class TestNew:
         _compare_fn_with_torch([(2, 3), (2, 3), (2, 3)], pq_fn, torch_fn)
 
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
-    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize(
+        "dtype", [dt.float32, dt.float64]
+    )  # TODO -- correct Int32 implementations (for example, divs need to be casted to float before division)
     @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize(
         "lambdaop",
         [
-            (lambda x, y: pg.add(x, y), lambda x, y: torch.add(x, y), True),
-            (lambda x, y: pg.mul(x, y), lambda x, y: torch.mul(x, y), True),
-            (lambda x, y: pg.sub(x, y), lambda x, y: torch.sub(x, y), True),
-            (lambda x, y: pg.div(x, y), lambda x, y: torch.div(x, y), True),
-            (lambda x, y: pg.pow(x, y), lambda x, y: torch.pow(x, y), True),
-            (lambda x, y: pg.gt(x, y), lambda x, y: torch.gt(x, y), False),
-            (lambda x, y: pg.lt(x, y), lambda x, y: torch.lt(x, y), False),
-            (lambda x, y: pg.neq(x, y), lambda x, y: torch.ne(x, y), False),
-            (lambda x, y: pg.max(x, y), lambda x, y: torch.max(x, y), True),
+            (lambda x, y: pg.add(x, y), lambda x, y: torch.add(x, y), True, False),
+            (lambda x, y: pg.mul(x, y), lambda x, y: torch.mul(x, y), True, False),
+            (lambda x, y: pg.sub(x, y), lambda x, y: torch.sub(x, y), True, False),
+            (lambda x, y: pg.div(x, y), lambda x, y: torch.div(x, y), True, False),
+            (lambda x, y: pg.pow(x, y), lambda x, y: torch.pow(x, y), True, False),
+            (lambda x, y: pg.gt(x, y), lambda x, y: torch.gt(x, y), False, False),
+            (lambda x, y: pg.lt(x, y), lambda x, y: torch.lt(x, y), False, False),
+            (lambda x, y: pg.neq(x, y), lambda x, y: torch.ne(x, y), False, False),
+            (lambda x, y: pg.max(x, y), lambda x, y: torch.max(x, y), True, False),
         ],
     )
     def test_binary_ops(self, shape, dtype, lambdaop, device):
-        pq_fn, torch_fn, do_backward = lambdaop
+        pq_fn, torch_fn, do_backward_float, do_backward_on_int = lambdaop
         _compare_fn_with_torch(
             [shape, shape],
             pq_fn,
             torch_fn,
-            backward=do_backward,
+            backward=do_backward_float
+            if dtype in [dt.float32, dt.float64]
+            else do_backward_on_int
+            if dtype == dt.int32
+            else False,
             device=device,
             dtype=dtype,
         )
 
     # unary ops
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
-    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
     @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize(
         "lambdaop",
