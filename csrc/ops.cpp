@@ -349,6 +349,51 @@ Tensor reshape(const Tensor &a, const shape_t &shape) {
   return reshape(a, axes_t(shape.begin(), shape.end()));
 }
 
+std::vector<hl_select_t>
+convert_from_select_t_to_hl_select_t(const select_t &items,
+                                     const std::vector<Tensor> &t_indices) {
+  std::vector<hl_select_t> _items;
+  int curr_tensor_idx = 0;
+  for (auto &item : items) {
+    if (std::holds_alternative<SelectKeepDim>(item)) {
+      _items.push_back(SelectKeepDim());
+    } else if (std::holds_alternative<SelectWithSlice>(item)) {
+      auto _item = std::get<SelectWithSlice>(item);
+      _items.push_back(_item);
+    } else if (std::holds_alternative<SelectWithSingleIdx>(item)) {
+      _items.push_back(std::get<SelectWithSingleIdx>(item));
+    } else if (std::holds_alternative<SelectWithTensor>(item)) {
+      _items.push_back(t_indices[curr_tensor_idx]);
+      curr_tensor_idx++;
+    } else {
+      throw std::runtime_error("[select] Invalid select item");
+    }
+  }
+  return _items;
+}
+
+std::pair<select_t, std::vector<Tensor>>
+convert_from_hl_select_t_to_select_t(const std::vector<hl_select_t> &_items) {
+  select_t items;
+  std::vector<Tensor> t_indices;
+  for (auto &item : _items) {
+    if (std::holds_alternative<SelectKeepDim>(item)) {
+      items.push_back(SelectKeepDim());
+    } else if (std::holds_alternative<SelectWithSlice>(item)) {
+      auto _item = std::get<SelectWithSlice>(item);
+      items.push_back(_item);
+    } else if (std::holds_alternative<SelectWithSingleIdx>(item)) {
+      items.push_back(std::get<SelectWithSingleIdx>(item));
+    } else if (std::holds_alternative<Tensor>(item)) {
+      t_indices.push_back(std::get<Tensor>(item));
+      items.push_back(SelectWithTensor());
+    } else {
+      throw std::runtime_error("[select] Invalid select item");
+    }
+  }
+  return {items, t_indices};
+}
+
 Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items) {
   select_t items;
   std::vector<Tensor> t_indices;
@@ -379,4 +424,16 @@ Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items) {
 Tensor as_contiguous(const Tensor &a) {
   return Tensor::from_primitive(std::make_shared<AsContiguous>(), {a});
 }
+
+Tensor assign_at(const Tensor &a, const Tensor &b,
+                 const std::vector<hl_select_t> &indices) {
+  auto [items, t_indices] = convert_from_hl_select_t_to_select_t(indices);
+  while (items.size() < a.ndim()) {
+    items.push_back(SelectKeepDim());
+  }
+  std::vector<Tensor> inputs = {a, b};
+  inputs.insert(inputs.end(), t_indices.begin(), t_indices.end());
+  return Tensor::from_primitive(std::make_shared<AssignAt>(items), inputs);
+}
+
 } // namespace pg

@@ -512,7 +512,7 @@ public:
 
   Tensor eval() const;
 
-  Tensor() { throw std::runtime_error("Cannot create empty tensor."); }
+  Tensor() {}
   bool is_evaled() const { return is_initialized(); }
 
   bool is_initialized() const { return _view->is_initialized(); }

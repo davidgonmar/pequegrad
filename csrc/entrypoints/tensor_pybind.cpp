@@ -89,6 +89,20 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   m.def("matmul", &matmul);
   m.def("where", &where);
+  m.def("assign_at", [](const Tensor &dst, const Tensor &src,
+                        const py::tuple slices) {
+    std::vector<hl_select_t> parsed =
+        pybind_utils::parse_pybind_slices(slices, dst.shape(), dst.device());
+    return assign_at(dst, src, parsed);
+  });
+
+  m.def("assign_at", [](const Tensor &dst, const Tensor &src,
+                        const pybind_utils::pybind_slice_item_t sl) {
+    auto _tuple = py::make_tuple(sl);
+    std::vector<hl_select_t> parsed =
+        pybind_utils::parse_pybind_slices(_tuple, dst.shape(), dst.device());
+    return assign_at(dst, src, parsed);
+  });
 
 #define BIND_REDUCE_OP(python_name, name)                                      \
   m.def(                                                                       \

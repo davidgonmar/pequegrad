@@ -675,4 +675,11 @@ std::vector<Tensor> Select::backward(const std::vector<Tensor> &primals,
   }
   return ret; // TODO -- implement this
 }
+
+std::vector<shape_t>
+AssignAt::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  // Just return Dst shape
+  return {inputs[0].shape()};
+}
+
 } // namespace pg

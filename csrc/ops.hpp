@@ -12,7 +12,6 @@ namespace pg {
 using hl_select_t =
     std::variant<SelectKeepDim, SelectWithSlice, SelectWithSingleIdx, Tensor>;
 Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items);
-
 Tensor add(const Tensor &a, const Tensor &b);
 Tensor add(const Tensor &a, double b);
 Tensor mul(const Tensor &a, const Tensor &b);
@@ -72,4 +71,10 @@ Tensor reshape(const Tensor &a, const shape_t &shape);
 
 Tensor as_contiguous(const Tensor &a);
 
+std::vector<hl_select_t>
+convert_from_select_t_to_hl_select_t(const select_t &items,
+                                     const std::vector<Tensor> &t_indices);
+
+Tensor assign_at(const Tensor &dst, const Tensor &src,
+                 const std::vector<hl_select_t> &items);
 } // namespace pg

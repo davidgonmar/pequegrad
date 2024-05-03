@@ -387,3 +387,40 @@ class TestNew:
         _compare_fn_with_torch(
             [tensor_shape], peq_fn, torch_fn, backward=False, device=device
         )
+
+    @pytest.mark.parametrize(
+        "data",  # tensor_shape, slices(arr of slices), "setitem" shape
+        [
+            [(3, 3), (slice(0, 2), slice(0, 2)), (2, 2)],
+            # stepped slices
+            [(9, 11), (slice(0, 9, 2), slice(0, 11, 3)), (5, 4)],
+            # slice with array
+            # [(3, 3), (slice(0, 2), [0, 1])],
+            # mix
+            # [(3, 10, 5), (slice(0, 2), slice(0, 10), [0, 1])],
+            # [(7, 5, 8), (1, slice(0, 5), slice(0, 8))],
+            # slice len < tensor ndim
+            [(3, 3), (slice(0, 2)), (2, 3)],
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
+    @pytest.mark.parametrize("device", [device.cpu])
+    def test_slice(self, data, dtype, device):
+        tensor_shape, slices, assign_at_shape = data
+
+        def torch_fn(x, y):
+            x = x.clone()
+            x[slices] = y
+            return x
+
+        def peq_fn(x, y):
+            z = pg.assign_at(x, y, slices)
+            return z
+
+        _compare_fn_with_torch(
+            [tensor_shape, assign_at_shape],
+            peq_fn,
+            torch_fn,
+            backward=False,
+            device=device,
+        )

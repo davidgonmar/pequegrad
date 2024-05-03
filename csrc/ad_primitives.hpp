@@ -22,6 +22,10 @@
   std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs)  \
       override;
 
+#define DEFINE_INFER_OUTPUT_DTYPES                                             \
+  std::vector<DType> infer_output_dtypes(const std::vector<Tensor> &inputs)    \
+      override;
+
 #define DEFINE_STR_NAME(NAME)                                                  \
   std::string str() { return #NAME; }
 
@@ -417,6 +421,19 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
   DEFINE_STR_NAME(Select)
   DEFINE_BACKWARD
+};
+
+// 1 inp is dst, 2nd is src, rest are indices
+// Output will be a copy of dst with src values at the indices
+class AssignAt : public ADPrimitive {
+protected:
+  select_t _items;
+
+public:
+  explicit AssignAt(select_t items) : _items(items) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_STR_NAME(AssignAt)
+  DEFINE_INFER_OUTPUT_SHAPES
 };
 
 class AsContiguous : public ADPrimitive {
