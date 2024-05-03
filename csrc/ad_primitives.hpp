@@ -434,6 +434,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(AssignAt)
   DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_BACKWARD
 };
 
 class AsContiguous : public ADPrimitive {

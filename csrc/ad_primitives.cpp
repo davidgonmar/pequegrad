@@ -689,4 +689,17 @@ AssignAt::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};
 }
 
+std::vector<Tensor> AssignAt::backward(const std::vector<Tensor> &primals,
+                                       const std::vector<Tensor> &tangents,
+                                       const std::vector<Tensor> &outputs) {
+  // assign is of the form out = assign_at(dst, src, indices). dst = primals[0],
+  // src = primals[1] so the gradient wrt
+  std::vector<hl_select_t> st = convert_from_select_t_to_hl_select_t(
+      _items, std::vector<Tensor>{primals.begin() + 2, primals.end()});
+  Tensor selected_tan_src = select(tangents[0], st);
+  Tensor zeros_like_src =
+      fill(primals[1].shape(), primals[1].dtype(), 0, primals[1].device());
+  return {assign_at(tangents[0], zeros_like_src, st), selected_tan_src};
+}
+
 } // namespace pg
