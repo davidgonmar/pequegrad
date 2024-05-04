@@ -22,6 +22,25 @@ View as_contiguous(const View &view) {
   PG_CUDA_KERNEL_END;
   return contiguous_view;
 }
+void copy(const View &src, const View &dst) {
+  auto d_src_shape =
+      cuda_unique_ptr_from_host(src.shape().size(), src.shape().data());
+  auto d_src_strides =
+      cuda_unique_ptr_from_host(src.strides().size(), src.strides().data());
+  auto d_dst_shape =
+      cuda_unique_ptr_from_host(dst.shape().size(), dst.shape().data());
+  auto d_dst_strides =
+      cuda_unique_ptr_from_host(dst.strides().size(), dst.strides().data());
+
+  launch_copy_with_out_strides_kernel(
+      src.dtype(),
+      dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
+      dim3(DEFAULT_BLOCK_SIZE), d_src_strides.get(), d_src_shape.get(),
+      d_dst_strides.get(), d_dst_shape.get(), src.shape().size(),
+      dst.shape().size(), src.get_base_ptr(), dst.get_base_ptr());
+
+  PG_CUDA_KERNEL_END;
+}
 } // namespace view
 } // namespace cuda
 } // namespace pg

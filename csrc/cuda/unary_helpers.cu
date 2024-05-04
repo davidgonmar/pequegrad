@@ -65,10 +65,10 @@ void launch_unary_kernel_dense(UnaryKernelType type, DType dtype, dim3 blocks,
   }
 }
 void launch_copy_with_out_strides_kernel(
-    DType dtype, dim3 blocks, dim3 threads, const size_t *in_strides,
-    const size_t *in_shape, const size_t *out_strides, const size_t *out_shape,
-    const size_t in_num_dims, const size_t out_num_dims, const void *in,
-    void *out) {
+    DType dtype, dim3 blocks, dim3 threads, const stride_t *in_strides,
+    const size_t *in_shape, const stride_t *out_strides,
+    const size_t *out_shape, const size_t in_num_dims,
+    const size_t out_num_dims, const void *in, void *out) {
   switch (dtype) {
   case DType::Float32:
     launch_copy_with_out_strides_kernel_helper<float>(

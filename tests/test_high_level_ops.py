@@ -111,7 +111,7 @@ class TestNew:
             [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     def test_local_response_norm(self, data, device):
         shape_input, size, alpha, beta, k = data
 
@@ -332,7 +332,7 @@ class TestNew:
             [(7, 7), (1, 2, 3, 4), 2],  # different padding for each side, constant 2
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     def test_pad_constant(self, data, device):
         tensor_shape, padding, constant = data
 

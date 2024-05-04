@@ -134,9 +134,9 @@ void _assign_with_array(const Tensor &dst, Tensor &src, select_t items,
         "Dtype mismatch on assign, got: " + dtype_to_string(src.dtype()) +
         ", expected: " + dtype_to_string(dst.dtype()));
   }
-
-  int total_size = std::accumulate(dst.shape().begin(), dst.shape().end(), 1,
-                                   std::multiplies<int>());
+  shape_t s = dst.shape();
+  int total_size =
+      std::accumulate(s.begin(), s.end(), 1, std::multiplies<int>());
   std::vector<int *> _idxs(idxs.size());
   for (int i = 0; i < idxs.size(); i++) {
     PG_CHECK_ARG(idxs[i].dtype() == DType::Int32,

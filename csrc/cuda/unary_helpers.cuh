@@ -63,9 +63,9 @@ enum class UnaryKernelType {
 
 template <typename T>
 __global__ void
-copy_with_out_strides_kernel(const size_t *in_strides, const size_t *in_shape,
-                             const size_t *out_strides, const size_t *out_shape,
-                             const size_t in_num_dims,
+copy_with_out_strides_kernel(const stride_t *in_strides, const size_t *in_shape,
+                             const stride_t *out_strides,
+                             const size_t *out_shape, const size_t in_num_dims,
                              const size_t out_num_dims, const T *in, T *out) {
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (get_max_idx(in_shape, in_num_dims) < idx ||
@@ -132,9 +132,10 @@ void launch_unary_kernel_dense(UnaryKernelType type, DType dtype, dim3 blocks,
 
 template <typename T>
 void launch_copy_with_out_strides_kernel_helper(
-    dim3 blocks, dim3 threads, const size_t *in_strides, const size_t *in_shape,
-    const size_t *out_strides, const size_t *out_shape,
-    const size_t in_num_dims, const size_t out_num_dims, const T *in, T *out) {
+    dim3 blocks, dim3 threads, const stride_t *in_strides,
+    const size_t *in_shape, const stride_t *out_strides,
+    const size_t *out_shape, const size_t in_num_dims,
+    const size_t out_num_dims, const T *in, T *out) {
   copy_with_out_strides_kernel<T>
       <<<blocks, threads>>>(in_strides, in_shape, out_strides, out_shape,
                             in_num_dims, out_num_dims, in, out);
@@ -150,10 +151,10 @@ void launch_astype_kernel_helper(dim3 blocks, dim3 threads,
 }
 
 void launch_copy_with_out_strides_kernel(
-    DType dtype, dim3 blocks, dim3 threads, const size_t *in_strides,
-    const size_t *in_shape, const size_t *out_strides, const size_t *out_shape,
-    const size_t in_num_dims, const size_t out_num_dims, const void *in,
-    void *out);
+    DType dtype, dim3 blocks, dim3 threads, const stride_t *in_strides,
+    const size_t *in_shape, const stride_t *out_strides,
+    const size_t *out_shape, const size_t in_num_dims,
+    const size_t out_num_dims, const void *in, void *out);
 
 void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks,
                           dim3 threads, const size_t *in_strides,

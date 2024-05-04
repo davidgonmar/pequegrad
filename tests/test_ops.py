@@ -433,7 +433,7 @@ class TestNew:
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
-    @pytest.mark.parametrize("device", [device.cpu])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     def test_assign_at(self, data, dtype, device):
         tensor_shape, slices, assign_at_shape = data
 
