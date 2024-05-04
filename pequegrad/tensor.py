@@ -41,7 +41,6 @@ def one_hot(
     cls,
     num_classes: int,
     indices: "Tensor",
-    requires_grad=False,
     device=device.cpu,
     dtype=dt.float32,
 ) -> "Tensor":
@@ -60,7 +59,7 @@ def one_hot(
 
     np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
-    return Tensor(np_one_hot, requires_grad=requires_grad, device=device)
+    return Tensor(np_one_hot, device=device)
 
 
 bind_method(Tensor, "one_hot", classmethod(one_hot))

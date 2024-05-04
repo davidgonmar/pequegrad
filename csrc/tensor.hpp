@@ -230,7 +230,6 @@ class Tensor {
 
 public:
   std::vector<Tensor> children() const { return _ad_node->children(); }
-  bool requires_grad() const { return _requires_grad; }
   ADNode &ad_node() const;
   void assign(const Tensor &other) {
     if (!other.is_evaled()) {
@@ -372,10 +371,6 @@ public:
     return _view->device();
   }
 
-  void set_requires_grad(bool requires_grad) {
-    this->_requires_grad = requires_grad;
-  }
-
   template <typename T> T *get_casted_base_ptr() const {
     _throw_if_not_initialized(
         "get_casted_base_ptr() called on uninitialized tensor.");
@@ -386,7 +381,7 @@ public:
   }
   template <typename T>
   static Tensor
-  from_numpy(py::array_t<T> np_array, bool requires_grad = false,
+  from_numpy(py::array_t<T> np_array,
              device::DeviceKind device = device::DeviceKind::CPU) {
     py::buffer_info buffer_info = np_array.request();
     auto size = buffer_info.size;
@@ -522,7 +517,6 @@ public:
   }
 
 private:
-  bool _requires_grad = false;
   std::shared_ptr<View> _view = std::make_shared<View>();
 
   std::shared_ptr<ADNode> _ad_node =

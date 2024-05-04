@@ -6,17 +6,14 @@ from pequegrad.context import pequegrad_context
 
 
 class ModuleParam(Tensor):
-    def __init__(self, data, requires_grad=None):
-        super().__init__(
-            data, requires_grad=True if requires_grad is None else requires_grad
-        )
+    pass
 
 
 def kaiming_init(shape):
     fan_in = shape[0]
     bound = 1 / np.sqrt(fan_in)
     uniform = np.random.uniform(low=-bound, high=bound, size=shape).astype(np.float32)
-    return ModuleParam(uniform, requires_grad=True)
+    return ModuleParam(uniform)
 
 
 class StatefulModule:
@@ -118,7 +115,7 @@ class Linear(StatefulModule):
     def __init__(self, in_features, out_features):
         super().__init__()
         self.weights = kaiming_init((in_features, out_features))
-        self.bias = ModuleParam.zeros(out_features, requires_grad=True)
+        self.bias = ModuleParam.zeros(out_features)
 
     def forward(self, input):
         a = (input @ self.weights) + self.bias
@@ -133,7 +130,7 @@ class Conv2d(StatefulModule):
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )
-        self.bias = ModuleParam.zeros(out_channels, requires_grad=True)
+        self.bias = ModuleParam.zeros(out_channels)
         assert isinstance(self.kernel, ModuleParam)
         assert isinstance(self.bias, ModuleParam)
         self.stride = stride
