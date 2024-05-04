@@ -1,5 +1,5 @@
 from pequegrad.backend.c import Tensor, dt, device, grads
-import pequegrad.backend.c as pg
+import pequegrad as pg
 import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
@@ -111,8 +111,7 @@ class TestNew:
             [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
-    @pytest.mark.skip(reason="Not implemented")
+    @pytest.mark.parametrize("device", [device.cpu])
     def test_local_response_norm(self, data, device):
         shape_input, size, alpha, beta, k = data
 

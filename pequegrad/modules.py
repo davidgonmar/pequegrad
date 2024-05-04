@@ -1,5 +1,4 @@
 from pequegrad.backend.c import Tensor
-from pequegrad.backend import NumpyTensor, CudaTensor
 import numpy as np
 from typing import List, Union
 import pickle
@@ -59,13 +58,9 @@ class StatefulModule:
     def load(self, path):
         with open(path, "rb") as f:
             d = pickle.load(f)
-            orig_backend = self.parameters()[0].backend
+            device = self.parameters()[0].device
             for p, p_loaded in zip(self.parameters(), d["params"]):
-                p.assign(
-                    NumpyTensor(p_loaded)
-                    if orig_backend == "np"
-                    else CudaTensor(p_loaded)
-                )
+                p.assign(Tensor(p_loaded, device=device))
 
     def to(self, backend):
         for p in self.__dict__.values():
@@ -81,6 +76,7 @@ class StatefulModule:
                         pp.to(backend)
                     elif isinstance(pp, ModuleParam):
                         pp.to_(backend)
+        return self
 
     def _search_parameters_and_submodules(self):
         params = []

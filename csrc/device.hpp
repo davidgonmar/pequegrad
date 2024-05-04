@@ -24,7 +24,8 @@ inline std::string device_to_string(const DeviceKind device) {
   case DeviceKind::CUDA:
     return "CUDA";
   default:
-    return "Unknown";
+    return "Unknown with integer value " +
+           std::to_string(static_cast<int>(device));
   }
 }
 

@@ -1,8 +1,17 @@
-import pytest
-from pequegrad.tensor import Tensor, CUDA_AVAILABLE
-from torch import Tensor as TorchTensor, tensor as torch_tensor
+import pequegrad.backend.c as pg
+from pequegrad.autodiff import grads
+from pequegrad.tensor import Tensor, dt, device
 import numpy as np
 import torch
+from torch import tensor as torch_tensor, Tensor as TorchTensor
+import pytest
+
+dtypemapnp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+dtypemapt = {
+    dt.float32: torch.float32,
+    dt.float64: torch.float64,
+    dt.int32: torch.int32,
+}
 
 
 def _compare_fn_with_torch(
@@ -11,7 +20,8 @@ def _compare_fn_with_torch(
     torch_fn=None,
     tol: float = 1e-5,
     backward=True,
-    pq_backend: str = "np",
+    device: device = device.cpu,
+    dtype=dt.float64,
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
     torch_fn = torch_fn or pequegrad_fn
@@ -21,14 +31,18 @@ def _compare_fn_with_torch(
     torch.manual_seed(1337)
 
     # Use a uniform distribution to initialize the arrays with 'good numbers' so that there are no numerical stability issues
-    np_arr = [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
+    np_arr = (
+        [np.random.uniform(low=0.5, high=0.9, size=shape) for shape in shapes]
+        if dtype in [dt.float32, dt.float64]
+        else [np.random.randint(1, 4, size=shape) for shape in shapes]
+    )
     tensors = [
-        Tensor(arr.astype(np.float64), requires_grad=True, backend=pq_backend)
-        for arr in np_arr
+        Tensor.from_numpy(arr.astype(dtypemapnp[dtype])).to(device) for arr in np_arr
     ]  # Using double precision
 
     torch_tensors = [
-        torch_tensor(arr, dtype=torch.float64, requires_grad=True) for arr in np_arr
+        torch_tensor(arr, dtype=dtypemapt[dtype], requires_grad=backward)
+        for arr in np_arr
     ]  # Using double precision
 
     torch_res = torch_fn(*torch_tensors)
@@ -49,160 +63,173 @@ def _compare_fn_with_torch(
     _compare(peq_res, torch_res, tol)
 
     if backward:
-        # Do it with 2 to ensure previous results are taken into account (chain rule is applied correctly)
         nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
-        peq_res.backward(Tensor(nparr.astype(np.float64), backend=pq_backend))
-        torch_res.backward(torch_tensor(nparr, dtype=torch.float64))
-
-        for t, torch_t in zip(tensors, torch_tensors):
-            _compare(t.grad, torch_t.grad, tol)
-
-
-class _TestOps:
-    backend: str
-
-    @pytest.mark.parametrize(
-        "shape", [(2, 3), (3, 2), (6, 1), (1, 6), (6,), (1, 1, 6), (1, 2, 3), (2, 3, 1)]
-    )
-    def test_reshape(self, shape):
-        _compare_fn_with_torch(
-            [shape],
-            lambda x: x.reshape(shape),
-            lambda x: x.reshape(shape),
-            pq_backend=self.backend,
+        peq_grads = grads(
+            tensors,
+            peq_res,
+            Tensor.from_numpy(nparr.astype(dtypemapnp[dtype])).to(device),
         )
+        torch_res.backward(torch_tensor(nparr, dtype=dtypemapt[dtype]))
+        torch_grads = [t.grad for t in torch_tensors]
+        assert len(peq_grads) == len(torch_grads)
+        for i, (t, torch_t) in enumerate(zip(peq_grads, torch_grads)):
+            print("Comparing position: ", i)
+            _compare(t, torch_t, tol)
 
+
+class TestNew:
+    def test_fill(self):
+        a = pg.fill((2, 3), dt.float32, 1, device.cpu)
+        assert np.allclose(a.to_numpy(), np.ones((2, 3)))
+
+    def test_custom(self):
+        def torch_fn(a, b, c, d):
+            return (a * b + c * d) * d
+
+        def pq_fn(a, b, c, d):
+            return pg.mul(pg.add(pg.mul(a, b), pg.mul(c, d)), d)
+
+        _compare_fn_with_torch([(2, 3), (2, 3), (2, 3), (2, 3)], pq_fn, torch_fn)
+
+    def test_custom2(self):
+        def torch_fn(a, b, c):
+            return torch.mul(torch.add(torch.mul(a, b), c), b)
+
+        def pq_fn(a, b, c):
+            return pg.mul(pg.add(pg.mul(a, b), c), b)
+
+        _compare_fn_with_torch([(2, 3), (2, 3), (2, 3)], pq_fn, torch_fn)
+
+    @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize(
-        "shapes",
+        "dtype", [dt.float32, dt.float64]
+    )  # TODO -- correct Int32 implementations (for example, divs need to be casted to float before division)
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize(
+        "lambdaop",
         [
-            [(3,), (3,)],
-            [(2, 3), (2, 3)],
-            [(1, 2, 3), (1, 2, 3)],
+            (lambda x, y: pg.add(x, y), lambda x, y: torch.add(x, y), True, False),
+            (lambda x, y: pg.mul(x, y), lambda x, y: torch.mul(x, y), True, False),
+            (lambda x, y: pg.sub(x, y), lambda x, y: torch.sub(x, y), True, False),
+            (lambda x, y: pg.div(x, y), lambda x, y: torch.div(x, y), True, False),
+            (lambda x, y: pg.pow(x, y), lambda x, y: torch.pow(x, y), True, False),
+            (lambda x, y: pg.gt(x, y), lambda x, y: torch.gt(x, y), False, False),
+            (lambda x, y: pg.lt(x, y), lambda x, y: torch.lt(x, y), False, False),
+            (lambda x, y: pg.neq(x, y), lambda x, y: torch.ne(x, y), False, False),
+            (lambda x, y: pg.max(x, y), lambda x, y: torch.max(x, y), True, False),
         ],
     )
-    def test_pow(self, shapes):
+    def test_binary_ops(self, shape, dtype, lambdaop, device):
+        pq_fn, torch_fn, do_backward_float, do_backward_on_int = lambdaop
         _compare_fn_with_torch(
-            shapes, lambda x, y: x**y, lambda x, y: x**y, pq_backend=self.backend
+            [shape, shape],
+            pq_fn,
+            torch_fn,
+            backward=do_backward_float
+            if dtype in [dt.float32, dt.float64]
+            else do_backward_on_int
+            if dtype == dt.int32
+            else False,
+            device=device,
+            dtype=dtype,
         )
 
+    # unary ops
+    @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize(
-        "data",
+        "lambdaop",
         [
-            [(2, 3), 0],
-            [(2, 3), 1],
-            [(2, 3), None],
-            [(2, 3), -1],
-            [(2, 3), -2],
-            [(1, 2, 3), None],
-            [(1, 2, 3), -1],
-            [(1, 2, 3), (-1, -2)],
+            (lambda x: pg.log(x), lambda x: torch.log(x), True),
         ],
     )
-    def test_mean(self, data):
-        shape, dim = data
+    def test_unary_ops(self, shape, dtype, lambdaop, device):
+        pq_fn, torch_fn, do_backward = lambdaop
         _compare_fn_with_torch(
-            [shape],
-            lambda x: x.mean(dim=dim, keepdim=False),
-            lambda x: x.mean(dim=dim, keepdim=False),
-            pq_backend=self.backend,
+            [shape], pq_fn, torch_fn, backward=do_backward, device=device
         )
 
+    # REDUCERS TESTS
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), None])
+    @pytest.mark.parametrize("keepdims", [True, False])
     @pytest.mark.parametrize(
-        "shapes",
+        "lambdaop",
         [
-            [(1, 2, 3), (1, 2, 3)],
-            [(1, 2, 3), (1, 2, 1)],
-            [(1, 2, 3), (1, 1, 3)],
-            [(2, 3), (3,)],
-        ],
-    )
-    def test_add(self, shapes):
-        _compare_fn_with_torch(
-            shapes, lambda x, y: x + y, lambda x, y: x + y, pq_backend=self.backend
-        )
-
-    @pytest.mark.parametrize("shapes", [[(3,)], [(2, 3)], [(1, 2, 3)], [(2, 4, 1)]])
-    def test_exp(self, shapes):
-        _compare_fn_with_torch(
-            shapes, lambda x: x.exp(), lambda x: x.exp(), pq_backend=self.backend
-        )
-
-    @pytest.mark.parametrize(
-        "shape",
-        [
-            [(3,)],
-            [
-                (
-                    3,
-                    2,
-                )
-            ],
-        ],
-    )
-    def test_mse(self, shape):
-        def torch_fn(x, y):
-            mse = torch.nn.MSELoss(reduction="mean")
-            return mse(x, y)
-
-        _compare_fn_with_torch(
-            shape * 2, lambda x, y: x.mse_loss(y), torch_fn, pq_backend=self.backend
-        )
-
-    @pytest.mark.parametrize(
-        "shapes",
-        [
-            [(1, 2, 3), (1, 2, 3)],
-            [(1, 2, 3), (1, 2, 1)],
-            [(1, 2, 3), (1, 1, 3)],
-        ],
-    )
-    def test_mul(self, shapes):
-        _compare_fn_with_torch(
-            shapes, lambda x, y: x * y, lambda x, y: x * y, pq_backend=self.backend
-        )
-
-    @pytest.mark.parametrize(
-        "shape",
-        [
-            [
-                (1,),
-            ],
-            [
-                (
-                    1,
-                    2,
-                )
-            ],
-            [(1, 2, 3)],
-        ],
-    )
-    def test_relu(self, shape):
-        _compare_fn_with_torch(shape, lambda x: x.relu(), pq_backend=self.backend)
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            [(2, 3), 0],
-            [(2, 3), 1],
-            [(2, 3), None],
-            [(2, 3), -1],
-            [(2, 3), -2],
-            [(1, 2, 3), None],
-            [(1, 2, 3), -1],
-            [(1, 2, 3), (-1, -2)],
-        ],
-    )
-    def test_sum(self, data):
-        shape, dim = data
-        _compare_fn_with_torch(
-            [shape],
-            lambda x: x.sum(
-                dim=dim,
-                keepdim=False,
+            (
+                lambda x, axes, keepdims: pg.sum(x, axes, keepdims),
+                lambda x, axes, keepdims: torch.sum(x, dim=axes, keepdim=keepdims),
+                True,
             ),
-            lambda x: x.sum(dim=dim, keepdim=False),
-            pq_backend=self.backend,
+            (
+                lambda x, axes, keepdims: pg.mean(x, axes, keepdims),
+                lambda x, axes, keepdims: torch.mean(x, dim=axes, keepdim=keepdims),
+                True,
+            ),
+            (
+                lambda x, axes, keepdims: pg.max_reduce(x, axes, keepdims),
+                lambda x, axes, keepdims: torch.max(x, dim=axes, keepdim=keepdims)[0],
+                True,
+            ),
+        ],
+    )
+    def test_reducers(self, device, shape, dtype, axes, keepdims, lambdaop):
+        def pq_fn(x):
+            return pg.sum(x, axes, keepdims)
+
+        def torch_fn(x):
+            return torch.sum(x, dim=axes, keepdim=keepdims)
+
+        _compare_fn_with_torch(
+            [shape], pq_fn, torch_fn, backward=lambdaop[2], device=device
         )
+
+    # Test broadcast to
+    @pytest.mark.parametrize(
+        "shapes",
+        [
+            ((2, 3), (4, 2, 3)),
+            ((2, 3), (2, 3)),
+            ((2, 3), (1, 2, 3)),
+            ((1, 2, 3), (2, 2, 3)),
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    def test_broadcast_to(self, shapes, dtype):
+        shape, target_shape = shapes
+
+        def pq_fn(x):
+            return pg.broadcast_to(x, target_shape)
+
+        def torch_fn(x):
+            return torch.broadcast_to(x, target_shape)
+
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=False)
+
+    # Test permute
+    @pytest.mark.parametrize(
+        "shape_and_dims",
+        [
+            ((2, 3), (1, 0)),
+            ((2, 3, 4), (2, 0, 1)),
+            ((2, 3, 4), (0, 1, 2)),
+            ((4, 8, 15, 12, 3), (4, 0, 2, 1, 3)),
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])
+    def test_permute(self, shape_and_dims, dtype):
+        shape, dims = shape_and_dims
+
+        def pq_fn(x):
+            return pg.permute(x, dims)
+
+        def torch_fn(x):
+            return torch.permute(x, dims)
+
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
 
     @pytest.mark.parametrize(
         "data",
@@ -210,420 +237,152 @@ class _TestOps:
             [(1, 2, 3), 0, 1],
         ],
     )
-    def test_transpose(self, data):
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_transpose(self, data, device):
         shape, dim0, dim1 = data
         _compare_fn_with_torch(
             [shape],
             lambda x: x.transpose(dim0, dim1),
             lambda x: x.transpose(dim0, dim1),
-            pq_backend=self.backend,
+            device=device,
         )
 
+    # Test matmul
     @pytest.mark.parametrize(
-        "data",  # shape, permutation_dims
+        "shapes",
         [
-            [(1, 2, 3, 4), (0, 1, 2, 3)],
-            [(1, 2, 3), (0, 1, 2)],
-            [(1, 2, 3), (2, 1, 0)],
-            [(1, 2, 3), (1, 2, 0)],
-            [(1, 2, 3), (0, 2, 1)],
-            [(1, 2, 3), (2, 0, 1)],
-            [(1, 2, 3), (1, 0, 2)],
-            [(1, 2), (0, 1)],
+            ((4,), (4,)),
+            ((4, 3), (3, 4)),
+            ((5, 2, 10), (5, 10, 6)),
         ],
     )
-    def test_permute(self, data):
-        shape, permutation_dims = data
-        _compare_fn_with_torch(
-            [shape],
-            lambda x: x.permute(*permutation_dims),
-            lambda x: x.permute(*permutation_dims),
-            pq_backend=self.backend,
-        )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    def test_matmul(self, shapes, dtype, device):
+        def pq_fn(a, b):
+            return pg.matmul(a, b)
+
+        def torch_fn(a, b):
+            return torch.matmul(a, b)
+
+        _compare_fn_with_torch(shapes, pq_fn, torch_fn, backward=True, device=device)
 
     @pytest.mark.parametrize(
         "shape",
         [
-            [(3,)],
-            [(2, 3)],
-            [(1, 2, 3)],
+            (2, 3),
+            (3, 4),
+            (4, 5),
         ],
     )
-    def test_max(self, shape):
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize(
+        "lambdaop",
+        [
+            (
+                lambda cond, x, y: pg.where(cond, x, y),
+                lambda cond, x, y: torch.where(cond.bool(), x, y),
+                False,
+            ),  # backward not implemented
+        ],
+    )
+    def test_where(self, shape, dtype, lambdaop, device):
+        pq_fn, torch_fn, do_backward = lambdaop
         _compare_fn_with_torch(
-            shape, lambda x: x.max(), lambda x: x.max(), pq_backend=self.backend
+            [shape, shape, shape], pq_fn, torch_fn, backward=do_backward, device=device
         )
 
     @pytest.mark.parametrize(
-        "shape",
+        "shape_and_dims",
         [
-            [(2, 3)],
+            ((2, 1, 3), 1),
+            ((2, 1, 1), (1, 2)),
+            ((2, 1, 1), 1),
         ],
     )
-    def test_softmax(self, shape):
-        _compare_fn_with_torch(
-            shape,
-            lambda x: x.softmax(dim=-1),
-            lambda x: x.softmax(dim=-1),
-            pq_backend=self.backend,
-        )
+    @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])
+    def test_squeeze(self, shape_and_dims, dtype):
+        shape, dims = shape_and_dims
 
-    @pytest.mark.parametrize(
-        "shape",
-        [
-            [(2, 3)],
-        ],
-    )
-    def test_log_softmax(self, shape):
-        _compare_fn_with_torch(
-            shape,
-            lambda x: x.log_softmax(dim=-1),
-            lambda x: x.log_softmax(dim=-1),
-            pq_backend=self.backend,
-        )
-
-    @pytest.mark.parametrize("shape", [[(3,)], [(2, 3)], [(1, 2, 3)]])
-    def test_cross_entropy_loss_probs(self, shape):
-        def torch_fn(x, y):
-            nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
-            return nn_cross_entropy(x, y)
-
-        _compare_fn_with_torch(
-            shape * 2,
-            lambda x, y: x.cross_entropy_loss_probs(y),
-            torch_fn,
-            pq_backend=self.backend,
-        )
-
-    # batch, classes
-    @pytest.mark.parametrize("shape", [(2, 3), (3, 2), (6, 1), (1, 6)])
-    def test_cross_entropy_loss_index(self, shape):
-        np_idx = np.random.randint(0, shape[1], size=shape[0]).astype(np.int64)
-        correct_index = Tensor(np_idx)
-        correct_index_torch = torch_tensor(np_idx)
+        def pq_fn(x):
+            return pg.squeeze(x, dims)
 
         def torch_fn(x):
-            nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
-            return nn_cross_entropy(x, correct_index_torch)
+            return torch.squeeze(x, dims)
 
-        _compare_fn_with_torch(
-            [shape],
-            lambda x: x.cross_entropy_loss_indices(correct_index),
-            torch_fn,
-            pq_backend=self.backend,
-        )
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
 
     @pytest.mark.parametrize(
-        "data",
+        "shape_and_dims",
         [
-            [(3,), 0],
-            [(2, 3), 1],
-            [(1, 2, 3), 0],
-            [(1, 2, 3), 1],
-            [(1, 2, 3), 2],
+            ((2, 3), 1),
+            ((2, 3), 0),
+            ((2, 3), -1),
+            ((2, 3), -2),
         ],
     )
-    def test_unsqueeze(self, data):
-        shape, dim = data
-        _compare_fn_with_torch(
-            [shape],
-            lambda x: x.unsqueeze(dim),
-            lambda x: x.unsqueeze(dim),
-            pq_backend=self.backend,
-        )
+    @pytest.mark.parametrize("dtype", [dt.int32, dt.float32, dt.float64])
+    def test_unsqueeze(self, shape_and_dims, dtype):
+        shape, dims = shape_and_dims
 
+        def pq_fn(x):
+            return pg.unsqueeze(x, dims)
+
+        def torch_fn(x):
+            return torch.unsqueeze(x, dims)
+
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True)
+
+    # test im2col
     @pytest.mark.parametrize(
-        "data",
+        "info",  # shape, kernel_size, stride, dilation
         [
-            [(1, 2, 3), 0],
-            [(1, 3, 1), 2],
+            ((2, 3, 20, 20), (3, 3), (1, 1), (1, 1)),
+            ((2, 3, 20, 20), (3, 3), (2, 2), (1, 1)),
+            ((2, 3, 20, 20), (3, 3), (1, 1), (2, 2)),
+            ((2, 3, 20, 20), (3, 3), (2, 2), (2, 2)),
         ],
     )
-    def test_squeeze(self, data):
-        shape, dim = data
-        _compare_fn_with_torch(
-            [shape],
-            lambda x: x.squeeze(dim),
-            lambda x: x.squeeze(dim),
-            pq_backend=self.backend,
-        )
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
+    @pytest.mark.parametrize("device", [device.cuda])
+    def test_im2col(self, info, dtype, device):
+        shape, kernel_size, stride, dilation = info
 
-    @pytest.mark.parametrize(
-        "shapes",
-        [
-            [(3,)],
-            [(2, 3)],
-            [(1, 2, 3)],
-            [(2, 4, 1)],
-        ],
-    )
-    def test_log(self, shapes):
-        _compare_fn_with_torch(
-            shapes, lambda x: x.log(), lambda x: x.log(), pq_backend=self.backend
-        )
+        im2col_out_shape = None
 
-    @pytest.mark.parametrize(
-        "shapes",
-        [
-            [(3,), (3,)],
-            [(2,), (2, 2)],
-            [(2, 2), (2, 2)],
-            [(4, 1), (1,)],
-            [(4,), (4, 1)],
-            [(2, 4, 1), (2, 1, 4)],  # both batched
-            [(2, 4, 1), (1, 4)],  # batched x unbatched
-            [(4, 1), (2, 1, 4)],  # unbatched x batched
-            [(2, 2, 3, 5), (5, 2)],  # batched_2 x unbatched
-            [(5, 2), (2, 2, 2, 5)],  # unbatched x batched_2
-        ],
-    )
-    def test_matmul(self, shapes):
-        _compare_fn_with_torch(
-            shapes, lambda x, y: x @ y, lambda x, y: x @ y, pq_backend=self.backend
-        )
+        def pq_fn(x):
+            return pg.im2col(
+                x, kernel_size, stride, (), dilation
+            )  # padding is not implemented yet
 
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, shape_kernel, bias, strides
-        [
-            # for input: batch_size, input_channels, input_height, input_width, dilation
-            # for kernel: output_channels, input_channels, kernel_height, kernel_width, dilation
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 1],
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 2],
-            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2, 1],
-            [(1, 1, 10, 5), (1, 1, 1, 1), True, 1, 1],
-            [(1, 1, 10, 5), (1, 1, 1, 1), False, 2, 1],
-            [(5, 1, 10, 5), (3, 1, 3, 3), True, 1, 1],
-            [(5, 1, 10, 5), (3, 1, 3, 3), False, 2, 1],
-            [(5, 1, 10, 5), (3, 1, 1, 1), True, 1, 1],
-            [(5, 1, 10, 5), (3, 1, 1, 1), False, 2, 1],
-            [(5, 1, 10, 5), (3, 1, 5, 5), True, 1, 1],
-            [(5, 1, 10, 5), (3, 1, 5, 5), False, 2, 1],
-            [(5, 3, 20, 10), (5, 3, 3, 3), True, 4, 1],
-            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50, 1],  # large stride
-            # now with stride as tuple
-            [(5, 3, 20, 10), (5, 3, 3, 3), True, (4, 2), 1],  # 12
-            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1],
-            [(1, 3, 20, 10), (1, 3, 3, 3), False, (3, 1), 1],
-            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1],
-            [(1, 3, 20, 10), (1, 3, 3, 3), False, (2, 5), 1],
-        ],
-    )
-    def test_conv2d(self, data):
-        shape_input, shape_kernel, use_bias, stride, dilation = data
-
-        def torch_fn(x, y, b=None):
-            if b is None:
-                return torch.nn.functional.conv2d(
-                    x, y, stride=stride, dilation=dilation
-                )
-            return torch.nn.functional.conv2d(
-                x, y, bias=b, stride=stride, dilation=dilation
+        def torch_fn(x):
+            nonlocal im2col_out_shape
+            a = torch.nn.functional.unfold(
+                x, kernel_size, dilation=dilation, stride=stride, padding=0
             )
+            im2col_out_shape = a.shape
+            return a
 
-        def peq_fn(x, y, b=None):
-            if b is None:
-                return x.conv2d(y, stride=stride, dilation=dilation)
-            return x.conv2d(y, bias=b, stride=stride, dilation=dilation)
+        _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True, device=device)
 
-        if use_bias:
-            bias_shape = (shape_kernel[0],)
-        arr = [shape_input, shape_kernel]
-        if use_bias:
-            arr.append(bias_shape)
-        _compare_fn_with_torch(
-            arr,
-            peq_fn,
-            torch_fn,
-            pq_backend=self.backend,
-        )
+        print("col2im test pass!. im2col_out_shape: ", im2col_out_shape)
 
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, kernel_size, stride
-        [
-            [(2, 2, 3, 3), (2, 2), 1],
-            [(2, 2, 3, 3), (2, 2), 2],
-            [(1, 1, 10, 5), (3, 3), 1],
-            [(1, 1, 10, 5), (2, 2), 2],
-            [(1, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (3, 3), 1],
-            [(5, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (5, 5), 1],
-        ],
-    )
-    def test_unfold(self, data):
-        shape_input, kernel_size, stride = data
+        # Now col2im
+        def pq_fn(x):
+            return pg.col2im(x, shape[2:], kernel_size, stride, (), dilation)
 
         def torch_fn(x):
-            return torch.nn.functional.unfold(x, kernel_size, stride=stride)
-
-        _compare_fn_with_torch(
-            [shape_input],
-            lambda x: x.unfold(kernel_size, stride=stride),
-            torch_fn,
-            pq_backend=self.backend,
-        )
-
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, kernel_size
-        [
-            [(2, 2, 3, 3), (2, 2), 1],
-            [(2, 2, 3, 3), (2, 2), 2],
-            [(1, 1, 10, 5), (3, 3), 1],
-            [(1, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (3, 3), 1],
-            [(5, 1, 10, 5), (3, 3), 2],
-            [(5, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (5, 5), 1],
-        ],
-    )
-    def test_fold(self, data):
-        shape_input, kernel_size, stride = data
-
-        def torch_fn(x):
-            unfolded = torch.nn.functional.unfold(x, kernel_size, stride=stride)
             return torch.nn.functional.fold(
-                unfolded, x.shape[2:], kernel_size, stride=stride
+                x, shape[2:], kernel_size, dilation=dilation, stride=stride, padding=0
             )
-
-        def peq_fn(x):
-            unfolded = x.unfold(kernel_size, stride=stride)
-            return unfolded.fold(kernel_size, x.shape[2:], stride=stride)
-
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_backend=self.backend)
-
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, kernel_size, stride
-        [
-            [(1, 1, 10, 5), (3, 3), 1],
-            [(1, 1, 10, 5), (3, 3), 2],
-            [(1, 1, 10, 5), (1, 1), 4],
-            [(1, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (3, 3), None],
-            [(5, 1, 10, 5), (1, 1), 1],
-            [(5, 1, 10, 5), (5, 5), None],
-            [(5, 3, 10, 5), (5, 5), 5],
-        ],
-    )
-    @pytest.mark.parametrize("method_name", ["avg_pool2d", "max_pool2d"])
-    def test_pool2d(self, data, method_name):
-        shape_input, kernel_size, stride = data
-
-        def torch_fn(x):
-            if stride is None:
-                return torch.nn.functional.__getattribute__(method_name)(x, kernel_size)
-            return torch.nn.functional.__getattribute__(method_name)(
-                x, kernel_size, stride
-            )
-
-        def peq_fn(x):
-            if stride is None:
-                return x.__getattribute__(method_name)(kernel_size)
-            return x.__getattribute__(method_name)(kernel_size, stride=stride)
-
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_backend=self.backend)
-
-    # test local response norm + local response norm autograd
-
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, size, alpha, beta, k
-        [
-            [(1, 1, 10, 5), 5, 1e-4, 0.75, 2],
-            [(1, 1, 10, 5), 5, 1e-4, 0.75, 2],
-            [(5, 1, 10, 5), 5, 1e-4, 0.75, 2],
-            [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
-            [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
-        ],
-    )
-    def test_local_response_norm(self, data):
-        shape_input, size, alpha, beta, k = data
-
-        def torch_fn(x):
-            return torch.nn.functional.local_response_norm(x, size, alpha, beta, k)
-
-        def peq_fn(x):
-            return x.local_response_norm(size, alpha, beta, k)
 
         _compare_fn_with_torch(
-            [shape_input], peq_fn, torch_fn, pq_backend=self.backend, tol=1e-4
-        )  # why does this need a higher tolerance?
+            [im2col_out_shape], pq_fn, torch_fn, backward=True, device=device
+        )
 
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, dim, keepdim
-        [
-            [(5, 3, 10, 5), 0, True],
-            [(5, 3, 10, 5), 1, True],
-            [(5, 3, 10, 5), 2, True],
-            [(5, 3, 10, 5), 3, True],
-            [(5, 3, 10, 5), 0, False],
-            [(5, 3, 10, 5), 1, False],
-            [(5, 3, 10, 5), 2, False],
-            [(5, 3, 10, 5), 3, False],
-            [(5, 3, 10, 5), None, True],
-            [(5, 3, 10, 5), None, False],
-            [(5, 3, 10, 5), (0, 1), True],
-            [(5, 3, 10, 5), (0, 1), False],
-            [(5, 3, 10, 5), (1, 2), True],
-            [(5, 3, 10, 5), (1, 2), False],
-            [(5, 3, 10, 5), (2, 3), True],
-            [(5, 3, 10, 5), (2, 3), False],
-            [(5, 3, 10, 5), (0, 2), True],
-            [(5, 3, 10, 5), (0, 2), False],
-            [(5, 3, 10, 5), (1, 3), True],
-            [(5, 3, 10, 5), (1, 3), False],
-            [(5, 3, 10, 5), (0, 3), True],
-            [(5, 3, 10, 5), (0, 3), False],
-            [(5, 3, 10, 5), (0, 1, 2), True],
-            [(5, 3, 10, 5), (0, 1, 2), False],
-            [(5, 3, 10, 5), (1, 2, 3), True],
-            [(5, 3, 10, 5), (1, 2, 3), False],
-            [(5, 3, 10, 5), (0, 1, 3), True],
-            [(5, 3, 10, 5), (0, 1, 3), False],
-            [(5, 3, 10, 5), (0, 2, 3), True],
-            [(5, 3, 10, 5), (0, 2, 3), False],
-            [(5, 3, 10, 5), (0, 1, 2, 3), True],
-            [(5, 3, 10, 5), (0, 1, 2, 3), False],
-        ],
-    )
-    def test_std_var(self, data):
-        shape_input, dim, keepdim = data
+        # test slice + slice autograd
 
-        def torch_fn(x):
-            return torch.std(x, dim=dim, keepdim=keepdim)
-
-        def peq_fn(x):
-            return x.std(dim=dim, keepdim=keepdim)
-
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_backend=self.backend)
-
-    @pytest.mark.parametrize(
-        "data",
-        # shape_input, normalized_shape, eps
-        [
-            [(5, 3, 10, 5), (3, 10, 5), 1e-5],
-            [(2, 3, 4, 5), (3, 4, 5), 1e-5],
-            [(2, 3, 4, 5), (4, 5), 1e-5],
-            [(1, 2, 3, 4, 5), (2, 3, 4, 5), 1e-5],
-            [(1, 2), (2,), 1e-5],
-        ],
-    )
-    def test_layer_norm(self, data):
-        shape_input, normalized_shape, eps = data
-
-        def torch_fn(x):
-            return torch.nn.functional.layer_norm(x, normalized_shape, eps=eps)
-
-        def peq_fn(x):
-            return x.layer_norm(normalized_shape, eps=eps)
-
-        _compare_fn_with_torch([shape_input], peq_fn, torch_fn, pq_backend=self.backend)
-
-    # test slice + slice autograd
     @pytest.mark.parametrize(
         "data",  # tensor_shape, slices(arr of slices)
         [
@@ -639,7 +398,9 @@ class _TestOps:
             [(3, 3), (slice(0, 2))],
         ],
     )
-    def test_slice(self, data):
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_select(self, data, dtype, device):
         tensor_shape, slices = data
 
         def torch_fn(x):
@@ -652,44 +413,43 @@ class _TestOps:
             [tensor_shape],
             peq_fn,
             torch_fn,
-            pq_backend=self.backend,
+            backward=True if device == device.cpu else False,
+            device=device,
         )
 
-    # test padding + padding autograd
     @pytest.mark.parametrize(
-        "data",  # tensor_shape, padding, constant
+        "data",  # tensor_shape, slices(arr of slices), "setitem" shape
         [
-            [(3, 3), (1, 1, 1, 1), 0],  # padding all sides equally
-            [(4, 4), (2, 2, 2, 2), 1],  # larger padding, constant 1
-            [(5, 5), (0, 1, 2, 3), -1],  # asymmetric padding, negative constant
-            [(6, 3), (0, 2, 0, 2), 0],  # padding left and right only
-            [(7, 7), (1, 2, 3, 4), 2],  # different padding for each side, constant 2
+            [(3, 3), (slice(0, 2), slice(0, 2)), (2, 2)],
+            # stepped slices
+            [(9, 11), (slice(0, 9, 2), slice(0, 11, 3)), (5, 4)],
+            # slice with array
+            [(3, 3), (slice(0, 2), [0, 1]), (2, 2)],
+            # mix
+            [(3, 10, 5), (slice(0, 2), slice(0, 10), [0, 1]), (2, 10, 2)],
+            [(7, 5, 8), (1, slice(0, 5), slice(0, 8)), (5, 8)],
+            # slice len < tensor ndim
+            [(3, 3), (slice(0, 2)), (2, 3)],
         ],
     )
-    # @pytest.mark.skip(reason="padding not implemented")
-    def test_pad_constant(self, data):
-        tensor_shape, padding, constant = data
+    @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
+    @pytest.mark.parametrize("device", [device.cpu])
+    def test_assign_at(self, data, dtype, device):
+        tensor_shape, slices, assign_at_shape = data
 
-        def torch_fn(x):
-            return torch.nn.functional.pad(x, padding, value=constant)
+        def torch_fn(x, y):
+            x = x.clone()
+            x[slices] = y
+            return x
 
-        def peq_fn(x):
-            return x.pad_constant(padding, constant)
+        def peq_fn(x, y):
+            z = pg.assign_at(x, y, slices)
+            return z
 
         _compare_fn_with_torch(
-            [tensor_shape],
+            [tensor_shape, assign_at_shape],
             peq_fn,
             torch_fn,
-            pq_backend=self.backend,
+            backward=False,
+            device=device,
         )
-
-
-# Run the tests for the different backend types
-class TestOpsNP(_TestOps):
-    backend = "np"
-
-
-if CUDA_AVAILABLE:
-
-    class TestOpsCuda(_TestOps):
-        backend = "cuda"

@@ -259,7 +259,7 @@ static std::vector<Tensor> prepare_shapes_for_matmul(const Tensor &_a,
     }
     // this makes the op as [d1, d2, ..., 1, a] x [d1, d2, ..., a, b] -> [d1,
     // d2, ..., 1, b]
-    Tensor a = broadcast_to(a, new_shape_a);
+    Tensor a = broadcast_to(_a, new_shape_a);
     return {a, _b};
   }
   // CASE 3: mat x vec
@@ -273,7 +273,7 @@ static std::vector<Tensor> prepare_shapes_for_matmul(const Tensor &_a,
     }
     // this makes the op as [d1, d2, ..., a, b] x [d1, d2, ..., b, 1] -> [d1,
     // d2, ..., a, 1]
-    Tensor b = broadcast_to(b, new_shape_b);
+    Tensor b = broadcast_to(_b, new_shape_b);
     return {_a, b};
   }
   // CASE 4: mat x mat
@@ -313,6 +313,16 @@ Tensor matmul(const Tensor &a, const Tensor &b) {
   // Now, we need to squeeze the result if needed
   if (a.shape().size() == 1 && b.shape().size() == 1) {
     return squeeze(res);
+  }
+  // On matrix-vector multiplication, we need to squeeze the result on the last
+  // dim
+  if (a.shape().size() == 2 && b.shape().size() == 1) {
+    return squeeze(res, -1);
+  }
+  // On vector-matrix multiplication, we need to squeeze the result on the first
+  // dim
+  if (a.shape().size() == 1 && b.shape().size() == 2) {
+    return squeeze(res, 0);
   }
   return res;
 }
