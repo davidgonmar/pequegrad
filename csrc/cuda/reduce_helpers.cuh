@@ -15,7 +15,7 @@ __device__ void reduce_base_fn(const T *in, T *out, const stride_t *in_strides,
   // output value therefore, we'll loop accross the reduced dimension, and
   // accumulate those values in order to calculate where we take the input from,
   // we can just do 2 things:
-  // 1. calculate actual index as normally (impl in cuda_tensor/cuda_utils.cuh)
+  // 1. calculate actual index as normally (impl in cuda_utils.cuh)
   // 2. if the dim we are iterating over is the one we are reducing over,
   // we must use the 'i' value (current iteration over the dimension we are
   // reducing)

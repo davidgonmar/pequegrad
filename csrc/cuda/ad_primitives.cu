@@ -3,7 +3,7 @@
 #include "./ternary_helpers.cuh"
 #include "./unary_helpers.cuh"
 #include "ad_primitives.hpp"
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 #include "folding_helpers.cuh"
 #include "matmul_helpers.cuh"
 #include "tensor.hpp"

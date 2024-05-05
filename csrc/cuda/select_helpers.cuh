@@ -1,6 +1,6 @@
 #pragma once
 #include "ad_primitives.hpp"
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 namespace pg {
 
 enum class CudaSelectKind {

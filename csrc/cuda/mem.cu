@@ -1,4 +1,4 @@
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 #include "mem.hpp"
 
 std::shared_ptr<void> allocate_cuda(const size_t nbytes) {

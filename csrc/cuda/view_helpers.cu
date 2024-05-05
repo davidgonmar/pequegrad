@@ -1,4 +1,4 @@
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 #include "unary_helpers.cuh"
 #include "view_helpers.cuh"
 namespace pg {

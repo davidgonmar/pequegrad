@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 #include "dtype.hpp"
 
 namespace pg {

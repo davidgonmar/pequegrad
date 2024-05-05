@@ -1,5 +1,5 @@
 #include "./binary_helpers.cuh"
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 #include "dtype.hpp"
 #include "utils.hpp"
 #include <cmath>

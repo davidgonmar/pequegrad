@@ -1,5 +1,5 @@
 #include "ad_primitives.hpp"
-#include "cuda_tensor/cuda_utils.cuh"
+#include "cuda_utils.cuh"
 #include "select_helpers.cuh"
 #include "shape.hpp"
 #include "unary_helpers.cuh"
