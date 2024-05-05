@@ -20,11 +20,10 @@ class SGD:
         assert len(g) == len(self.params)
         for i, p in enumerate(self.params):
             gt = g[i].eval().detach()
-            assert gt is not None, "Gradient is None, param: {}".format(p)
             if self.weight_decay != 0:
                 gt += self.weight_decay * p
             vt = (self.momentum * self.vt_last[i] + gt).eval()
-            self.vt_last[i] = vt
+            self.vt_last[i] = vt.eval().detach()
             p.assign(p - self.lr * vt)
             del gt
         del g
@@ -51,9 +50,9 @@ class Adam:
             vt = self.b2 * self.vt_last[i] + (1 - self.b2) * (gt * gt)
             mt_hat = mt / (1 - self.b1**self.t)
             vt_hat = vt / (1 - self.b2**self.t)
-            self.vt_last[i] = vt
-            self.mt_last[i] = mt
             p.assign(p - self.lr * mt_hat / (vt_hat**0.5 + self.eps))
+            self.vt_last[i] = vt.eval().detach()
+            self.mt_last[i] = mt.eval().detach()
             self.t += 1
             del gt
         del grads
