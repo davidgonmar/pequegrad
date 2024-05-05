@@ -1,10 +1,9 @@
-from pequegrad.tensor import Tensor
+from pequegrad import Tensor, device, grads
 import pequegrad.modules as nn
 from pequegrad.optim import SGD
 import argparse
 import torch
 import torchvision
-import datetime
 import numpy as np
 
 
@@ -81,7 +80,7 @@ trainset = torchvision.datasets.CIFAR100(
     root="./data", train=True, download=True, transform=transform
 )
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=40, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
 
 testset = torchvision.datasets.CIFAR100(
     root="./data", train=False, download=True, transform=transform
@@ -113,9 +112,10 @@ parser.add_argument(
     help="Number of epochs to train the model",
 )
 
-model = AlexNet(num_classes=100).to("cuda")
-
-
+DEVICE = device.cuda
+model = AlexNet(num_classes=100).to(DEVICE)
+print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
+print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) * 1e6)
 args = parser.parse_args()
 
 if args.checkpoint is not None:
@@ -128,32 +128,25 @@ if not args.test:
         for i, data in enumerate(trainloader, 0):
             inputs, labels = data
 
-            inputs = Tensor(inputs.numpy().astype("float32"), backend="cuda")
-            labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
+            inputs = Tensor(inputs.numpy().astype("float32"), device=DEVICE)
+            labels = Tensor(labels.numpy().astype("float32"), device=DEVICE)
 
             outputs = model(inputs)
             loss = outputs.cross_entropy_loss_indices(labels)
             print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
             # format day_month_hour_minute
-            model.save(
-                "alexnet_checkpoint_{}.pkl".format(
-                    datetime.datetime.now().strftime("%d_%m_%H_%M")
-                )
-            )
-            loss.backward()
-            optim.step()
+            model.save("alexnet_checkpoint.pkl")
+            g = grads(model.parameters(), loss)
+            optim.step(g)
 
-            import gc
-
-            gc.collect()
 
 if args.test:
     correct = 0
     total = 0
     for data in testloader:
         images, labels = data
-        images = Tensor(images.numpy().astype("float32"), backend="cuda")
-        labels = Tensor(labels.numpy().astype("float32"), backend="cuda")
+        images = Tensor(images.numpy().astype("float32"), device=DEVICE)
+        labels = Tensor(labels.numpy().astype("float32"), device=DEVICE)
         outputs = model(images)
         total += labels.shape[0]
         correct += np.sum(outputs.numpy().argmax(1) == labels.numpy())
@@ -162,9 +155,6 @@ if args.test:
             "Accuracy of the network on the 10000 test images: %d %%"
             % (100 * correct / total)
         )
-        import gc
-
-        gc.collect()
     print(
         "Accuracy of the network on the 10000 test images: %d %%"
         % (100 * correct / total)

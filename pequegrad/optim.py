@@ -27,6 +27,7 @@ class SGD:
             self.vt_last[i] = vt
             p.assign(p - self.lr * vt)
             del gt
+        del g
 
 
 class Adam:
@@ -54,3 +55,5 @@ class Adam:
             self.mt_last[i] = mt
             p.assign(p - self.lr * mt_hat / (vt_hat**0.5 + self.eps))
             self.t += 1
+            del gt
+        del grads

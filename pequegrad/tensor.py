@@ -32,7 +32,7 @@ bind_method(
     "ones",
     classmethod(lambda cls, shape, **kwargs: cls(np.ones(shape), **kwargs)),
 )
-bind_method(Tensor, "relu", lambda x: max(x, Tensor(0, device=x.device)))
+bind_method(Tensor, "relu", lambda x: pg.max(x, Tensor(0, device=x.device)))
 bind_method(Tensor, "unfold", lambda *args, **kwargs: pg.im2col(*args, **kwargs))
 bind_method(Tensor, "fold", lambda *args, **kwargs: pg.col2im(*args, **kwargs))
 
@@ -497,7 +497,9 @@ def local_response_norm(
 
     assert (
         self.dim == 4
-    ), "local_response_norm is only supported for tensors with 4 dimensions"
+    ), "local_response_norm is only supported for tensors with 4 dimensions, got {}".format(
+        self
+    )
 
     # input of shape (batch, in_channels, height, width)
     # we need to normalize accross channels
@@ -525,7 +527,8 @@ def dropout(self, p: float, training: bool = True) -> "Tensor":
     """Returns the dropout of the tensor"""
     if training:
         mask = Tensor(
-            np.random.binomial(1, 1 - p, self.shape).astype(dtypetonp[self.dtype])
+            np.random.binomial(1, 1 - p, self.shape).astype(dtypetonp[self.dtype]),
+            device=self.device,
         )
         return self * mask / (1 - p)
     return self
