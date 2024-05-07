@@ -162,7 +162,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
            [](py::array_t<double> np_array) {
              return Tensor::from_numpy(np_array);
            })
-      .def("eval", &Tensor::eval)
+      .def(
+          "eval", [](Tensor &t, bool force) { return t.eval(force); },
+          py::arg("force") = false)
       .def("numel", &Tensor::numel)
       .def("astype", &Tensor::astype)
       .def("to_numpy",

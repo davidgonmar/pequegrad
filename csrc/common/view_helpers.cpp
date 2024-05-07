@@ -1,6 +1,9 @@
 #include "view_helpers.hpp"
 #include "shape.hpp"
 
+namespace pg {
+namespace view {
+
 // returns new strides + axes of the output that are 'broadcasted'
 static std::tuple<strides_t, axes_t, axes_t>
 get_broadcasting_info(const shape_t shape_from, const strides_t strides_from,
@@ -45,9 +48,13 @@ get_broadcasting_info(const shape_t shape_from, const strides_t strides_from,
 
   return std::make_tuple(new_strides, broadcasted_axes, created_axes);
 }
-
-namespace pg {
-namespace view {
+// doesnt compute strides, just created and broadcasted axes
+std::tuple<axes_t, axes_t> get_broadcasting_info(const shape_t shape_from,
+                                                 const shape_t shape_to) {
+  strides_t fake_strides(shape_from.size(), 0);
+  auto x = get_broadcasting_info(shape_from, fake_strides, shape_to);
+  return std::make_tuple(std::get<1>(x), std::get<2>(x));
+}
 std::tuple<View, axes_t, axes_t> broadcasted_to(const View &view,
                                                 const shape_t &shape_to) {
   if (view.shape() == shape_to) {

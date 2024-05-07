@@ -92,6 +92,9 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
       tensorComparator);
   auto accum_grad = [&](Tensor ten, Tensor tan) {
     bool has_grad = tangents_map.count(ten) == 1;
+    PG_CHECK_RUNTIME(tan.shape() == ten.shape(),
+                     "Tangent shape does not match tensor shape, got: ",
+                     tan.str(), " and ", ten.str());
     if (!has_grad) {
       tangents_map.insert({ten, tan});
     } else {

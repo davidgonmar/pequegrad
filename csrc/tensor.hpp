@@ -238,11 +238,16 @@ public:
       other.eval();
     }
     PG_CHECK_RUNTIME(other.device() == device(),
-                     "Cannot assign tensors on different devices.");
+                     "Cannot assign tensors on different devices, got " +
+                         device_to_string(other.device()) + " and " +
+                         device_to_string(device()));
     PG_CHECK_RUNTIME(other.dtype() == dtype(),
-                     "Cannot assign tensors of different dtypes.");
+                     "Cannot assign tensors of different dtypes, got " +
+                         dtype_to_string(other.dtype()) + " and " +
+                         dtype_to_string(dtype()));
     PG_CHECK_RUNTIME(other.shape() == shape(),
-                     "Cannot assign tensors of different shapes.");
+                     "Cannot assign tensors of different shapes, got dst " +
+                         this->str() + " and srd " + other.str());
 
     // we want to make our view shared ptr reference the view associated with
     // the other tensor

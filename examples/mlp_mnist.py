@@ -36,7 +36,6 @@ def train(model, X_train, Y_train, epochs=13, batch_size=4096):
         prediction = model.forward(batch_X)
         # Compute loss and backpropagate
         loss = prediction.cross_entropy_loss_indices(batch_Y)
-        loss.eval()
         g = grads(model.parameters(), loss)
 
         # Update the weights

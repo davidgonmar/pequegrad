@@ -15,5 +15,7 @@ View permute(const View &view, const axes_t &axes);
 View transpose(
     const View &view); // transpose all dims (reverses the order of dims)
 View nocopy_reshape_nocheck(const View &view, const shape_t &shape);
+std::tuple<axes_t, axes_t> get_broadcasting_info(const shape_t shape_from,
+                                                 const shape_t shape_to);
 } // namespace view
 } // namespace pg

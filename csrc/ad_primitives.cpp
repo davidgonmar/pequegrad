@@ -148,6 +148,11 @@ std::vector<Tensor> Exp::backward(const std::vector<Tensor> &primals,
 
 std::vector<shape_t>
 BroadcastTo::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  // We need here to populate the _created_axis and _broadcasted_axis
+  auto [broadcasted_axes, created_axes] =
+      view::get_broadcasting_info(inputs[0].shape(), _shape_to);
+  this->_broadcasted_axes = broadcasted_axes;
+  this->_created_axes = created_axes;
   return {_shape_to};
 }
 
@@ -306,11 +311,10 @@ std::vector<Tensor> BroadcastTo::backward(const std::vector<Tensor> &primals,
                  ? t
                  : sum(t, _broadcasted_axes,
                        true); // sum along broadcasted axes, keeping the dims
-  return {
-      _created_axes.empty()
-          ? s
-          : sum(s, _created_axes,
-                false)}; // then sum along created axes, not keeping the dims
+  return {_created_axes.empty()
+              ? s
+              : sum(s, _created_axes, false)}; // sum along created axes,
+                                               // removing the dims
 }
 
 std::vector<Tensor> Permute::backward(const std::vector<Tensor> &primals,
