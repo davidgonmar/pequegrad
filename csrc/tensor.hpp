@@ -99,25 +99,25 @@ public:
        const shape_t &shape, const strides_t &strides, const size_t offset,
        DType dtype, device::DeviceKind device);
 
-  View(const shape_t shape, DType dtype, device::DeviceKind device) {
+  View(const shape_t shape, DType dtype, device::DeviceKind device,
+       bool init = true) {
     _shape = shape;
-    size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
-                                    std::multiplies<size_t>()) *
-                    dtype_to_size(dtype);
-    _nbytes = nbytes;
-    _strides = _compute_natural_strides(shape, dtype);
-    _ptr = device::allocate(nbytes, device);
+
+    if (init) {
+      size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
+                                      std::multiplies<size_t>()) *
+                      dtype_to_size(dtype);
+      _nbytes = nbytes;
+      _strides = _compute_natural_strides(shape, dtype);
+      _ptr = device::allocate(nbytes, device);
+      _offset = 0;
+    }
     _device = device;
-    _offset = 0;
-    _initialized = true;
+    _initialized = init;
     _dtype = dtype;
   }
 
   void init_view(const std::shared_ptr<View> &view) {
-    if (is_initialized()) {
-      throw std::runtime_error(
-          "View already initialized, but tried to call init_view.");
-    }
     _ptr = view->_ptr;
     _nbytes = view->_nbytes;
     _shape = view->_shape;
@@ -233,7 +233,7 @@ public:
   Tensor astype(DType dtype) const { return pg::astype(*this, dtype); }
   std::vector<Tensor> children() const { return _ad_node->children(); }
   ADNode &ad_node() const;
-  void assign(const Tensor &other) {
+  void assign(const Tensor other) {
     if (!other.is_evaled()) {
       other.eval();
     }
@@ -243,8 +243,10 @@ public:
                      "Cannot assign tensors of different dtypes.");
     PG_CHECK_RUNTIME(other.shape() == shape(),
                      "Cannot assign tensors of different shapes.");
-    _view = other._view;
-    _ad_node = std::make_shared<ADNode>(); // reset gradient information
+
+    // we want to make our view shared ptr reference the view associated with
+    // the other tensor
+    _view->init_view(other._view);
   }
   Tensor detach() {
     if (!is_evaled()) {
@@ -268,6 +270,12 @@ public:
     }
     _ad_node = std::make_shared<ADNode>(); // creates a leaf node
     return *this;
+  }
+  // Assigns a new view with same dtype, device, and shape, but uninitialized
+  // ptr, strides, etc
+  void reset_view() {
+    _view = std::make_shared<View>(shape(), dtype(), device(), false);
+    PG_CHECK_RUNTIME(!is_initialized(), "View should be uninitialized.");
   }
   Tensor T() const { return t(*this); }
 
@@ -333,13 +341,7 @@ public:
     return *_view;
   }
 
-  void init_view(std::shared_ptr<View> view) {
-    if (is_initialized()) {
-      throw std::runtime_error(
-          "Tensor already initialized, but tried to call init_view.");
-    }
-    _view->init_view(view);
-  }
+  void init_view(std::shared_ptr<View> view) { _view->init_view(view); }
 
   shape_t shape() const {
     //_throw_if_not_initialized("shape() called on uninitialized tensor.");
@@ -507,7 +509,7 @@ public:
     return Tensor(primitive, inputs);
   }
 
-  Tensor eval() const;
+  Tensor eval(bool force = false) const;
 
   Tensor() {}
   bool is_evaled() const { return is_initialized(); }

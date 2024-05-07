@@ -294,7 +294,7 @@ def transpose(self, dim0, dim1):
 
 bind_method(Tensor, "transpose", lambda self, dim0, dim1: transpose(self, dim0, dim1))
 bind_method_property(Tensor, "T", lambda self: transpose(self, 0, 1))
-bind_method(Tensor, "__len__", lambda self: self.shape[0])
+bind_method(Tensor, "__len__", lambda self: self.shape[0] if self.dim > 0 else 0)
 
 
 def var(self, dim=None, keepdim=True, correction=1):
@@ -535,3 +535,11 @@ def dropout(self, p: float, training: bool = True) -> "Tensor":
 
 
 bind_method(Tensor, "dropout", dropout)
+
+
+def mse_loss(self, target: "Tensor") -> "Tensor":
+    """Returns the mean squared error loss of the tensor"""
+    return ((self - target) ** 2).mean()
+
+
+bind_method(Tensor, "mse_loss", mse_loss)

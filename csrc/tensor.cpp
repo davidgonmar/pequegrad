@@ -46,8 +46,8 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const {
 
 std::vector<Tensor> ADNode::children() const { return _children; }
 
-Tensor Tensor::eval() const {
-  if (is_evaled()) {
+Tensor Tensor::eval(bool force) const {
+  if (is_evaled() && !force || ad_node().is_leaf()) {
     return *this;
   }
   ADPrimitive *primitive = (_ad_node->primitive().get());
@@ -56,7 +56,7 @@ Tensor Tensor::eval() const {
   for (const Tensor &child : children) {
     PG_CHECK_RUNTIME(child.device() == this_device,
                      "All children must be on the same device");
-    child.eval();
+    child.eval(force);
   }
   // outputs is just `this` tensor
   std::vector<Tensor> outputs = {*this};

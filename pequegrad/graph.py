@@ -1,42 +1,29 @@
-from pequegrad.tensor import Tensor
-import networkx as nx
+from pequegrad.tensor import Tensor  # noqa
+from pequegrad.backend.c import ComputeGraph  # noqa
 
 
-ID = 0
+def from_fn(fn):
+    """
+    Create a ComputeGraph from a function.
+    """
+
+    _fn = fn
+    # returns a mock ComputeGraph. Once a first call is made, it will be replaced by the real ComputeGraph
+    # ComputeGraph can only be generated from 'outputs', an array of the outputs of the function
+    # But we instead want to generate it from the function itself, so we do it 'lazily'
+    # And we return the actual ComputeGraph object only when the first call is made
+    graph = None
+
+    def _wrapper(*args):
+        nonlocal graph
+        if graph is None:
+            outputs = _fn(*args)
+            graph = ComputeGraph.from_outputs(
+                outputs if isinstance(outputs, (list, tuple)) else [outputs], args
+            )
+        return graph.feed_data(args, True)
+
+    return _wrapper
 
 
-def get_tensor_repr(node: Tensor):
-    global ID
-    if not hasattr(node, "id"):
-        node.id = ID
-        ID += 1
-    s = (
-        "shape: " + str(node.shape)
-        if not is_scalar(node)
-        else "value: " + str(node.numpy())
-    )
-    return str(node.id) + "\n" + s
-
-
-def is_scalar(node: Tensor):
-    return len(node.shape) == 0
-
-
-def build_graph(root: Tensor):
-    G = nx.DiGraph()
-    visited = set()
-    stack = [root]
-    while stack:
-        node = stack.pop()
-        if node not in visited:
-            visited.add(node)
-            color = "green" if is_scalar(node) else "blue"
-            G.add_node(get_tensor_repr(node), color=color)
-            for c in node._ctx.children if node._ctx else []:
-                stack.append(c)
-                G.add_edge(
-                    get_tensor_repr(c),
-                    get_tensor_repr(node),
-                    label=node._ctx.__class__.__name__,
-                )
-    return G
+ComputeGraph.from_fn = from_fn
