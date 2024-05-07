@@ -78,8 +78,9 @@ copy_with_out_strides_kernel(const stride_t *in_strides, const size_t *in_shape,
 }
 
 template <typename InT, typename OutT>
-__global__ void astype_kernel(const size_t *in_strides, const size_t *in_shape,
-                              const size_t num_dims, const InT *in, OutT *out) {
+__global__ void astype_kernel(const stride_t *in_strides,
+                              const size_t *in_shape, const size_t num_dims,
+                              const InT *in, OutT *out) {
 
   // 'out' is assumed to be contiguous in memory, and have the same shape as
   // 'in'
@@ -143,7 +144,7 @@ void launch_copy_with_out_strides_kernel_helper(
 
 template <typename InT, typename OutT>
 void launch_astype_kernel_helper(dim3 blocks, dim3 threads,
-                                 const size_t *in_strides,
+                                 const stride_t *in_strides,
                                  const size_t *in_shape, const size_t num_dims,
                                  const InT *in, OutT *out) {
   astype_kernel<InT, OutT>
@@ -157,7 +158,7 @@ void launch_copy_with_out_strides_kernel(
     const size_t out_num_dims, const void *in, void *out);
 
 void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks,
-                          dim3 threads, const size_t *in_strides,
+                          dim3 threads, const stride_t *in_strides,
                           const size_t *in_shape, const size_t num_dims,
                           const void *in, void *out);
 

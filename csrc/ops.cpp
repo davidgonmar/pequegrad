@@ -446,4 +446,8 @@ Tensor assign_at(const Tensor &a, const Tensor &b,
   return Tensor::from_primitive(std::make_shared<AssignAt>(items), inputs);
 }
 
+Tensor astype(const Tensor &a, DType dtype) {
+  return Tensor::from_primitive(std::make_shared<AsType>(dtype), {a});
+}
+
 } // namespace pg

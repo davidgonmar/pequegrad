@@ -14,6 +14,16 @@ View as_contiguous(const View &view, bool force) {
                       view.dtype());
   return new_view;
 }
+View astype(const View &view, DType dtype) {
+  if (view.dtype() == dtype) {
+    return view;
+  }
+  View new_view = View(view.shape(), dtype, device::CPU);
+  copy::dispatch_cast(view.shape(), view.strides(), new_view.strides(),
+                      view.get_base_ptr(), new_view.get_base_ptr(),
+                      view.dtype(), dtype);
+  return new_view;
+}
 } // namespace view
 } // namespace cpu
 } // namespace pg

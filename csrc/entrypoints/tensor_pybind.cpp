@@ -103,7 +103,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
         pybind_utils::parse_pybind_slices(_tuple, dst.shape(), dst.device());
     return assign_at(dst, src, parsed);
   });
-
+  m.def("astype", &astype);
 #define BIND_REDUCE_OP(python_name, name)                                      \
   m.def(                                                                       \
       python_name,                                                             \
@@ -163,6 +163,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
            })
       .def("eval", &Tensor::eval)
       .def("numel", &Tensor::numel)
+      .def("astype", &Tensor::astype)
       .def("to_numpy",
            [](Tensor &arr) -> NpArrayVariant {
              if (!arr.is_evaled())

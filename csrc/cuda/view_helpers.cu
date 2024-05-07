@@ -41,6 +41,25 @@ void copy(const View &src, const View &dst) {
 
   PG_CUDA_KERNEL_END;
 }
+
+View astype(const View &view, const DType &dtype) {
+  if (view.dtype() == dtype) {
+    return view;
+  }
+  View new_view = View(view.shape(), dtype, view.device());
+  auto d_shape =
+      cuda_unique_ptr_from_host(view.shape().size(), view.shape().data());
+  auto d_strides =
+      cuda_unique_ptr_from_host(view.strides().size(), view.strides().data());
+
+  launch_astype_kernel(
+      view.dtype(), dtype,
+      dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
+      dim3(DEFAULT_BLOCK_SIZE), d_strides.get(), d_shape.get(),
+      view.shape().size(), view.get_base_ptr(), new_view.get_base_ptr());
+  PG_CUDA_KERNEL_END;
+  return new_view;
+}
 } // namespace view
 } // namespace cuda
 } // namespace pg

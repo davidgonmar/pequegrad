@@ -702,4 +702,19 @@ std::vector<Tensor> AssignAt::backward(const std::vector<Tensor> &primals,
   return {assign_at(tangents[0], zeros_like_src, st), selected_tan_src};
 }
 
+std::vector<shape_t>
+AsType::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  return {inputs[0].shape()};
+}
+
+std::vector<Tensor> AsType::backward(const std::vector<Tensor> &primals,
+                                     const std::vector<Tensor> &tangents,
+                                     const std::vector<Tensor> &outputs) {
+  return {astype(tangents[0], primals[0].dtype())};
+}
+
+std::vector<DType>
+AsType::infer_output_dtypes(const std::vector<Tensor> &inputs) {
+  return {_dtype_to};
+}
 } // namespace pg

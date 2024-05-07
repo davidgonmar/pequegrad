@@ -447,4 +447,18 @@ public:
   DEFINE_BACKWARD
 };
 
+class AsType : public ADPrimitive {
+protected:
+  DType _dtype_to;
+
+public:
+  explicit AsType(DType dtype_to) : _dtype_to(dtype_to) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(AsType)
+  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_DTYPES
+};
+
 } // namespace pg

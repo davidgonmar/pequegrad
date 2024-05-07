@@ -77,4 +77,6 @@ convert_from_select_t_to_hl_select_t(const select_t &items,
 
 Tensor assign_at(const Tensor &dst, const Tensor &src,
                  const std::vector<hl_select_t> &items);
+
+Tensor astype(const Tensor &a, DType dtype);
 } // namespace pg

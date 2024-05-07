@@ -226,9 +226,11 @@ private:
 
 // forward declaration
 Tensor t(const Tensor &t);
+Tensor astype(const Tensor &t, DType dtype);
 class Tensor {
 
 public:
+  Tensor astype(DType dtype) const { return pg::astype(*this, dtype); }
   std::vector<Tensor> children() const { return _ad_node->children(); }
   ADNode &ad_node() const;
   void assign(const Tensor &other) {

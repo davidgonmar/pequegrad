@@ -92,7 +92,7 @@ void launch_copy_with_out_strides_kernel(
 }
 
 void launch_astype_kernel(DType in_dtype, DType out_dtype, dim3 blocks,
-                          dim3 threads, const size_t *in_strides,
+                          dim3 threads, const stride_t *in_strides,
                           const size_t *in_shape, const size_t num_dims,
                           const void *in, void *out) {
   switch (in_dtype) {
