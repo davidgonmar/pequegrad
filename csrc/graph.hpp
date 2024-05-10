@@ -37,9 +37,24 @@ public:
       t.assign(inputs[curr]);
       curr++;
     }
+    // We first need to clear the data of the tensors
+    using clear_lambda = std::function<void(Tensor &)>;
+    clear_lambda clear_data = [&](Tensor &t) {
+      if (t.ad_node().is_leaf()) {
+        return;
+      }
+      t.reset_view();
+      for (Tensor &child : t.children()) {
+        clear_data(child);
+      }
+    };
 
     for (Tensor &t : this->outputs) {
-      t.eval(true); // force reevaluation
+      clear_data(t);
+    }
+
+    for (Tensor &t : this->outputs) {
+      t.eval(); // force reevaluation
     }
 
     return this->outputs;

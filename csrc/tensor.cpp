@@ -44,7 +44,7 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const {
   return _primitive;
 }
 
-std::vector<Tensor> ADNode::children() const { return _children; }
+std::vector<Tensor> &ADNode::children() { return _children; }
 
 Tensor Tensor::eval(bool force) const {
   if (is_evaled() && !force || ad_node().is_leaf()) {

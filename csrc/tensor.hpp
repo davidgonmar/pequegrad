@@ -199,7 +199,7 @@ public:
   static ADNode create_leaf();
   bool is_leaf() { return _primitive == nullptr || _children.empty(); };
   std::shared_ptr<ADPrimitive> primitive() const;
-  std::vector<Tensor> children() const;
+  std::vector<Tensor> &children();
   shape_t inferred_shape() const { return _inferred_shape; }
 
   // Copy and move constructors
@@ -231,7 +231,7 @@ class Tensor {
 
 public:
   Tensor astype(DType dtype) const { return pg::astype(*this, dtype); }
-  std::vector<Tensor> children() const { return _ad_node->children(); }
+  std::vector<Tensor> &children() const { return _ad_node->children(); }
   ADNode &ad_node() const;
   void assign(const Tensor other) {
     if (!other.is_evaled()) {
