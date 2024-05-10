@@ -258,6 +258,40 @@ class TestNew:
             arr.append(bias_shape)
         _compare_fn_with_torch(arr, peq_fn, torch_fn, device=device)
 
+    # test for transposed convolution
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input, shape_kernel, bias, strides
+        [
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 1],
+        ],
+    )
+    @pytest.mark.skip(reason="Not implemented yet")
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_conv2d_transpose(self, data, device):
+        shape_input, shape_kernel, use_bias, stride, dilation = data
+
+        def torch_fn(x, y, b=None):
+            if b is None:
+                return torch.nn.functional.conv_transpose2d(
+                    x, y, stride=stride, dilation=dilation
+                )
+            return torch.nn.functional.conv_transpose2d(
+                x, y, bias=b, stride=stride, dilation=dilation
+            )
+
+        def peq_fn(x, y, b=None):
+            if b is None:
+                return x.conv_transpose2d(y, stride=stride, dilation=dilation)
+            return x.conv_transpose2d(y, bias=b, stride=stride, dilation=dilation)
+
+        if use_bias:
+            bias_shape = (shape_kernel[0],)
+        arr = [shape_input, shape_kernel]
+        if use_bias:
+            arr.append(bias_shape)
+        _compare_fn_with_torch(arr, peq_fn, torch_fn, device=device)
+
     @pytest.mark.parametrize(
         "shape",
         [

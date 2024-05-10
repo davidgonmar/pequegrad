@@ -203,6 +203,58 @@ def conv2d(
     return out
 
 
+def conv_transpose2d(
+    self,
+    filter: "Tensor",
+    bias: "Tensor" = None,
+    stride: Union[int, Tuple[int, int]] = 1,
+    padding: Union[int, Tuple[int, int]] = 0,
+    output_padding: Union[int, Tuple[int, int]] = 0,
+) -> "Tensor":
+    """Returns the 2d transposed convolution of the tensor with the given filter"""
+    s_y, s_x = (stride, stride) if isinstance(stride, int) else stride
+    p_y, p_x = (padding, padding) if isinstance(padding, int) else padding
+    op_y, op_x = (
+        (
+            output_padding,
+            output_padding,
+        )
+        if isinstance(output_padding, int)
+        else output_padding
+    )
+    assert padding == 0, "padding not supported"
+    assert output_padding == 0, "output_padding not supported"
+
+    assert (
+        self.dim == 4
+    ), "conv_transpose2d is only supported for tensors with 4 dimensions"
+    assert (
+        filter.dim == 4
+    ), "conv_transpose2d is only supported for filters with 4 dimensions"
+
+    inp_unf = self.unfold(
+        (1, 1), (1, 1), (1, 1)
+    )  # shape (batch, channels, height, width) -> (batch, channels, 1, height * width)
+
+    x = inp_unf.T @ filter.reshape(filter.shape[0], -1)
+    batch_size = self.shape[0]
+    after_convt_size = (
+        batch_size,
+        filter.shape[1],  # out_channels
+        (self.shape[2] - 1) * s_y + filter.shape[2],
+        (self.shape[3] - 1) * s_x + filter.shape[3],
+    )
+
+    out = x.reshape(after_convt_size)
+
+    if bias is not None:
+        raise NotImplementedError("bias not supported yet")
+    return out
+
+
+bind_method(Tensor, "conv_transpose2d", conv_transpose2d)
+
+
 def max_pool2d(
     self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
 ) -> "Tensor":
