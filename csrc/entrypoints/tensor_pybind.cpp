@@ -37,6 +37,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   // since it accepts scalars
   m.def("add", [](const Tensor &a, const Tensor &b) { return pg::add(a, b); });
   m.def("add", [](const Tensor &a, double b) { return pg::add(a, b); });
+  m.def("add_inplace", [](Tensor &a, const Tensor &b) { add_inplace(a, b); });
   m.def("sub", [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); });
   m.def("sub", [](const Tensor &a, double b) { return pg::sub(a, b); });
   m.def("mul", [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); });

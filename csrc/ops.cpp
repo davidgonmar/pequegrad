@@ -450,4 +450,9 @@ Tensor astype(const Tensor &a, DType dtype) {
   return Tensor::from_primitive(std::make_shared<AsType>(dtype), {a});
 }
 
+Tensor add_inplace(Tensor &dst, const Tensor &other) {
+  Tensor added = add(dst, other);
+  dst.inplace_update(added);
+  return dst;
+}
 } // namespace pg

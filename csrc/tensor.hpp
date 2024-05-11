@@ -262,6 +262,23 @@ public:
     return detached;
   }
 
+  Tensor inplace_update(const Tensor other) {
+    /*
+    EXPLANATION with ADD
+    a = Tensor([1, 2, 3], id=0)
+    b = Tensor([4, 5, 6], id=1)
+    temp = a + b (Tensor([5, 7, 9], id=2))
+    a.inplace_update(temp)
+    then, a will be Tensor([5, 7, 9], id=2)
+    and a will have as childs Tensor([1, 2, 3], id=0) and Tensor([4, 5, 6],
+    id=1)
+    */
+    this->_ad_node = other._ad_node;
+    this->_view = other._view;
+    this->id = other.id;
+    return *this;
+  }
+
   Tensor copy_but_lose_grad_info() {
     Tensor copy = *this;
     copy._ad_node = std::make_shared<ADNode>(copy._ad_node->primitive(),

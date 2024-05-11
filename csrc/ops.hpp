@@ -13,6 +13,7 @@ using hl_select_t =
     std::variant<SelectKeepDim, SelectWithSlice, SelectWithSingleIdx, Tensor>;
 Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items);
 Tensor add(const Tensor &a, const Tensor &b);
+Tensor add_inplace(Tensor &a, const Tensor &b);
 Tensor add(const Tensor &a, double b);
 Tensor mul(const Tensor &a, const Tensor &b);
 Tensor mul(const Tensor &a, double b);
