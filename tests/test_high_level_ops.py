@@ -261,13 +261,15 @@ class TestNew:
     # test for transposed convolution
     @pytest.mark.parametrize(
         "data",
-        # shape_input, shape_kernel, bias, strides
+        # shape_input, shape_kernel, bias, strides, dilation
         [
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 1],
+            [(1, 1, 4, 4), (1, 1, 3, 3), False, 1, 1],
+            [(1, 1, 4, 4), (1, 1, 3, 3), True, 1, 1],
+            [(1, 1, 4, 4), (1, 1, 3, 3), False, 2, 1],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2],
         ],
     )
-    @pytest.mark.skip(reason="Not implemented yet")
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize("device", [device.cuda, device.cpu])
     def test_conv2d_transpose(self, data, device):
         shape_input, shape_kernel, use_bias, stride, dilation = data
 

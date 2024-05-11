@@ -208,6 +208,7 @@ def conv_transpose2d(
     filter: "Tensor",
     bias: "Tensor" = None,
     stride: Union[int, Tuple[int, int]] = 1,
+    dilation: Union[int, Tuple[int, int]] = 1,
     padding: Union[int, Tuple[int, int]] = 0,
     output_padding: Union[int, Tuple[int, int]] = 0,
 ) -> "Tensor":
@@ -222,33 +223,38 @@ def conv_transpose2d(
         if isinstance(output_padding, int)
         else output_padding
     )
+    d_y, d_x = (dilation, dilation) if isinstance(dilation, int) else dilation
     assert padding == 0, "padding not supported"
     assert output_padding == 0, "output_padding not supported"
-
     assert (
         self.dim == 4
     ), "conv_transpose2d is only supported for tensors with 4 dimensions"
     assert (
         filter.dim == 4
     ), "conv_transpose2d is only supported for filters with 4 dimensions"
-
     inp_unf = self.unfold(
         (1, 1), (1, 1), (1, 1)
     )  # shape (batch, channels, height, width) -> (batch, channels, 1, height * width)
-
-    x = inp_unf.T @ filter.reshape(filter.shape[0], -1)
-    batch_size = self.shape[0]
-    after_convt_size = (
-        batch_size,
-        filter.shape[1],  # out_channels
-        (self.shape[2] - 1) * s_y + filter.shape[2],
-        (self.shape[3] - 1) * s_x + filter.shape[3],
+    x = (inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1))).transpose(
+        1, 2
     )
-
-    out = x.reshape(after_convt_size)
-
+    after_convt_size = (
+        (self.shape[2] - 1) * s_y + (filter.shape[-2] - 1) * d_y + 1,
+        (self.shape[3] - 1) * s_x + (filter.shape[-1] - 1) * d_x + 1,
+    )
+    out = x.fold(
+        kernel_shape=filter.shape[-2:],
+        output_shape=after_convt_size,
+        stride=(s_y, s_x),
+        dilation=(d_y, d_x),
+    )
     if bias is not None:
-        raise NotImplementedError("bias not supported yet")
+        assert (
+            bias.shape[0] == out.shape[1]
+        ), "bias shape must match output shape (channels). Got {} but expected {}".format(
+            bias.shape, (out.shape)
+        )
+        out += bias.reshape((1, -1, 1, 1))  # so we add the bias to each channel
     return out
 
 
