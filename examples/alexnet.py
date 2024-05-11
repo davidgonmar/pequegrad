@@ -80,13 +80,13 @@ trainset = torchvision.datasets.CIFAR100(
     root="./data", train=True, download=True, transform=transform
 )
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=10, shuffle=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=32, shuffle=True)
 
 testset = torchvision.datasets.CIFAR100(
     root="./data", train=False, download=True, transform=transform
 )
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False)
+testloader = torch.utils.data.DataLoader(testset, batch_size=40, shuffle=False)
 
 
 # allow to continue training from a checkpoint
@@ -115,7 +115,7 @@ parser.add_argument(
 DEVICE = device.cuda
 model = AlexNet(num_classes=100).to(DEVICE)
 print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
-print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) * 1e6)
+print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1024)
 args = parser.parse_args()
 
 if args.checkpoint is not None:
@@ -133,12 +133,12 @@ if not args.test:
 
             outputs = model(inputs)
             loss = outputs.cross_entropy_loss_indices(labels)
-            print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
             # format day_month_hour_minute
-            model.save("alexnet_checkpoint.pkl")
             g = grads(model.parameters(), loss)
             optim.step(g)
-
+            print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
+            if i % 100 == 0:
+                model.save("alexnet_checkpoint.pkl")
 
 if args.test:
     correct = 0

@@ -164,8 +164,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
              return Tensor::from_numpy(np_array);
            })
       .def(
-          "eval", [](Tensor &t, bool force) { return t.eval(force); },
-          py::arg("force") = false)
+          "eval", [](Tensor &t, bool detach) { return t.eval(detach); },
+          py::arg("detach") = true)
       .def("numel", &Tensor::numel)
       .def("astype", &Tensor::astype)
       .def("to_numpy",

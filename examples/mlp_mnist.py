@@ -6,7 +6,6 @@ import argparse
 import time
 from pequegrad.backend.c import device, grads
 from pequegrad.optim import Adam
-from pequegrad.graph import ComputeGraph
 
 np.random.seed(0)
 
@@ -37,12 +36,11 @@ def train(model, X_train, Y_train, epochs=13, batch_size=4096):
         g = grads(model.parameters(), loss)
         return [loss] + g
 
-    graph = ComputeGraph.from_fn(train_step) if USE_GRAPH else train_step
     for epoch in range(epochs):
         indices = np.random.choice(len(X_train), batch_size)
         batch_X = X_train[indices]
         batch_Y = Y_train[indices]
-        outs = graph(batch_X, batch_Y)
+        outs = train_step(batch_X, batch_Y)
         loss = outs[0]
         g = outs[1:]
         optim.step(g)
@@ -68,11 +66,6 @@ def test_model(model, X_test, Y_test):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a simple MLP on MNIST")
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
-    parser.add_argument(
-        "--graph",
-        action="store_true",
-        help="Use graph mode for training",
-    )
 
     parser.add_argument(
         "--mode",
@@ -94,15 +87,8 @@ if __name__ == "__main__":
         mlp.to(device.cpu)
         print("Using CPU")
         device = device.cpu
-
-    if USE_GRAPH:
-        print("Using graph mode for training")
-        USE_GRAPH = True
-    else:
-        print("Using eager mode for training")
-        USE_GRAPH = False
-
     X_train, y_train, X_test, y_test = get_mnist_dataset(tensor_device=device)
+
     if MODE == "train":
         print("Training the model")
         start = time.time()

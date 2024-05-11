@@ -202,25 +202,29 @@ public:
   std::vector<Tensor> &children();
   shape_t inferred_shape() const { return _inferred_shape; }
 
+  void detach_() {
+    // remove children
+    _children.clear();
+    // remove primitive
+    _primitive = nullptr;
+  }
   // Copy and move constructors
   ADNode(const ADNode &other) {
     _primitive = other._primitive;
     _children = other._children;
-    _grad = other._grad;
+
     _inferred_shape = other._inferred_shape;
   }
 
   ADNode(ADNode &&other) {
     _primitive = std::move(other._primitive);
     _children = std::move(other._children);
-    _grad = std::move(other._grad);
     _inferred_shape = std::move(other._inferred_shape);
   }
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children;
-  std::weak_ptr<Tensor> _grad;
   shape_t _inferred_shape;
 };
 
@@ -290,7 +294,7 @@ public:
     if (!is_evaled()) {
       throw std::runtime_error("Cannot detach unevaluated tensor.");
     }
-    _ad_node = std::make_shared<ADNode>(); // creates a leaf node
+    _ad_node->detach_();
     return *this;
   }
   // Assigns a new view with same dtype, device, and shape, but uninitialized

@@ -19,12 +19,12 @@ class SGD:
     def step(self, g):
         assert len(g) == len(self.params)
         for i, p in enumerate(self.params):
-            gt = g[i].eval().detach()
+            gt = g[i]
             if self.weight_decay != 0:
                 gt += self.weight_decay * p
-            vt = (self.momentum * self.vt_last[i] + gt).eval()
-            self.vt_last[i] = vt.eval().detach()
+            vt = self.momentum * self.vt_last[i] + gt
             p.assign(p - self.lr * vt)
+            self.vt_last[i] = vt.eval().detach()
             del gt
         del g
 
@@ -45,7 +45,7 @@ class Adam:
     def step(self, grads):
         assert len(grads) == len(self.params)
         for i, p in enumerate(self.params):
-            gt = grads[i].eval().detach()
+            gt = grads[i]
             mt = self.b1 * self.mt_last[i] + (1 - self.b1) * gt
             vt = self.b2 * self.vt_last[i] + (1 - self.b2) * (gt * gt)
             mt_hat = mt / (1 - self.b1**self.t)
