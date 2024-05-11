@@ -224,8 +224,6 @@ def conv_transpose2d(
         else output_padding
     )
     d_y, d_x = (dilation, dilation) if isinstance(dilation, int) else dilation
-    assert padding == 0, "padding not supported"
-    assert output_padding == 0, "output_padding not supported"
     assert (
         self.dim == 4
     ), "conv_transpose2d is only supported for tensors with 4 dimensions"
@@ -239,8 +237,8 @@ def conv_transpose2d(
         1, 2
     )
     after_convt_size = (
-        (self.shape[2] - 1) * s_y + (filter.shape[-2] - 1) * d_y + 1,
-        (self.shape[3] - 1) * s_x + (filter.shape[-1] - 1) * d_x + 1,
+        (self.shape[2] - 1) * s_y + (filter.shape[-2] - 1) * d_y + 1 + op_y,
+        (self.shape[3] - 1) * s_x + (filter.shape[-1] - 1) * d_x + 1 + op_x,
     )
     out = x.fold(
         kernel_shape=filter.shape[-2:],
@@ -248,6 +246,11 @@ def conv_transpose2d(
         stride=(s_y, s_x),
         dilation=(d_y, d_x),
     )
+    # if padding is not 0, we need to crop the output
+    if p_y > 0 or p_x > 0:
+        out = out[:, :, p_y:-p_y, p_x:-p_x]
+    # output padding not supported
+
     if bias is not None:
         assert (
             bias.shape[0] == out.shape[1]

@@ -261,31 +261,66 @@ class TestNew:
     # test for transposed convolution
     @pytest.mark.parametrize(
         "data",
-        # shape_input, shape_kernel, bias, strides, dilation
+        # shape_input, shape_kernel, bias, strides, dilation, padding, output_padding
         [
-            [(1, 1, 4, 4), (1, 1, 3, 3), False, 1, 1],
-            [(1, 1, 4, 4), (1, 1, 3, 3), True, 1, 1],
-            [(1, 1, 4, 4), (1, 1, 3, 3), False, 2, 1],
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2],
+            [(1, 1, 4, 4), (1, 1, 3, 3), False, 1, 1, 0, 0],
+            [(1, 1, 4, 4), (1, 1, 3, 3), True, 1, 1, 0, 0],
+            [(1, 1, 4, 4), (1, 1, 3, 3), False, 2, 1, 0, 0],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2, 1, 0],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2, 2, 0],
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2, 0, 1],
+            [(1, 1, 3, 3), (1, 1, 3, 3), True, 2, 1, 0, 1],
         ],
     )
     @pytest.mark.parametrize("device", [device.cuda, device.cpu])
     def test_conv2d_transpose(self, data, device):
-        shape_input, shape_kernel, use_bias, stride, dilation = data
+        (
+            shape_input,
+            shape_kernel,
+            use_bias,
+            stride,
+            dilation,
+            padding,
+            output_padding,
+        ) = data
 
         def torch_fn(x, y, b=None):
             if b is None:
                 return torch.nn.functional.conv_transpose2d(
-                    x, y, stride=stride, dilation=dilation
+                    x,
+                    y,
+                    stride=stride,
+                    dilation=dilation,
+                    output_padding=output_padding,
+                    padding=padding,
                 )
             return torch.nn.functional.conv_transpose2d(
-                x, y, bias=b, stride=stride, dilation=dilation
+                x,
+                y,
+                bias=b,
+                stride=stride,
+                dilation=dilation,
+                output_padding=output_padding,
+                padding=padding,
             )
 
         def peq_fn(x, y, b=None):
             if b is None:
-                return x.conv_transpose2d(y, stride=stride, dilation=dilation)
-            return x.conv_transpose2d(y, bias=b, stride=stride, dilation=dilation)
+                return x.conv_transpose2d(
+                    y,
+                    stride=stride,
+                    dilation=dilation,
+                    output_padding=output_padding,
+                    padding=padding,
+                )
+            return x.conv_transpose2d(
+                y,
+                bias=b,
+                stride=stride,
+                dilation=dilation,
+                output_padding=output_padding,
+                padding=padding,
+            )
 
         if use_bias:
             bias_shape = (shape_kernel[0],)
