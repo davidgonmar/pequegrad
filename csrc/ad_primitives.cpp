@@ -158,7 +158,22 @@ BroadcastTo::infer_output_shapes(const std::vector<Tensor> &inputs) {
 
 std::vector<shape_t>
 Where::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  PG_CHECK_ARG(inputs.size() == 3, "Where expects 3 inputs, got ",
+               inputs.size());
   return {inputs[0].shape()};
+}
+
+std::vector<DType>
+Where::infer_output_dtypes(const std::vector<Tensor> &inputs) {
+  PG_CHECK_ARG(inputs.size() == 3, "Where expects 3 inputs, got ",
+               inputs.size());
+  PG_CHECK_ARG(inputs[1].dtype() == inputs[2].dtype() &&
+                   inputs[0].dtype() == inputs[1].dtype(),
+               "Where expects inputs to have the same dtype, got ",
+               dtype_to_string(inputs[0].dtype()), ", ",
+               dtype_to_string(inputs[1].dtype()), " and ",
+               dtype_to_string(inputs[2].dtype()));
+  return {inputs[1].dtype()};
 }
 
 std::vector<shape_t>

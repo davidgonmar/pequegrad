@@ -154,7 +154,7 @@ class TestNew:
     @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
-    @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), None])
+    @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), (-1), (-1, -2), None])
     @pytest.mark.parametrize("keepdims", [True, False])
     @pytest.mark.parametrize(
         "lambdaop",

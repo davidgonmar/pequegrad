@@ -152,18 +152,6 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
     for (size_t i = 0; i < children.size(); i++) {
       accum_grad(children[i], tangents[i]);
     }
-    // check if we already have computed the gradient for all required tensors
-    // (even if they are not in the nodes list)
-    bool all_grads = true;
-    for (auto tensor : required_tensors) {
-      if (tangents_map.count(tensor) == 0) {
-        all_grads = false;
-        break;
-      }
-    }
-    if (all_grads) {
-      break;
-    }
   }
 
   return flatten_tangents(tangents_map);
