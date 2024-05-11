@@ -60,10 +60,8 @@ def _compare_fn_with_torch(
 
         np.testing.assert_allclose(list1, list2, rtol=tol, atol=tol)
 
-    _compare(peq_res, torch_res, tol)
-
     if backward:
-        nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
+        nparr = np.random.uniform(low=0.5, high=0.9, size=torch_res.shape)
         peq_grads = grads(
             tensors,
             peq_res,
@@ -75,6 +73,8 @@ def _compare_fn_with_torch(
         for i, (t, torch_t) in enumerate(zip(peq_grads, torch_grads)):
             print("Comparing position: ", i)
             _compare(t, torch_t, tol)
+
+    _compare(peq_res, torch_res, tol)
 
 
 class TestNew:
@@ -413,7 +413,7 @@ class TestNew:
             [tensor_shape],
             peq_fn,
             torch_fn,
-            backward=True if device == device.cpu else False,
+            backward=True,
             device=device,
         )
 

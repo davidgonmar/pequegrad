@@ -46,17 +46,17 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const {
 
 std::vector<Tensor> &ADNode::children() { return _children; }
 
-Tensor Tensor::eval(bool force) const {
-  if (is_evaled() && !force || ad_node().is_leaf()) {
+Tensor Tensor::eval(bool detach) {
+  if (is_evaled() && ad_node().is_leaf()) {
     return *this;
   }
   ADPrimitive *primitive = (_ad_node->primitive().get());
   const device::DeviceKind this_device = this->device();
   std::vector<Tensor> children = _ad_node->children();
-  for (const Tensor &child : children) {
+  for (Tensor &child : children) {
     PG_CHECK_RUNTIME(child.device() == this_device,
                      "All children must be on the same device");
-    child.eval(force);
+    child.eval();
   }
   // outputs is just `this` tensor
   std::vector<Tensor> outputs = {*this};
@@ -70,7 +70,9 @@ Tensor Tensor::eval(bool force) const {
   default:
     throw std::runtime_error("Unsupported device");
   }
-
+  if (detach) {
+    this->detach_();
+  }
   return *this;
 }
 

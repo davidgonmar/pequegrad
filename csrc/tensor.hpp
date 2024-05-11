@@ -233,7 +233,7 @@ public:
   Tensor astype(DType dtype) const { return pg::astype(*this, dtype); }
   std::vector<Tensor> &children() const { return _ad_node->children(); }
   ADNode &ad_node() const;
-  void assign(const Tensor other) {
+  void assign(Tensor other) {
     if (!other.is_evaled()) {
       other.eval();
     }
@@ -531,7 +531,7 @@ public:
     return Tensor(primitive, inputs);
   }
 
-  Tensor eval(bool force = false) const;
+  Tensor eval(bool detach = true);
 
   Tensor() {}
   bool is_evaled() const { return is_initialized(); }

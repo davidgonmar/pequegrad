@@ -59,8 +59,6 @@ def _compare_fn_with_torch(
 
         np.testing.assert_allclose(list1, list2, rtol=tol, atol=tol)
 
-    _compare(peq_res, torch_res, tol)
-
     if backward:
         nparr = np.random.uniform(low=0.5, high=0.9, size=peq_res.shape)
         peq_grads = grads(
@@ -74,6 +72,7 @@ def _compare_fn_with_torch(
         for i, (t, torch_t) in enumerate(zip(peq_grads, torch_grads)):
             print("Comparing position: ", i)
             _compare(t, torch_t, tol)
+    _compare(peq_res, torch_res, tol)
 
 
 class TestCasting:

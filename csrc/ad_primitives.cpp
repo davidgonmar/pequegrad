@@ -655,7 +655,7 @@ Select::infer_output_shapes(const std::vector<Tensor> &inputs) {
       if (step < 0) {
         step += orig_shape[i];
       }
-      new_shape.push_back((stop - start) / step);
+      new_shape.push_back((stop - start + step - 1) / step);
     } else if (std::holds_alternative<SelectWithTensor>(items[i])) {
       SelectWithTensor swt = std::get<SelectWithTensor>(items[i]);
       Tensor t = inputs[n_tensor_indices + 1];
