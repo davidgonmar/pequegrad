@@ -1,19 +1,12 @@
 ## Pequegrad
 
-** THIS IS THE OLD README **
-** I AM CURRENTLY REWRITING THE ENGINE IN CPP, AND THE README WILL BE UPDATED ACCORDINGLY WHEN IT IS READY **
-
-Pequegrad is a simple deep learning framework for Python. It works with tensors, and provides automatic differentiation. It's API is similar to PyTorch's.
-It has strong GPU acceleration through CUDA.
+Pequegrad is a simple deep learning framework for Python. It works with tensors, and provides automatic differentiation. It supports CUDA and CPU computation.
 
 ### Requirements (might work with other versions, but these are the ones that I tested)
 
 ```bash
 - General
 numpy==1.26.2
-
-- Graph visualization
-networkx==3.1
 
 - Testing
 pytest==7.4.0
@@ -31,24 +24,22 @@ There are some examples in the examples directory. You can run them with the fol
 - CNN
   `python -m examples.conv_mnist --cuda`
 
-The CNN example trains a simple CNN on the MNIST dataset. It reaches 90%+ accuracy in about 0.7 seconds on a RTX 2070 Mobile laptop GPU, as per my tests.
-The MLP example trains a simple MLP on the MNIST dataset. It reaches 90%+ accuracy in about 0.4 seconds on a RTX 2070 Mobile laptop GPU, as per my tests.
+### Automatic differentiation
 
-### Getting started
-
-The tensor functionality is very similar to PyTorch's. You can create tensors, perform operations on them, and use the .backward() method to compute the gradients. The gradients are stored in the .grad attribute of the tensor.
+You can perform simple autodifferentiation with Pequegrad like this:
 
 ```python
 from pequegrad.tensor import Tensor
+from pequegrad.autodiff import grads
 
-t1 = Tensor([1, 2, 3, 4, 5], requires_grad=True)
-t2 = Tensor([5, 4, 3, 2, 1], requires_grad=True)
+t1 = Tensor([1, 2, 3, 4, 5])
+t2 = Tensor([5, 4, 3, 2, 1])
 t3 = t1 + t2
 t4 = t3.sum()
-t4.backward()
-print(t1.grad) # [1, 1, 1, 1, 1]
-print(t2.grad) # [1, 1, 1, 1, 1]
-print(t3) # [6, 6, 6, 6, 6]
+dt4_dt1, dt4_dt2 = grads([t1, t2], t4)
+
+print(dt4_dt1.numpy()) # [1, 1, 1, 1, 1]
+print(dt4_dt2.numpy()) # [1, 1, 1, 1, 1]
 ```
 
 The same example in PyTorch would be:
@@ -61,27 +52,92 @@ t2 = torch.tensor([5, 4, 3, 2, 1], requires_grad=True)
 t3 = t1 + t2
 t4 = t3.sum()
 t4.backward()
-print(t1.grad) # tensor([1, 1, 1, 1, 1])
-print(t2.grad) # tensor([1, 1, 1, 1, 1])
-print(t3) # tensor([6, 6, 6, 6, 6], grad_fn=<AddBackward0>)
+dt4_dt1 = t1.grad
+dt4_dt2 = t2.grad
+
+print(dt4_dt1.detach().numpy()) # [1, 1, 1, 1, 1]
+print(dt4_dt2.detach().numpy()) # [1, 1, 1, 1, 1]
 ```
 
-### GPU acceleration
+### Training a simple neural network!
 
-In order to use the GPU acceleration, you need to be able to compile CUDA programs (so you need to have the CUDA toolkit installed). A CMakeLists.txt file is provided, so you can use cmake to compile the CUDA code. You must also have the pybind11 library installed and searcheable.
-Once the csrc directory is compiled, the library should be left in the ./build directory, and you can use the Pequegrad library as usual.
-You can still use Pequegrad without the GPU acceleration, and will use Numpy under the hood, but you wont be able to use things like .cuda() or .to("cuda") on tensors.
+(please go to the examples directory to see the full example, like loading the data and saving/loading a model)
 
-### Roadmap
+```python
+class MLP(StatefulModule):
+    def __init__(self):
+        self.fc1 = Linear(784, 200)
+        self.fc2 = Linear(200, 10)
 
-** THIS IS THE OLD ROADMAP **
+    def forward(self, input):
+        input = self.fc1.forward(input).relu()
+        return self.fc2.forward(input)
 
-- Complete the tests for the tensor operations on CPU (GPU works fine). Performance does not matter for now.
-- Unify the backends (CpuTensor + CudaTensor) into a single Tensor class in CPP, and remove the Numpy backend. That is, move the entire computation backend to Cpp.
-- Optimize the computation backend (especially the CPU one).
-- Refactor and maybe document better
-- Move autograd to Cpp ????
+def train(model, X_train, Y_train, epochs=13, batch_size=4096):
+    optim = Adam(model.parameters(), lr=0.021)
 
-** CURRENT ROADMAP **
+    def train_step(batch_X, batch_Y):
+        prediction = model.forward(batch_X)
+        loss = prediction.cross_entropy_loss_indices(batch_Y)
+        g = grads(model.parameters(), loss)
+        return [loss] + g
 
-- Rewrite the entire engine in Cpp (including autograd)
+    for epoch in range(epochs):
+        indices = np.random.choice(len(X_train), batch_size)
+        batch_X = X_train[indices]
+        batch_Y = Y_train[indices]
+        outs = train_step(batch_X, batch_Y)
+        loss = outs[0]
+        g = outs[1:]
+        optim.step(g)
+        print(f"Epoch {epoch} | Loss {loss.numpy()}")
+
+    return model
+
+model = MLP()
+model = train(model, X_train, Y_train)
+```
+
+### Laziness
+
+The whole Tensor class is lazy. This means that shapes and dtypes are inferred when you write a tensor computation like
+
+```python
+t1 = Tensor([1, 2, 3, 4, 5])
+t2 = Tensor([5, 4, 3, 2, 1])
+t3 = t1 + t2
+```
+
+But t3 is not actually computed until .eval() is called, or until you try to access the .numpy() attribute.
+This is useful since useless computations are not done, and allows for graph optimizations in the future.
+
+You can even extend the DAG with the tensor gradients, without anything being actually computed!
+
+```python
+t1 = Tensor([1, 2, 3, 4, 5])
+t2 = Tensor([5, 4, 3, 2, 1])
+t3 = t1 + t2
+t4 = t3.sum()
+dt4_dt1, dt4_dt2 = grads([t1, t2], t4)
+```
+
+Here, nothing is actually computed!
+
+### More
+
+Pequegrad has support for most core operations like:
+
+- Binary operations: +, -, \*, /, @
+- Unary operations: relu, sigmoid, tanh
+- Reduction operations: sum, mean, max
+- Indexing operations: getitem, setitem
+- Folding operations: im2col (fold), col2im (unfold)
+- Padding
+- Convolutions
+
+And higher level operations like tensordot (tensor contractions), pooling, norms, naive einsum, dropoutm, statistical operations, etc.
+
+### Building the library
+
+Most of the computation (include graphs and automatic differentiation) is done in C++. You'll need to compile the CPP code to use the library. A CMakeLists.txt file is provided. Once it is compiled, the built files should be in the build directory.
+At the moment, the library can only be built with support for different technologies like CUDA, OpenMP and OpenBLAS. I'm working on making it more flexible and able to be built without these dependencies.
