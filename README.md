@@ -103,9 +103,14 @@ model = train(model, X_train, Y_train)
 The whole Tensor class is lazy. This means that shapes and dtypes are inferred when you write a tensor computation like
 
 ```python
-t1 = Tensor([1, 2, 3, 4, 5])
-t2 = Tensor([5, 4, 3, 2, 1])
+from pequegrad.tensor import Tensor, dt
+
+t1 = Tensor([1, 2, 3, 4, 5]).astype(dt.float32)
+t2 = Tensor([5, 4, 3, 2, 1]).astype(dt.float32)
 t3 = t1 + t2
+print(t3.shape) # [5]
+print(t3.dtype) # dt.float32
+print(t3) # Tensor(shape=[5], dtype=float32, device=CPU, evaled=0, primitive=Add, id=34)
 ```
 
 But t3 is not actually computed until .eval() is called, or until you try to access the .numpy() attribute.
@@ -123,7 +128,28 @@ dt4_dt1, dt4_dt2 = grads([t1, t2], t4)
 
 Here, nothing is actually computed!
 
-### More
+### GPU support
+
+All operations must have the same device for all inputs. To use the GPU, simply pass the tensor to the device you want to use:
+
+```python
+from pequegrad.tensor import Tensor, dt, device
+
+t1 = Tensor([1, 2, 3, 4, 5]).to(device.cuda)
+t2 = Tensor([5, 4, 3, 2, 1]).to(device.cuda)
+t3 = t1 + t2 # fine!!!!
+t2_cpu = t2.to(device.cpu)
+t3 = t1 + t2_cpu # this will raise an error
+```
+
+To pass an entire model to the GPU, you can use the .to(device) method:
+
+```python
+model = MLP()
+model = model.to(device.cuda) # now, it computes everything in the GPU, and expects all inputs to be in the GPU!
+```
+
+### More operations
 
 Pequegrad has support for most core operations like:
 
@@ -133,9 +159,9 @@ Pequegrad has support for most core operations like:
 - Indexing operations: getitem, setitem
 - Folding operations: im2col (fold), col2im (unfold)
 - Padding
-- Convolutions
+- Convolutions (regular and transposed)
 
-And higher level operations like tensordot (tensor contractions), pooling, norms, naive einsum, dropoutm, statistical operations, etc.
+And higher level operations like tensordot (tensor contractions), pooling, norms, naive einsum, dropoutm, statistical operations, dropout, etc.
 
 ### Building the library
 
