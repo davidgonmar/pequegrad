@@ -459,3 +459,30 @@ class TestNew:
             torch_fn,
             device=device,
         )
+
+    # tests for simple einsum
+    @pytest.mark.parametrize(
+        "data",
+        # equation, shape_input1, shape_input2
+        [
+            ["ij,jk->ik", (10, 20), (20, 30)],  # output shape: (10, 30)
+            ["ij,jk->ik", (5, 5), (5, 5)],  # output shape: (5, 5)
+            ["abc,bce->ae", (2, 3, 4), (3, 4, 6)],  # output shape: (2, 3, 6)
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_einsum(self, data, device):
+        equation, shape_input1, shape_input2 = data
+
+        def torch_fn(x, y):
+            return torch.einsum(equation, x, y)
+
+        def peq_fn(x, y):
+            return pg.einsum(equation, x, y)
+
+        _compare_fn_with_torch(
+            [shape_input1, shape_input2],
+            peq_fn,
+            torch_fn,
+            device=device,
+        )
