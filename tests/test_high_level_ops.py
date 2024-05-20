@@ -419,3 +419,43 @@ class TestNew:
             torch_fn,
             device=device,
         )
+
+    # tensordot tests
+    @pytest.mark.parametrize(
+        "data",
+        # shape_input1, shape_input2, dim
+        [
+            [
+                (2, 3, 4, 5),
+                (8, 5, 4, 3),
+                ([1, 3], [3, 1]),
+            ],  # output shape: (2, 8, 3, 2)
+            [
+                (2, 3, 4, 5),
+                (8, 5, 4, 3),
+                ([1, 2], [3, 2]),
+            ],  # output shape: (2, 5, 8, 5)
+            [
+                (100, 20),
+                (20, 300),
+                1,
+            ],  # output shape: (100, 300), it is a matrix multiplication
+            [(100, 20), (20, 300), 0],  # output shape: (100, 20, 20, 300), no reduction
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_tensordot(self, data, device):
+        shape_input1, shape_input2, dim = data
+
+        def torch_fn(x, y):
+            return torch.tensordot(x, y, dims=dim)
+
+        def peq_fn(x, y):
+            return x.tensordot(y, dims=dim)
+
+        _compare_fn_with_torch(
+            [shape_input1, shape_input2],
+            peq_fn,
+            torch_fn,
+            device=device,
+        )

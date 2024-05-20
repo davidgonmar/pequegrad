@@ -76,7 +76,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     USE_CUDA = args.cuda
-    USE_GRAPH = args.graph
     MODE = args.mode
     mlp = MLP()
     if USE_CUDA:

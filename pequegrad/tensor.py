@@ -603,4 +603,56 @@ def mse_loss(self, target: "Tensor") -> "Tensor":
     return ((self - target) ** 2).mean()
 
 
+bind_method(Tensor, "permute", lambda self, *dims: pg.permute(self, dims))
+
 bind_method(Tensor, "mse_loss", mse_loss)
+
+
+def tensordot(a: "Tensor", b: "Tensor", dims: Union[int, Tuple[List[int], List[int]]]):
+    # Convert dims to a consistent format (it accepts both a single int or a tuple of lists of ints)
+    if isinstance(dims, int):
+        dims = (list(range(-dims, 0)), list(range(dims)))
+    a_axes, b_axes = dims
+    # make a_axes have positive values
+    a_axes = [a.dim + ax if ax < 0 else ax for ax in a_axes]
+    b_axes = [b.dim + ax if ax < 0 else ax for ax in b_axes]
+
+    # Compute the new shape for a
+    a_shape = list(a.shape)
+    a_shape1 = [
+        a_shape[i] for i in range(len(a_shape)) if i not in a_axes
+    ]  # shape of a without the axes to sum over
+    a_shape2 = [a_shape[i] for i in a_axes]  # shape of a to sum over
+    a_reshape = [-1, int(np.prod(a_shape2))]
+
+    # Compute the new shape for b
+    b_shape = list(b.shape)
+    b_shape1 = [
+        b_shape[i] for i in range(len(b_shape)) if i not in b_axes
+    ]  # shape of b without the axes to sum over
+    b_shape2 = [b_shape[i] for i in b_axes]  # shape of b to sum over
+    b_reshape = [int(np.prod(b_shape2)), -1]
+
+    # Permute the dimensions of a and b
+    a_perm = [
+        i for i in range(len(a.shape)) if i not in a_axes
+    ] + a_axes  # pull the axes to sum over to the end
+    b_perm = b_axes + [
+        i for i in range(len(b.shape)) if i not in b_axes
+    ]  # pull the axes to sum over to the start
+
+    # Flatten a and b to 2D tensors of shape (a_shape1, a_shape2) and (b_shape2, b_shape1)
+    a_t = a.permute(*a_perm).reshape(a_reshape)
+    b_t = b.permute(*b_perm).reshape(b_reshape)
+
+    assert a_t.shape[1] == b_t.shape[0], "shapes {} and {} not aligned".format(
+        a_t.shape, b_t.shape
+    )
+    result = pg.matmul(a_t, b_t)
+
+    # Reshape the result back to the correct shape
+    final_shape = a_shape1 + b_shape1
+    return result.reshape(final_shape)
+
+
+bind_method(Tensor, "tensordot", tensordot)

@@ -213,7 +213,9 @@ Permute::infer_output_shapes(const std::vector<Tensor> &inputs) {
     if (_axes[i] < 0) {
       _axes[i] += new_shape.size();
     }
-    PG_CHECK_ARG(_axes[i] < new_shape.size(), "Permute axis out of bounds");
+    PG_CHECK_ARG(_axes[i] < new_shape.size(),
+                 "Permute axis out of bounds: got axes ", vec_to_string(_axes),
+                 " and shape ", vec_to_string(new_shape));
     new_shape_permuted[i] = new_shape[_axes[i]];
   }
   return {new_shape_permuted};
