@@ -222,6 +222,11 @@ public:
     _inferred_shape = std::move(other._inferred_shape);
   }
 
+  void set_primitive(std::shared_ptr<ADPrimitive> &primitive);
+  void set_primitive(const ADPrimitive &primitive);
+  void set_primitive(std::shared_ptr<ADPrimitive> &&primitive);
+  void set_children(const std::vector<Tensor> &children);
+
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children;

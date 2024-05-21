@@ -1,3 +1,4 @@
+#include "compiler/compile.hpp"
 #include "dtype.hpp"
 #include "graph.hpp"
 #include "npybind_utils.hpp"
@@ -131,6 +132,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   BIND_REDUCE_OP("mean", pg::mean);
 
   m.def("permute", &permute);
+  m.def("compile", &compile);
 
   m.def(
       "grads",

@@ -8,6 +8,7 @@
 #include "matmul_helpers.cuh"
 #include "tensor.hpp"
 #include "view_helpers.cuh"
+#include <cuda.h>
 
 #define DECL_BINARY_OP(NAME, OP)                                               \
   void NAME::dispatch_cuda(const std::vector<Tensor> &inputs,                  \
@@ -428,4 +429,41 @@ void AsType::dispatch_cuda(const std::vector<Tensor> &inputs,
   outputs[0].init_view(
       std::make_shared<View>(cuda::view::astype(a.view(), _dtype_to)));
 }
+
+void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
+                                      std::vector<Tensor> &outputs) {
+  PG_CHECK_ARG(_handle != nullptr, "Function pointer is null");
+
+  // Prepare grid and block dimensions
+  dim3 threads_per_block(128, 1, 1);
+  size_t num_elements = inputs[0].numel();
+  dim3 blocks_per_grid(
+      (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);
+
+  outputs[0].init_view(std::make_shared<View>(
+      outputs[0].shape(), outputs[0].dtype(), device::CUDA));
+
+  // Prepare kernel arguments
+  float *in_data = (float *)inputs[0].get_base_ptr();
+  float *out_data = (float *)outputs[0].get_base_ptr();
+  void *kernel_args[] = {&in_data,
+                         &out_data}; // Correct the kernel argument types
+
+  // Launch the kernel
+  CUresult launch_result = cuLaunchKernel(
+      (CUfunction)_handle, blocks_per_grid.x, blocks_per_grid.y,
+      blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
+      threads_per_block.z, 0, NULL, kernel_args, NULL);
+
+  if (launch_result != CUDA_SUCCESS) {
+    const char *error_string;
+    cuGetErrorString(launch_result, &error_string);
+    PG_CHECK_RUNTIME(false,
+                     "Error launching kernel: " + std::string(error_string));
+  }
+  PG_CUDA_KERNEL_END;
+
+  std::cout << "Kernel launched successfully" << std::endl;
+}
+
 } // namespace pg

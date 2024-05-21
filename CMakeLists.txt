@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.17)
 project(pequegrad LANGUAGES CXX)
 
 # Find the desired Python version
@@ -44,6 +44,8 @@ include(CheckCXXCompilerFlag)
 enable_language(CUDA)
 
 find_package(CUDA REQUIRED)
+find_package(CUDAToolkit REQUIRED)
+
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 file(GLOB PG_SOURCES
         csrc/dtype.cpp
@@ -71,6 +73,13 @@ set_property(TARGET pequegrad_c PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(pequegrad_c PROPERTIES OUTPUT_NAME "pequegrad_c")
 
 target_link_libraries(pequegrad_c PRIVATE ${BLAS_LIB})
+# link to nvrtc
+# but first assert that nvrtc is available
+if(NOT CUDA_nvrtc_LIBRARY)
+    message(FATAL_ERROR "nvrtc library not found")
+endif()
+
+target_link_libraries(pequegrad_c PRIVATE CUDA::nvrtc)
 
 # use OpenMP if available
 find_package(OpenMP)

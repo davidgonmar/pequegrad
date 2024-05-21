@@ -196,4 +196,17 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
 }
 
 ADNode &Tensor::ad_node() const { return *_ad_node; }
+void ADNode::set_children(const std::vector<Tensor> &children) {
+  _children = children;
+}
+
+void ADNode::set_primitive(const ADPrimitive &primitive) {
+  _primitive = std::make_shared<ADPrimitive>(primitive);
+}
+void ADNode::set_primitive(std::shared_ptr<ADPrimitive> &primitive) {
+  _primitive = primitive;
+}
+void ADNode::set_primitive(std::shared_ptr<ADPrimitive> &&primitive) {
+  _primitive = std::move(primitive);
+}
 } // namespace pg

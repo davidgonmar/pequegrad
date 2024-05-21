@@ -64,7 +64,24 @@ public:
   }
 };
 
-class Log : public ADPrimitive {
+class CompiledPrimitive : public ADPrimitive {
+  std::string _name;
+  void *_handle;
+  std::string _code;
+
+public:
+  CompiledPrimitive(std::string name, void *handle, std::string code)
+      : _name(name), _handle(handle), _code(code) {}
+  std::string str() { return "CompiledPrimitive(" + _name + ")"; }
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_BACKWARD
+  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_INFER_OUTPUT_DTYPES
+};
+
+class UnaryPrimitive : public ADPrimitive {};
+class Log : public UnaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
@@ -73,7 +90,7 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
-class Exp : public ADPrimitive {
+class Exp : public UnaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
