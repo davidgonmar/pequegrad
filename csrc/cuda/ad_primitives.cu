@@ -430,6 +430,11 @@ void AsType::dispatch_cuda(const std::vector<Tensor> &inputs,
       std::make_shared<View>(cuda::view::astype(a.view(), _dtype_to)));
 }
 
+#include <cuda_runtime.h>
+#include <iostream>
+#include <memory>
+#include <vector>
+
 void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
                                       std::vector<Tensor> &outputs) {
   PG_CHECK_ARG(_handle != nullptr, "Function pointer is null");
@@ -444,16 +449,25 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
       outputs[0].shape(), outputs[0].dtype(), device::CUDA));
 
   // Prepare kernel arguments
-  float *in_data = (float *)inputs[0].get_base_ptr();
-  float *out_data = (float *)outputs[0].get_base_ptr();
-  void *kernel_args[] = {&in_data,
-                         &out_data}; // Correct the kernel argument types
+  std::vector<void *> kernel_args;
+  for (const auto &input : inputs) {
+    float *in_data = static_cast<float *>(input.get_base_ptr());
+    kernel_args.push_back(&in_data);
+  }
+  float *out_data = static_cast<float *>(outputs[0].get_base_ptr());
+  kernel_args.push_back(&out_data);
+
+  // Convert to array of pointers
+  std::vector<void *> kernel_args_ptrs;
+  for (auto &arg : kernel_args) {
+    kernel_args_ptrs.push_back(arg);
+  }
 
   // Launch the kernel
   CUresult launch_result = cuLaunchKernel(
       (CUfunction)_handle, blocks_per_grid.x, blocks_per_grid.y,
       blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
-      threads_per_block.z, 0, NULL, kernel_args, NULL);
+      threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
 
   if (launch_result != CUDA_SUCCESS) {
     const char *error_string;
@@ -461,9 +475,9 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     PG_CHECK_RUNTIME(false,
                      "Error launching kernel: " + std::string(error_string));
   }
-  PG_CUDA_KERNEL_END;
 
-  std::cout << "Kernel launched successfully" << std::endl;
+  // Synchronize to ensure kernel execution is complete
+  PG_CUDA_KERNEL_END;
 }
 
 } // namespace pg

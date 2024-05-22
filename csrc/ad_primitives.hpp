@@ -99,7 +99,9 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
-class Add : public ADPrimitive {
+class BinaryPrimitive : public ADPrimitive {};
+
+class Add : public BinaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
@@ -108,7 +110,7 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
-class Mul : public ADPrimitive {
+class Mul : public BinaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
@@ -117,7 +119,7 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
-class Sub : public ADPrimitive {
+class Sub : public BinaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
@@ -126,7 +128,7 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
 };
 
-class Div : public ADPrimitive {
+class Div : public BinaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
@@ -280,6 +282,7 @@ public:
   DEFINE_STR_NAME(Broadcast)
   DEFINE_BACKWARD
   DEFINE_INFER_OUTPUT_SHAPES
+  shape_t shape_to() { return _shape_to; }
 };
 
 class Squeeze : public ADPrimitive {

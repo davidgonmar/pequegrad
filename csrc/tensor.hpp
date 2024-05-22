@@ -551,6 +551,11 @@ public:
     _view = std::make_shared<View>(shape, dtype, device);
   }
 
+  void set_ad_node(const ADNode &ad_node) {
+    _ad_node = std::make_shared<ADNode>(ad_node);
+  }
+  void set_ad_node(std::shared_ptr<ADNode> ad_node) { _ad_node = ad_node; }
+
 private:
   std::shared_ptr<View> _view = std::make_shared<View>();
 
