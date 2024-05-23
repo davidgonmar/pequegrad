@@ -58,8 +58,8 @@ __global__ void vector_outer_product_kernel(T *lhs, T *rhs, T *out,
 
 template <typename T>
 __global__ void
-batched_matmul_kernel(const T *a, const T *b, T *out, const size_t *a_shape,
-                      const size_t *b_shape, const size_t n_dims) {
+batched_matmul_kernel(const T *a, const T *b, T *out, const size_t *_a_shape,
+                      const size_t *_b_shape, const size_t n_dims) {
   // this kernel assumes correctness of the inputs + contiguous memory
   // a and b are, at minimum, 2D matrices. Both have the same number of
   // dimensions. Extra dimensions are treated as 'batch' dimensions. The kernel
@@ -74,6 +74,16 @@ batched_matmul_kernel(const T *a, const T *b, T *out, const size_t *a_shape,
   // (batch_1, batch_2, d1, d3). The 'idx' variable would correspond to a
   // single element in the output matrix.
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+  extern __shared__ int8_t smem[];
+  size_t *a_shape = (size_t *)smem;
+  size_t *b_shape = (size_t *)(smem + n_dims * sizeof(size_t));
+  // Load the shapes of the input matrices into shared memory
+  if (threadIdx.x < n_dims) {
+    a_shape[threadIdx.x] = _a_shape[threadIdx.x];
+    b_shape[threadIdx.x] = _b_shape[threadIdx.x];
+  }
+  __syncthreads();
 
   const int size1 = a_shape[n_dims - 2];
   const int sizemid = a_shape[n_dims - 1];

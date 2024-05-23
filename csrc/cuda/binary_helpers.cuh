@@ -6,20 +6,34 @@
 
 #define DEF_BIN_OP_KERNEL(NAME, FN, TYPE)                                      \
   __global__ void NAME(                                                        \
-      const long *lhs_strides, /* in bytes */                                  \
-      const long *rhs_strides, /* in bytes */                                  \
-      const size_t *shape,     /* both lhs and rhs should have equal shape, we \
-                                  don't handle broadcasting here */            \
-      const size_t num_dims,   /* equals len of strides and shape */           \
+      const long *_lhs_strides, /* in bytes */                                 \
+      const long *_rhs_strides, /* in bytes */                                 \
+      const size_t *_shape,  /* both lhs and rhs should have equal shape, we   \
+                                don't handle broadcasting here */              \
+      const size_t num_dims, /* equals len of strides and shape */             \
       const TYPE *lhs, const TYPE *rhs, TYPE *out) {                           \
     const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
-    if (get_max_idx(shape, num_dims) <= idx)                                   \
+    extern __shared__ int8_t smem[];                                           \
+    long *lhs_strides = (long *)smem;                                          \
+    long *rhs_strides = (long *)(smem + num_dims * sizeof(long));              \
+    size_t *shape = (size_t *)(smem + num_dims * sizeof(long) * 2);            \
+                                                                               \
+    if (threadIdx.x < num_dims) {                                              \
+      lhs_strides[threadIdx.x] = _lhs_strides[threadIdx.x];                    \
+      rhs_strides[threadIdx.x] = _rhs_strides[threadIdx.x];                    \
+      shape[threadIdx.x] = _shape[threadIdx.x];                                \
+    }                                                                          \
+    __syncthreads();                                                           \
+                                                                               \
+    if (idx >= get_max_idx(shape, num_dims))                                   \
       return;                                                                  \
+                                                                               \
     /* calculate correct index based on strides */                             \
     int idx_lhs =                                                              \
         get_idx_from_strides<TYPE>(shape, lhs_strides, num_dims, idx);         \
     int idx_rhs =                                                              \
         get_idx_from_strides<TYPE>(shape, rhs_strides, num_dims, idx);         \
+                                                                               \
     TYPE x = lhs[idx_lhs];                                                     \
     TYPE y = rhs[idx_rhs];                                                     \
     out[idx] = FN;                                                             \
@@ -102,54 +116,57 @@ void launch_binary_kernel_casted_helper(BinaryKernelType kernel_type,
                                         const size_t *shape,
                                         const size_t num_dims, const T *lhs,
                                         const T *rhs, T *out) {
+  size_t total_dynamic_smem =
+      sizeof(stride_t) * num_dims * 2 +
+      sizeof(size_t) * num_dims; // two strides and shape
   switch (kernel_type) {
   case BinaryKernelType::ADD:
-    add_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                          num_dims, lhs, rhs, out);
+    add_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::SUB:
-    sub_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                          num_dims, lhs, rhs, out);
+    sub_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::MULT:
-    mult_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                           num_dims, lhs, rhs, out);
+    mult_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::DIV:
-    div_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                          num_dims, lhs, rhs, out);
+    div_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::GREATER:
-    greater_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                              num_dims, lhs, rhs, out);
+    greater_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::LESS:
-    less_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                           num_dims, lhs, rhs, out);
+    less_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::EQUAL:
-    equal_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                            num_dims, lhs, rhs, out);
+    equal_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::NOT_EQUAL:
-    not_equal_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                                num_dims, lhs, rhs, out);
+    not_equal_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::GREATER_EQUAL:
-    greater_equal_kernel<<<grid_size, block_size>>>(
+    greater_equal_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
         lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::LESS_EQUAL:
-    less_equal_kernel<<<grid_size, block_size>>>(
+    less_equal_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
         lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::ELEMENT_WISE_MAX:
-    element_wise_max_kernel<<<grid_size, block_size>>>(
+    element_wise_max_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
         lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   case BinaryKernelType::POW:
-    pow_kernel<<<grid_size, block_size>>>(lhs_strides, rhs_strides, shape,
-                                          num_dims, lhs, rhs, out);
+    pow_kernel<<<grid_size, block_size, total_dynamic_smem>>>(
+        lhs_strides, rhs_strides, shape, num_dims, lhs, rhs, out);
     break;
   default:
     throw std::runtime_error("Invalid kernel type");

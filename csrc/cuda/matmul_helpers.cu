@@ -6,21 +6,25 @@ void launch_matmul_kernel(dim3 grid_size, dim3 block_size, DType dtype,
                           const void *a, const void *b, void *out,
                           const size_t *a_shape, const size_t *b_shape,
                           const size_t n_dims) {
+  size_t total_smem_for_shapes = 2 * n_dims * sizeof(size_t);
   switch (dtype) {
   case DType::Float32:
-    batched_matmul_kernel<float><<<grid_size, block_size, 0, 0>>>(
-        static_cast<const float *>(a), static_cast<const float *>(b),
-        static_cast<float *>(out), a_shape, b_shape, n_dims);
+    batched_matmul_kernel<float>
+        <<<grid_size, block_size, total_smem_for_shapes>>>(
+            static_cast<const float *>(a), static_cast<const float *>(b),
+            static_cast<float *>(out), a_shape, b_shape, n_dims);
     break;
   case DType::Float64:
-    batched_matmul_kernel<double><<<grid_size, block_size, 0, 0>>>(
-        static_cast<const double *>(a), static_cast<const double *>(b),
-        static_cast<double *>(out), a_shape, b_shape, n_dims);
+    batched_matmul_kernel<double>
+        <<<grid_size, block_size, total_smem_for_shapes>>>(
+            static_cast<const double *>(a), static_cast<const double *>(b),
+            static_cast<double *>(out), a_shape, b_shape, n_dims);
     break;
   case DType::Int32:
-    batched_matmul_kernel<int><<<grid_size, block_size, 0, 0>>>(
-        static_cast<const int *>(a), static_cast<const int *>(b),
-        static_cast<int *>(out), a_shape, b_shape, n_dims);
+    batched_matmul_kernel<int>
+        <<<grid_size, block_size, total_smem_for_shapes>>>(
+            static_cast<const int *>(a), static_cast<const int *>(b),
+            static_cast<int *>(out), a_shape, b_shape, n_dims);
     break;
   default:
     throw std::runtime_error("Unsupported dtype");
@@ -56,21 +60,25 @@ void launch_batched_matmul_kernel(dim3 grid_size, dim3 block_size, DType dtype,
                                   const void *a, const void *b, void *out,
                                   const size_t *a_shape, const size_t *b_shape,
                                   const size_t n_dims) {
+  size_t total_smem_for_shapes = 2 * n_dims * sizeof(size_t);
   switch (dtype) {
   case DType::Float32:
-    batched_matmul_kernel<float><<<grid_size, block_size, 0, 0>>>(
-        static_cast<const float *>(a), static_cast<const float *>(b),
-        static_cast<float *>(out), a_shape, b_shape, n_dims);
+    batched_matmul_kernel<float>
+        <<<grid_size, block_size, total_smem_for_shapes>>>(
+            static_cast<const float *>(a), static_cast<const float *>(b),
+            static_cast<float *>(out), a_shape, b_shape, n_dims);
     break;
   case DType::Float64:
-    batched_matmul_kernel<double><<<grid_size, block_size, 0, 0>>>(
-        static_cast<const double *>(a), static_cast<const double *>(b),
-        static_cast<double *>(out), a_shape, b_shape, n_dims);
+    batched_matmul_kernel<double>
+        <<<grid_size, block_size, total_smem_for_shapes>>>(
+            static_cast<const double *>(a), static_cast<const double *>(b),
+            static_cast<double *>(out), a_shape, b_shape, n_dims);
     break;
   case DType::Int32:
-    batched_matmul_kernel<int><<<grid_size, block_size, 0, 0>>>(
-        static_cast<const int *>(a), static_cast<const int *>(b),
-        static_cast<int *>(out), a_shape, b_shape, n_dims);
+    batched_matmul_kernel<int>
+        <<<grid_size, block_size, total_smem_for_shapes>>>(
+            static_cast<const int *>(a), static_cast<const int *>(b),
+            static_cast<int *>(out), a_shape, b_shape, n_dims);
     break;
   default:
     throw std::runtime_error("Unsupported dtype");
