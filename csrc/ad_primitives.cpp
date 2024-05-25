@@ -690,7 +690,6 @@ std::vector<Tensor> AsContiguous::backward(const std::vector<Tensor> &primals,
 std::vector<Tensor> Select::backward(const std::vector<Tensor> &primals,
                                      const std::vector<Tensor> &tangents,
                                      const std::vector<Tensor> &outputs) {
-
   std::vector<hl_select_t> st = convert_from_select_t_to_hl_select_t(
       _items, std::vector<Tensor>{primals.begin() + 1, primals.end()});
   Tensor g =

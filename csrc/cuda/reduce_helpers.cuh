@@ -7,8 +7,8 @@ namespace pg {
 namespace cuda {
 // operation and initial accumulator value
 template <typename Op, typename T>
-__device__ void reduce_base_fn(const T *in, T *out, const stride_t *in_strides,
-                               const size_t *in_shape, const size_t n_dims,
+__device__ void reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
+                               const size_t *_in_shape, const size_t n_dims,
                                const size_t red_axis) {
   // the general explanation is:
   // each idx represents one output value, so each thread will reduce to said
@@ -29,9 +29,18 @@ __device__ void reduce_base_fn(const T *in, T *out, const stride_t *in_strides,
   // from based on those strides, but since we are 'moving' accross the
   // shape[dim=1] in the loop, we will not use the idx accross that dimension,
   // but the iterator value (i).
+  extern __shared__ int8_t smem[];
   int idx =
       blockDim.x * blockIdx.x + threadIdx.x; // one element of the output array
 
+  size_t *in_shape = (size_t *)smem;
+  stride_t *in_strides = (stride_t *)(smem + n_dims * sizeof(size_t));
+
+  if (threadIdx.x < n_dims) {
+    in_shape[threadIdx.x] = _in_shape[threadIdx.x];
+    in_strides[threadIdx.x] = _in_strides[threadIdx.x];
+  }
+  __syncthreads();
   Op op;
 
   int total_out_elements = 1;
@@ -126,15 +135,16 @@ void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
                                  const stride_t *in_strides,
                                  const size_t *in_shape, const size_t n_dims,
                                  const size_t red_axis) {
+  size_t smem = n_dims * sizeof(stride_t) + n_dims * sizeof(size_t);
   if (type == ReduceKernelType::SUM) {
-    sum_kernel<T>
-        <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);
+    sum_kernel<T><<<blocks, threads, smem>>>(in, out, in_strides, in_shape,
+                                             n_dims, red_axis);
   } else if (type == ReduceKernelType::MAX) {
-    max_kernel<T>
-        <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);
+    max_kernel<T><<<blocks, threads, smem>>>(in, out, in_strides, in_shape,
+                                             n_dims, red_axis);
   } else if (type == ReduceKernelType::MEAN) {
-    mean_kernel<T>
-        <<<blocks, threads>>>(in, out, in_strides, in_shape, n_dims, red_axis);
+    mean_kernel<T><<<blocks, threads, smem>>>(in, out, in_strides, in_shape,
+                                              n_dims, red_axis);
   }
 }
 

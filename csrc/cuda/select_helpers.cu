@@ -233,7 +233,6 @@ void select(const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs,
 
 void AssignAt::dispatch_cuda(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
-
   Tensor dst = inputs[0];
   Tensor src = inputs[1];
   std::vector<Tensor> idxs =

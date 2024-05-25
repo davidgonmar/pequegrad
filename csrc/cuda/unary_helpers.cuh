@@ -1,13 +1,13 @@
 #pragma once
 
+#include "common.hpp"
 #include "cuda_utils.cuh"
 #include "dtype.hpp"
-
 namespace pg {
 namespace cuda {
 
 #define KERNEL_PARAMS_UNARY(T)                                                 \
-  const stride_t *in_strides, const size_t *shape, const size_t num_dims,      \
+  const stride_t *_in_strides, const size_t *_shape, const size_t num_dims,    \
       const T *in, T *out
 
 __global__ void copy_kernel(KERNEL_PARAMS_UNARY(float));
@@ -22,12 +22,23 @@ __global__ void log_kernel(KERNEL_PARAMS_UNARY(int));
 
 #define DEF_UNARY_OP_KERNEL(KERNEL_NAME, FN, T)                                \
   __global__ void KERNEL_NAME(KERNEL_PARAMS_UNARY(T)) {                        \
-    const int idx = blockDim.x * blockIdx.x + threadIdx.x;                     \
-    if (get_max_idx(shape, num_dims) <= idx)                                   \
-      return;                                                                  \
-    int in_idx = get_idx_from_strides<T>(shape, in_strides, num_dims, idx);    \
-    T x = in[in_idx];                                                          \
-    out[idx] = FN;                                                             \
+    extern __shared__ int8_t smem[];                                           \
+    const int base_idx = blockDim.x * blockIdx.x + threadIdx.x;                \
+    size_t *shape = (size_t *)smem;                                            \
+    stride_t *in_strides = (stride_t *)(smem + num_dims * sizeof(size_t));     \
+    if (threadIdx.x < num_dims) {                                              \
+      in_strides[threadIdx.x] = _in_strides[threadIdx.x];                      \
+      shape[threadIdx.x] = _shape[threadIdx.x];                                \
+    }                                                                          \
+    __syncthreads();                                                           \
+    for (int i = 0; i < 4; ++i) {                                              \
+      int idx = base_idx + i * blockDim.x * gridDim.x;                         \
+      if (get_max_idx(shape, num_dims) <= idx)                                 \
+        return;                                                                \
+      int in_idx = get_idx_from_strides<T>(shape, in_strides, num_dims, idx);  \
+      T x = in[in_idx];                                                        \
+      out[idx] = FN;                                                           \
+    }                                                                          \
   }
 
 #define KERNEL_PARAMS_UNARY_DENSE(T)                                           \
@@ -96,15 +107,17 @@ template <typename T>
 void launch_unary_kernel_helper(UnaryKernelType type, dim3 blocks, dim3 threads,
                                 const stride_t *in_strides, const size_t *shape,
                                 const size_t num_dims, const T *in, T *out) {
+  size_t smem = num_dims * sizeof(stride_t) + num_dims * sizeof(size_t);
   switch (type) {
   case UnaryKernelType::COPY:
-    copy_kernel<<<blocks, threads>>>(in_strides, shape, num_dims, in, out);
+    copy_kernel<<<blocks, threads, smem>>>(in_strides, shape, num_dims, in,
+                                           out);
     break;
   case UnaryKernelType::EXP:
-    exp_kernel<<<blocks, threads>>>(in_strides, shape, num_dims, in, out);
+    exp_kernel<<<blocks, threads, smem>>>(in_strides, shape, num_dims, in, out);
     break;
   case UnaryKernelType::LOG:
-    log_kernel<<<blocks, threads>>>(in_strides, shape, num_dims, in, out);
+    log_kernel<<<blocks, threads, smem>>>(in_strides, shape, num_dims, in, out);
     break;
   default:
     throw std::runtime_error("Invalid UnaryKernelType");

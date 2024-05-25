@@ -80,6 +80,7 @@ if(NOT CUDA_nvrtc_LIBRARY)
 endif()
 
 target_link_libraries(pequegrad_c PRIVATE CUDA::nvrtc)
+target_link_libraries(pequegrad_c PRIVATE CUDA::cublas)
 
 # use OpenMP if available
 find_package(OpenMP)
