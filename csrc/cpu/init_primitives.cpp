@@ -1,4 +1,5 @@
 
+#include "ad_primitives.hpp"
 #include "dtype.hpp"
 #include "tensor.hpp"
 namespace pg {
@@ -33,5 +34,12 @@ void fill(Tensor &t, double value, const shape_t &shape) {
                              dtype_to_string(t.dtype()));
   }
 }
+
 } // namespace cpu
+void Fill::dispatch_cpu(const std::vector<Tensor> &inputs,
+                        std::vector<Tensor> &outputs) {
+  outputs[0].init_view(
+      std::make_shared<View>(_shape, _dtype, device::DeviceKind::CPU));
+  cpu::fill(outputs[0], _value, _shape);
+}
 } // namespace pg

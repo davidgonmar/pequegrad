@@ -534,10 +534,16 @@ public:
                   device::DeviceKind::CUDA);
   }
 
-  static Tensor from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
-                               std::vector<Tensor> inputs) {
+  static Tensor
+  from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
+                 std::vector<Tensor> inputs,
+                 std::optional<device::DeviceKind> device = std::nullopt) {
+    if (inputs.size() == 0) {
+      PG_CHECK_ARG(device.has_value(),
+                   "Device must be specified for leaf nodes.");
+    }
 
-    return Tensor(primitive, inputs);
+    return Tensor(primitive, inputs, device);
   }
 
   Tensor eval(bool detach = true);
@@ -573,7 +579,8 @@ private:
       : _view(std::make_shared<View>(ptr, nbytes, shape, strides, offset, dtype,
                                      device)) {}
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-         std::vector<Tensor> inputs);
+         std::vector<Tensor> inputs,
+         std::optional<device::DeviceKind> device = std::nullopt);
 };
 
 std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,

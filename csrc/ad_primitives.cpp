@@ -760,4 +760,20 @@ CompiledPrimitive::backward(const std::vector<Tensor> &primals,
   throw std::runtime_error("backward not implemented for " + str());
 }
 
+std::vector<shape_t>
+Fill::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  return {_shape};
+}
+
+std::vector<DType>
+Fill::infer_output_dtypes(const std::vector<Tensor> &inputs) {
+  return {_dtype};
+}
+
+std::vector<Tensor> Fill::backward(const std::vector<Tensor> &primals,
+                                   const std::vector<Tensor> &tangents,
+                                   const std::vector<Tensor> &outputs) {
+  return {};
+}
+
 } // namespace pg

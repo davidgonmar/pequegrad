@@ -9,14 +9,8 @@ namespace pg {
 
 Tensor fill(const shape_t &shape, DType dtype, double value,
             device::DeviceKind device) {
-  Tensor t = Tensor(shape, dtype, device);
-  if (device == device::CPU) {
-    cpu::fill(t, value, shape);
-    return t;
-  } else {
-    cuda::fill(t, value, shape);
-  }
-  return t;
+  return Tensor::from_primitive(std::make_shared<Fill>(value, dtype, shape), {},
+                                device);
 }
 
 Tensor broadcast_to(const Tensor &a, const shape_t &shape) {

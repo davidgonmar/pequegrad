@@ -1,4 +1,5 @@
 
+#include "ad_primitives.hpp"
 #include "cuda_utils.cuh"
 #include "dtype.hpp"
 #include "tensor.hpp"
@@ -40,4 +41,9 @@ void fill(Tensor &t, double value, const shape_t &_shape) {
   }
 }
 } // namespace cuda
+void Fill::dispatch_cuda(const std::vector<Tensor> &inputs,
+                         std::vector<Tensor> &outputs) {
+  outputs[0].init_view(std::make_shared<View>(_shape, _dtype, device::CUDA));
+  cuda::fill(outputs[0], _value, _shape);
+}
 } // namespace pg

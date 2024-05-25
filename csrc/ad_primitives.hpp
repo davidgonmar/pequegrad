@@ -482,4 +482,21 @@ public:
   DEFINE_INFER_OUTPUT_DTYPES
 };
 
+class Fill : public ADPrimitive {
+protected:
+  double _value;
+  shape_t _shape;
+  DType _dtype;
+
+public:
+  explicit Fill(double value, DType dtype, shape_t shape)
+      : _value(value), _shape(shape), _dtype(dtype) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Fill)
+  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_INFER_OUTPUT_DTYPES
+  DEFINE_BACKWARD
+};
+
 } // namespace pg

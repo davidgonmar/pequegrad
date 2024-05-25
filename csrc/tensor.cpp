@@ -178,9 +178,11 @@ DType Tensor::dtype() const {
 }
 
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-               std::vector<Tensor> inputs) {
+               std::vector<Tensor> inputs,
+               std::optional<device::DeviceKind> _device) {
   _ad_node = std::make_shared<ADNode>(primitive, inputs);
-  device::DeviceKind device = inputs[0].device();
+  device::DeviceKind device =
+      _device.has_value() ? _device.value() : inputs[0].device();
   for (const Tensor &input : inputs) {
     PG_CHECK_ARG(input.device() == device,
                  "All inputs to a primitive must be on the same device, got ",
