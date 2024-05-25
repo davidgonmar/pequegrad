@@ -98,7 +98,7 @@ void apply_expr(Expr expr) {
     inputs_str += ", ";
   }
   inputs_str += render_dtype(out.dtype()) + " *out";
-  std::string kernel_name = "namenamename";
+  std::string kernel_name = "kernel_" + std::to_string(rand());
   std::string kernel_code = get_x_gid() + kernel_body;
   std::string file = render_kernel_file(kernel_name, kernel_code, inputs_str);
   // std::cout << " Kernel file: " << file << "\n";
