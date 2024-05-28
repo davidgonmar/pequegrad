@@ -34,28 +34,31 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .value("cpu", device::DeviceKind::CPU)
       .value("cuda", device::DeviceKind::CUDA);
 
-  // module functions. We need to do the pybind cast overload thing for add
-  // since it accepts scalars
-  m.def("add", [](const Tensor &a, const Tensor &b) { return pg::add(a, b); });
-  m.def("add", [](const Tensor &a, double b) { return pg::add(a, b); });
+// module functions. We need to do the pybind cast overload thing for add
+// since it accepts scalars
+#define BIND_BINOP_WITH_SCALAR_OVERLOADS(op)                                   \
+  m.def(#op, py::overload_cast<const Tensor &, const Tensor &>(&pg::op));      \
+  m.def(#op, py::overload_cast<const Tensor &, double>(&pg::op));              \
+  m.def(#op, py::overload_cast<double, const Tensor &>(&pg::op))
+
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(add);
   m.def("add_inplace", [](Tensor &a, const Tensor &b) { add_inplace(a, b); });
-  m.def("sub", [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); });
-  m.def("sub", [](const Tensor &a, double b) { return pg::sub(a, b); });
-  m.def("mul", [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); });
-  m.def("mul", [](const Tensor &a, double b) { return pg::mul(a, b); });
-  m.def("div", [](const Tensor &a, const Tensor &b) { return pg::div(a, b); });
-  m.def("div", [](const Tensor &a, double b) { return pg::div(a, b); });
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(sub);
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(mul);
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(div);
   m.def("neg", &neg);
   m.def("fill", &fill);
-  m.def("gt", &gt);
-  m.def("lt", &lt);
-  m.def("eq", &eq);
-  m.def("neq", &neq);
-  m.def("pow", [](const Tensor &a, const Tensor &b) { return pg::pow(a, b); });
-  m.def("pow", [](const Tensor &a, double b) { return pg::pow(a, b); });
+
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(lt);
+
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(gt);
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(eq);
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(neq);
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(max);
+  BIND_BINOP_WITH_SCALAR_OVERLOADS(pow);
+
   m.def("log", &pg::log);
   m.def("exp", &pg::exp);
-  m.def("max", &pg::max);
   m.def("im2col", &pg::im2col, py::arg("a"), py::arg("kernel_shape"),
         py::arg("stride") = std::vector<int>{1, 1},
         py::arg("padding") = std::vector<int>{0, 0},
@@ -143,6 +146,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
       py::arg("required_tensors"), py::arg("output"),
       py::arg("tangent") = std::nullopt);
 
+#define BIND_BINOP_WITH_OVERLOAD_CLASS(pyname, op)                             \
+  def(#pyname, py::overload_cast<const Tensor &, const Tensor &>(&pg::op))     \
+      .def(#pyname, py::overload_cast<const Tensor &, double>(&pg::op))        \
+      .def(#pyname, py::overload_cast<double, const Tensor &>(&pg::op))
+
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def("to_", &Tensor::to_)
@@ -222,47 +230,32 @@ PYBIND11_MODULE(pequegrad_c, m) {
           }),
           py::arg("np_array"), py::arg("device") = device::DeviceKind::CPU)
 
-      .def("__add__",
-           [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
-      .def("__add__", [](const Tensor &a, double b) { return pg::add(a, b); })
-      .def("__add__", [](const Tensor &a, float b) { return pg::add(a, b); })
-      .def("__radd__", [](const Tensor &a, double b) { return pg::add(a, b); })
-      .def("__radd__", [](const Tensor &a, float b) { return pg::add(a, b); })
-      .def("__radd__",
-           [](const Tensor &a, const Tensor &b) { return pg::add(a, b); })
-      .def("__sub__",
-           [](const Tensor &a, const Tensor &b) { return pg::sub(a, b); })
-      .def("__sub__", [](const Tensor &a, double b) { return pg::sub(a, b); })
-      .def("__sub__", [](const Tensor &a, float b) { return pg::sub(a, b); })
-      .def("__sub__", [](const Tensor &a, int b) { return pg::sub(a, b); })
-      .def("__mul__",
-           [](const Tensor &a, const Tensor &b) { return pg::mul(a, b); })
-      .def("__mul__", [](const Tensor &a, double b) { return pg::mul(a, b); })
-      .def("__mul__", [](const Tensor &a, float b) { return pg::mul(a, b); })
-      .def("__mul__", [](const Tensor &a, int b) { return pg::mul(a, b); })
-      .def("__rmul__", [](const Tensor &a, double b) { return pg::mul(a, b); })
-      .def("__rmul__", [](const Tensor &a, float b) { return pg::mul(a, b); })
-      .def("__rmul__", [](const Tensor &a, int b) { return pg::mul(a, b); })
-      .def("__truediv__",
-           [](const Tensor &a, const Tensor &b) { return pg::div(a, b); })
-      .def("__truediv__",
-           [](const Tensor &a, double b) { return pg::div(a, b); })
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(add, add)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__add__, add)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__radd__, add)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(sub, sub)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__sub__, sub)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rsub__, sub)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(mul, mul)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__mul__, mul)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rmul__, mul)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(div, div)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__truediv__, div)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rtruediv__, div)
       .def("__neg__", [](const Tensor &a) { return pg::neg(a); })
       .def("__matmul__",
            [](const Tensor &a, const Tensor &b) { return pg::matmul(a, b); })
-      .def("__pow__",
-           [](const Tensor &a, const Tensor &b) { return pg::pow(a, b); })
-      .def("__pow__", [](const Tensor &a, double b) { return pg::pow(a, b); })
-      .def("__pow__", [](const Tensor &a, float b) { return pg::pow(a, b); })
-      .def("__pow__", [](const Tensor &a, int b) { return pg::pow(a, b); })
-      .def("__eq__",
-           [](const Tensor &a, const Tensor &b) { return pg::eq(a, b); })
-      .def("__ne__",
-           [](const Tensor &a, const Tensor &b) { return pg::neq(a, b); })
-      .def("__lt__",
-           [](const Tensor &a, const Tensor &b) { return pg::lt(a, b); })
-      .def("__gt__",
-           [](const Tensor &a, const Tensor &b) { return pg::gt(a, b); })
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(pow, pow)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__pow__, pow)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rpow__, pow)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(eq, eq)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__eq__, eq)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(neq, neq)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__ne__, neq)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(gt, gt)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__gt__, gt)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(lt, lt)
+      .BIND_BINOP_WITH_OVERLOAD_CLASS(__lt__, lt)
       .def("__repr__", [](const Tensor &t) { return t.str(); })
       .def(
           "__getitem__",

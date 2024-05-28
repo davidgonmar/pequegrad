@@ -2,7 +2,7 @@ from pequegrad.backend.c import Tensor, device, dt
 import pequegrad.backend.c as pg
 import numpy as np
 from typing import Tuple, Union, Optional, List
-
+import math
 
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
 CUDA_AVAILABLE = True
@@ -656,3 +656,42 @@ def tensordot(a: "Tensor", b: "Tensor", dims: Union[int, Tuple[List[int], List[i
 
 
 bind_method(Tensor, "tensordot", tensordot)
+
+
+def sigmoid(self):
+    return 1 / (1 + pg.exp(-self))
+
+
+def tanh(self):
+    # compute it manually
+    return (pg.exp(self) - pg.exp(-self)) / (pg.exp(self) + pg.exp(-self))
+
+
+bind_method(Tensor, "sigmoid", sigmoid)
+bind_method(Tensor, "tanh", tanh)
+bind_method(pg, "sigmoid", sigmoid)
+bind_method(pg, "tanh", tanh)
+
+
+pg.abs = lambda x: (x**2) ** 0.5  # TODO -- I am lazy
+
+
+def erf(x):
+    raise NotImplementedError("erf not implemented yet")
+
+
+bind_method(Tensor, "erf", erf)
+
+
+def gelu(self, approximate: str = None):
+    if not approximate:
+        raise NotImplementedError("gelu not implemented yet without approximation")
+    if approximate == "tanh":
+        return (
+            0.5
+            * self
+            * (1 + pg.tanh(math.sqrt(2 / math.pi) * (self + 0.044715 * (self**3))))
+        )
+
+
+bind_method(Tensor, "gelu", gelu)

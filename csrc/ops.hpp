@@ -11,23 +11,25 @@
 namespace pg {
 using hl_select_t =
     std::variant<SelectKeepDim, SelectWithSlice, SelectWithSingleIdx, Tensor>;
-Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items);
-Tensor add(const Tensor &a, const Tensor &b);
-Tensor add_inplace(Tensor &a, const Tensor &b);
-Tensor add(const Tensor &a, double b);
-Tensor mul(const Tensor &a, const Tensor &b);
-Tensor mul(const Tensor &a, double b);
-Tensor sub(const Tensor &a, const Tensor &b);
-Tensor sub(const Tensor &a, double b);
-Tensor div(const Tensor &a, const Tensor &b);
-Tensor div(const Tensor &a, double b);
-Tensor pow(const Tensor &a, const Tensor &b);
-Tensor pow(const Tensor &a, double b);
 
-Tensor gt(const Tensor &a, const Tensor &b);
-Tensor lt(const Tensor &a, const Tensor &b);
-Tensor eq(const Tensor &a, const Tensor &b);
-Tensor neq(const Tensor &a, const Tensor &b);
+#define DECLARE_BINARY_OP(name)                                                \
+  Tensor name(const Tensor &a, const Tensor &b);                               \
+  Tensor name(const Tensor &a, double b);                                      \
+  Tensor name(double a, const Tensor &b);
+
+Tensor select(const Tensor &a, const std::vector<hl_select_t> &_items);
+
+Tensor add_inplace(Tensor &a, const Tensor &b);
+DECLARE_BINARY_OP(add)
+DECLARE_BINARY_OP(sub)
+DECLARE_BINARY_OP(mul)
+DECLARE_BINARY_OP(div)
+DECLARE_BINARY_OP(pow)
+DECLARE_BINARY_OP(gt)
+DECLARE_BINARY_OP(lt)
+DECLARE_BINARY_OP(eq)
+DECLARE_BINARY_OP(neq)
+
 Tensor log(const Tensor &a);
 Tensor neg(const Tensor &a);
 
@@ -57,8 +59,7 @@ Tensor t(const Tensor &a);
 Tensor matmul(const Tensor &a, const Tensor &b);
 
 Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b);
-Tensor max(const Tensor &a, const Tensor &b);
-
+DECLARE_BINARY_OP(max)
 Tensor exp(const Tensor &a);
 
 Tensor im2col(const Tensor &a, const shape_t &kernel_shape,

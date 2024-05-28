@@ -75,79 +75,75 @@ static std::vector<Tensor> broadcast_tensors(const Tensor &a, const Tensor &b) {
   return {a_broadcasted, b_broadcasted};
 }
 
+#define DEFINE_BINOP_SCALAR_OVERLOAD(name)                                     \
+  Tensor name(const Tensor &a, double b) {                                     \
+    Tensor t = fill(a.shape(), a.dtype(), b, a.device());                      \
+    return name(a, t);                                                         \
+  }                                                                            \
+  Tensor name(double a, const Tensor &b) {                                     \
+    Tensor t = fill(b.shape(), b.dtype(), a, b.device());                      \
+    return name(t, b);                                                         \
+  }
+
 Tensor add(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Add>(),
                                 broadcast_tensors(a, b));
 }
-
-Tensor add(const Tensor &a, double b) {
-  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
-  return add(a, t);
-}
+DEFINE_BINOP_SCALAR_OVERLOAD(add)
 
 Tensor mul(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Mul>(),
                                 broadcast_tensors(a, b));
 }
+DEFINE_BINOP_SCALAR_OVERLOAD(mul)
 
-Tensor mul(const Tensor &a, double b) {
-  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
-  return mul(a, t);
-}
 Tensor sub(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Sub>(),
                                 broadcast_tensors(a, b));
 }
-
-Tensor sub(const Tensor &a, double b) {
-  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
-  return sub(a, t);
-}
+DEFINE_BINOP_SCALAR_OVERLOAD(sub)
 
 Tensor div(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Div>(),
                                 broadcast_tensors(a, b));
 }
-
-Tensor div(const Tensor &a, double b) {
-  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
-  return div(a, t);
-}
+DEFINE_BINOP_SCALAR_OVERLOAD(div)
 
 Tensor gt(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Gt>(),
                                 broadcast_tensors(a, b));
 }
+DEFINE_BINOP_SCALAR_OVERLOAD(gt)
 
 Tensor lt(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Lt>(),
                                 broadcast_tensors(a, b));
 }
+DEFINE_BINOP_SCALAR_OVERLOAD(lt)
 
 Tensor eq(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Eq>(),
                                 broadcast_tensors(a, b));
 }
+DEFINE_BINOP_SCALAR_OVERLOAD(eq)
 
 Tensor neq(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Neq>(),
                                 broadcast_tensors(a, b));
 }
+DEFINE_BINOP_SCALAR_OVERLOAD(neq)
 
 Tensor pow(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Pow>(),
                                 broadcast_tensors(a, b));
 }
-
-Tensor pow(const Tensor &a, double b) {
-  Tensor t = fill(a.shape(), a.dtype(), b, a.device());
-  return pow(a, t);
-}
+DEFINE_BINOP_SCALAR_OVERLOAD(pow)
 
 Tensor max(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive(std::make_shared<Max>(),
                                 broadcast_tensors(a, b));
 }
+DEFINE_BINOP_SCALAR_OVERLOAD(max)
 
 Tensor log(const Tensor &a) {
   return Tensor::from_primitive(std::make_shared<Log>(), {a});

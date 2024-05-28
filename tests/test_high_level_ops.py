@@ -486,3 +486,52 @@ class TestNew:
             torch_fn,
             device=device,
         )
+
+    @pytest.mark.skip(reason="Not implemented yet")
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_erf(self, shape, device):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.erf(),
+            lambda x: x.erf(),
+            device=device,
+        )
+
+    # tests for gelu
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize("approximate", ["tanh"])
+    def test_gelu(self, shape, device, approximate):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.gelu(approximate=approximate),
+            lambda x: torch.nn.functional.gelu(x, approximate=approximate),
+            device=device,
+        )
+
+    # tests for tanh
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_tanh(self, shape, device):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.tanh(),
+            lambda x: torch.tanh(x),
+            device=device,
+        )
