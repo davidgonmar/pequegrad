@@ -695,3 +695,10 @@ def gelu(self, approximate: str = None):
 
 
 bind_method(Tensor, "gelu", gelu)
+
+
+def silu(self):
+    return self * pg.sigmoid(self)
+
+
+bind_method(Tensor, "silu", silu)

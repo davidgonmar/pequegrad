@@ -69,6 +69,9 @@ public:
     return true;
   }
   void *get_base_ptr() const;
+  template <typename T> T *get_casted_base_ptr() const {
+    return static_cast<T *>(get_base_ptr());
+  }
   void set_ptr(const std::shared_ptr<void> &ptr) { _ptr = ptr; }
   std::shared_ptr<void> shared_ptr() const;
   shape_t shape() const;

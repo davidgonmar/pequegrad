@@ -535,3 +535,35 @@ class TestNew:
             lambda x: torch.tanh(x),
             device=device,
         )
+
+    # tests for sigmoid
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_sigmoid(self, shape, device):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.sigmoid(),
+            lambda x: torch.sigmoid(x),
+            device=device,
+        )
+
+    # tests for silu
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            [(2, 3)],
+        ],
+    )
+    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    def test_silu(self, shape, device):
+        _compare_fn_with_torch(
+            shape,
+            lambda x: x.silu(),
+            lambda x: torch.nn.functional.silu(x),
+            device=device,
+        )

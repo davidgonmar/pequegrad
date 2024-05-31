@@ -241,7 +241,12 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__rmul__, mul)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(div, div)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__truediv__, div)
-      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rtruediv__, div)
+      .def("__rtruediv__",
+           [](const Tensor &a, const Tensor &b) { return pg::div(b, a); })
+      .def("__rtruediv__",
+           [](const Tensor &a, double b) { return pg::div(b, a); })
+      .def("__rtruediv__",
+           [](const double a, const Tensor &b) { return pg::div(b, a); })
       .def("__neg__", [](const Tensor &a) { return pg::neg(a); })
       .def("__matmul__",
            [](const Tensor &a, const Tensor &b) { return pg::matmul(a, b); })
