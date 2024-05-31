@@ -1,7 +1,8 @@
-#include "folding_helpers.hpp"
+#include "folding.hpp"
 #include "ad_primitives.hpp"
 #include "dispatch.hpp"
 #include "view_helpers.hpp"
+
 namespace pg {
 void Im2Col::dispatch_cpu(const std::vector<Tensor> &inputs,
                           std::vector<Tensor> &outputs) {
@@ -46,7 +47,7 @@ void Im2Col::dispatch_cpu(const std::vector<Tensor> &inputs,
                               outputs[0].get_casted_base_ptr<scalar_t>(), k_h,
                               k_w, x_h, x_w, stride_x, stride_y, batch_size,
                               in_channels, dilation_x, dilation_y);
-  }(););
+  });
 } // namespace pg
 
 void Col2Im::dispatch_cpu(const std::vector<Tensor> &inputs,
@@ -94,6 +95,6 @@ void Col2Im::dispatch_cpu(const std::vector<Tensor> &inputs,
                               out_channels, k_h, k_w, in_h, in_w, batch_size,
                               out_h, out_w, stride_x, stride_y, dilation_x,
                               dilation_y);
-  }(););
+  });
 }
 } // namespace pg

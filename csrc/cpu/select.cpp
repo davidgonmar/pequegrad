@@ -1,5 +1,6 @@
-#include "select_helpers.hpp"
+#include "select.hpp"
 #include "ad_primitives.hpp"
+#include "view_helpers.hpp"
 
 namespace pg {
 void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
@@ -190,9 +191,7 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
       outputs[0].init_view(
           std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));
       // copy dst into outputs[0]
-      copy::dispatch_copy(dst.shape(), dst.strides(), dst.strides(),
-                          dst.get_base_ptr(), outputs[0].get_base_ptr(),
-                          dst.dtype());
+      cpu::view::copy_data(dst.view(), outputs[0].view());
       return _assign_with_array(outputs[0], src, _items, idxs);
     }
   }
@@ -201,9 +200,7 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
   outputs[0].init_view(
       std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));
   // copy dst into outputs[0]
-  copy::dispatch_copy(dst.shape(), dst.strides(), dst.strides(),
-                      dst.get_base_ptr(), outputs[0].get_base_ptr(),
-                      dst.dtype());
+  cpu::view::copy_data(dst.view(), outputs[0].view());
   // Now select from out into tmp
   Tensor tmp = Tensor();
   std::vector<Tensor> _inputs = {outputs[0]};
@@ -212,8 +209,7 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
   select(_inputs, std::vector<Tensor>{tmp}, _items);
 
   // Now copy the values from src to the sliced output
-  copy::dispatch_copy(tmp.shape(), src.strides(), tmp.strides(),
-                      src.get_base_ptr(), tmp.get_base_ptr(), src.dtype());
+  cpu::view::copy_data(src.view(), tmp.view());
 }
 
 void Select::dispatch_cpu(const std::vector<Tensor> &inputs,

@@ -413,7 +413,9 @@ public:
     _throw_if_not_initialized(
         "get_casted_base_ptr() called on uninitialized tensor.");
     if (dtype_from_cpptype<T>() != this->dtype()) {
-      throw std::runtime_error("Cannot cast pointer to different dtype.");
+      throw std::runtime_error("Cannot cast pointer to different dtype, got " +
+                               dtype_to_string(this->dtype()) + " and " +
+                               dtype_to_string(dtype_from_cpptype<T>()));
     }
     return static_cast<T *>(view().get_base_ptr());
   }

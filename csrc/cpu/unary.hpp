@@ -56,36 +56,5 @@ UNARY_OP_FLOAT(vec_exp, _mm256_exp_ps, expf)
 UNARY_OP_FLOAT(vec_log, _mm256_log_ps, logf)
 UNARY_OP_DOUBLE(vec_exp, _mm256_exp_pd, exp)
 UNARY_OP_DOUBLE(vec_log, _mm256_log_pd, log)
-
-enum class UnaryOpType { Exp, Log };
-
-static inline void dispatch_unary_op(DType dtype, UnaryOpType op, void *ptr,
-                                     void *result, int size) {
-  switch (dtype) {
-  case DType::Float32:
-    switch (op) {
-    case UnaryOpType::Exp:
-      vec_exp(static_cast<float *>(ptr), static_cast<float *>(result), size);
-      break;
-    case UnaryOpType::Log:
-      vec_log(static_cast<float *>(ptr), static_cast<float *>(result), size);
-      break;
-    }
-    break;
-  case DType::Int32:
-    throw std::runtime_error("Unsupported data type: Int32");
-    break;
-  case DType::Float64:
-    switch (op) {
-    case UnaryOpType::Exp:
-      vec_exp(static_cast<double *>(ptr), static_cast<double *>(result), size);
-      break;
-    case UnaryOpType::Log:
-      vec_log(static_cast<double *>(ptr), static_cast<double *>(result), size);
-      break;
-    }
-    break;
-  }
-}
 } // namespace cpu
 } // namespace pg

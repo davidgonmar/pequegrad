@@ -1,6 +1,5 @@
 #pragma once
 #include "ad_primitives.hpp"
-#include "copy_helpers.hpp"
 #include "shape.hpp"
 #include "utils.hpp"
 #include <memory>

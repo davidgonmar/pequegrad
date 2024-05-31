@@ -1,6 +1,7 @@
 #pragma once
 #include "dtype.hpp"
 #include "shape.hpp"
+#include <functional>
 #include <vector>
 
 namespace pg {
@@ -20,7 +21,7 @@ enum class BinaryOpType {
   Max
 };
 
-template <typename T> using Op = std::function<T(T, T)>;
+template <typename T> using BOp = std::function<T(T, T)>;
 
 #include <vector>
 
@@ -28,7 +29,7 @@ template <typename T>
 void binary_op_ker(const T *lhs, const T *rhs, T *result,
                    const strides_t &lhs_strides, const strides_t &rhs_strides,
                    const strides_t &result_strides, const shape_t &shape,
-                   Op<T> op) {
+                   BOp<T> op) {
 
   size_t total_elements = 1;
   for (size_t dim : shape) {
@@ -81,32 +82,5 @@ _dispatch_binary_op_helper(const shape_t &shape, const strides_t &lhs_strides,
     BINOP_HELPER_CASE(Max, [](T a, T b) { return std::max(a, b); })
   }
 }
-
-static inline void dispatch_binary_op(const shape_t &shape,
-                                      const strides_t &lhs_strides,
-                                      const strides_t &rhs_strides,
-                                      const strides_t &result_strides,
-                                      const void *lhs, const void *rhs,
-                                      void *result, DType dtype,
-                                      BinaryOpType op) {
-  switch (dtype) {
-  case DType::Float32:
-    _dispatch_binary_op_helper<float>(shape, lhs_strides, rhs_strides,
-                                      result_strides, lhs, rhs, result, op);
-    break;
-  case DType::Int32:
-    _dispatch_binary_op_helper<int>(shape, lhs_strides, rhs_strides,
-                                    result_strides, lhs, rhs, result, op);
-    break;
-  case DType::Float64:
-    _dispatch_binary_op_helper<double>(shape, lhs_strides, rhs_strides,
-                                       result_strides, lhs, rhs, result, op);
-    break;
-  default:
-    throw std::runtime_error("Unsupported data type: " +
-                             dtype_to_string(dtype));
-  }
-}
-
 } // namespace cpu
 } // namespace pg

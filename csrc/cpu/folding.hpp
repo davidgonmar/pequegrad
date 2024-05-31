@@ -59,18 +59,5 @@ void col2im_cpu(const T *in, T *out, size_t out_channels, size_t k_h,
     }
   }
 }
-
-void dispatch_im2col_kernel(DType dtype, void *in, void *out, size_t k_h,
-                            size_t k_w, size_t x_h, size_t x_w, size_t stride_x,
-                            size_t stride_y, size_t batch_size,
-                            size_t in_channels, size_t dilation_x,
-                            size_t dilation_y);
-
-void dispatch_col2im_kernel(DType dtype, void *in, void *out,
-                            size_t out_channels, size_t k_h, size_t k_w,
-                            size_t in_h, size_t in_w, size_t batch_size,
-                            size_t out_h, size_t out_w, size_t stride_x,
-                            size_t stride_y, size_t dilation_x,
-                            size_t dilation_y);
 } // namespace cpu
 } // namespace pg

@@ -86,52 +86,5 @@ template <typename T> struct MeanOp {
 
 enum class ReduceOp { Sum, Max, Mean };
 
-template <typename T>
-static inline void
-dispatch_reduce_helper(const T *in, T *out, const strides_t &in_strides,
-                       const shape_t &in_shape, const size_t red_axis,
-                       const ReduceOp op) {
-  switch (op) {
-  case ReduceOp::Sum:
-    reduce_base_fn<SumOp<T>>(in, out, in_strides, in_shape, red_axis);
-    break;
-  case ReduceOp::Max:
-    reduce_base_fn<MaxOp<T>>(in, out, in_strides, in_shape, red_axis);
-    break;
-  case ReduceOp::Mean:
-    reduce_base_fn<MeanOp<T>>(in, out, in_strides, in_shape, red_axis);
-    break;
-  default:
-    throw std::runtime_error("Unsupported reduce operation");
-  }
-}
-
-static inline void dispatch_reduce(const void *in, void *out,
-                                   const strides_t &in_strides,
-                                   const shape_t &in_shape,
-                                   const size_t red_axis, const DType dtype,
-                                   const ReduceOp op) {
-  switch (dtype) {
-  case DType::Float32:
-    dispatch_reduce_helper<float>(static_cast<const float *>(in),
-                                  static_cast<float *>(out), in_strides,
-                                  in_shape, red_axis, op);
-    break;
-  case DType::Int32:
-    dispatch_reduce_helper<int>(static_cast<const int *>(in),
-                                static_cast<int *>(out), in_strides, in_shape,
-                                red_axis, op);
-    break;
-  case DType::Float64:
-    dispatch_reduce_helper<double>(static_cast<const double *>(in),
-                                   static_cast<double *>(out), in_strides,
-                                   in_shape, red_axis, op);
-    break;
-  default:
-    throw std::runtime_error("Unsupported data type: " +
-                             dtype_to_string(dtype));
-  }
-}
-
 } // namespace cpu
 } // namespace pg

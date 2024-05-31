@@ -64,30 +64,6 @@ void dot_ker<double>(const double *lhs, const double *rhs, double *result,
   *result = cblas_ddot(S, lhs, 1, rhs, 1);
 }
 
-void dispatch_contiguous_matmul_ker(const void *lhs, const void *rhs,
-                                    void *result, size_t M, size_t N, size_t K,
-                                    size_t B, DType dtype) {
-  switch (dtype) {
-  case DType::Float32:
-    matmul_ker<float>(static_cast<const float *>(lhs),
-                      static_cast<const float *>(rhs),
-                      static_cast<float *>(result), M, N, K, B);
-    break;
-  case DType::Float64:
-    matmul_ker<double>(static_cast<const double *>(lhs),
-                       static_cast<const double *>(rhs),
-                       static_cast<double *>(result), M, N, K, B);
-    break;
-  case DType::Int32:
-    matmul_ker<int32_t>(static_cast<const int32_t *>(lhs),
-                        static_cast<const int32_t *>(rhs),
-                        static_cast<int32_t *>(result), M, N, K, B);
-    break;
-  default:
-    throw std::runtime_error("Unsupported data type");
-  }
-}
-
 void dispatch_contiguous_dot_ker(const void *lhs, const void *rhs, void *result,
                                  size_t S, DType dtype) {
   switch (dtype) {
