@@ -1,5 +1,12 @@
-from pequegrad.tensor import Tensor, CUDA_AVAILABLE, device
-from pequegrad.modules import Linear, Conv2d, StatefulModule, Dropout
+from pequegrad import (
+    Tensor,
+    device,
+    Linear,
+    Conv2d,
+    StatefulModule,
+    Dropout,
+    CUDA_AVAILABLE,
+)
 import os
 import tempfile
 import pytest

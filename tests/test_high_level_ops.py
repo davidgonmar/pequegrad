@@ -1,4 +1,4 @@
-from pequegrad.backend.c import Tensor, dt, device, grads
+from pequegrad import Tensor, dt, device, grads
 import pequegrad as pg
 import numpy as np
 import torch

@@ -13,7 +13,7 @@ void Log::dispatch_cuda(const std::vector<Tensor> &inputs,
   CHECK_INPUTS_LENGTH(inputs, 1);
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
-  if (true) {
+  if (!a.is_dense()) {
     outputs[0].init_view(
         std::make_shared<View>(a.shape(), a.dtype(), device::CUDA));
     dim3 blocksize(DEFAULT_BLOCK_SIZE);
@@ -30,8 +30,8 @@ void Log::dispatch_cuda(const std::vector<Tensor> &inputs,
     });
     PG_CUDA_KERNEL_END;
   } else {
-    outputs[0].init_view(
-        std::make_shared<View>(a.shape(), a.dtype(), device::CUDA));
+    outputs[0].init_view(std::make_shared<View>(a.shape(), a.strides(),
+                                                a.dtype(), device::CUDA));
     dim3 blocksize(DEFAULT_BLOCK_SIZE);
     dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
     PG_DISPATCH_FLOATING_TYPES(a.dtype(), "log_cuda", [&]() {
@@ -48,7 +48,7 @@ void Exp::dispatch_cuda(const std::vector<Tensor> &inputs,
   CHECK_INPUTS_LENGTH(inputs, 1);
   CHECK_OUTPUTS_LENGTH(outputs, 1);
   const Tensor &a = inputs[0];
-  if (true) {
+  if (!a.is_dense()) {
     outputs[0].init_view(
         std::make_shared<View>(a.shape(), a.dtype(), device::CUDA));
     dim3 blocksize(DEFAULT_BLOCK_SIZE);
@@ -65,8 +65,8 @@ void Exp::dispatch_cuda(const std::vector<Tensor> &inputs,
     });
     PG_CUDA_KERNEL_END;
   } else {
-    outputs[0].init_view(
-        std::make_shared<View>(a.shape(), a.dtype(), device::CUDA));
+    outputs[0].init_view(std::make_shared<View>(a.shape(), a.strides(),
+                                                a.dtype(), device::CUDA));
     dim3 blocksize(DEFAULT_BLOCK_SIZE);
     dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
     PG_DISPATCH_FLOATING_TYPES(a.dtype(), "exp_cuda", [&]() {

@@ -102,6 +102,49 @@ public:
        const shape_t &shape, const strides_t &strides, const size_t offset,
        DType dtype, device::DeviceKind device);
 
+  bool is_initialized() const { return _initialized; }
+  bool is_evaled() const { return is_initialized(); }
+  bool is_dense() const {
+    // dense means that it might not be contiguous, but
+    // there are no holes in the array
+    // that is, the total number of elements is equal to
+    // the size of the underlying storage
+    size_t total_in_storage = nbytes();
+    size_t total_size_in_bytes = numel() * dtype_to_size(dtype());
+    if (!is_evaled()) {
+      throw std::runtime_error("Cannot check if unevaluated view is dense.");
+    }
+    return total_in_storage == total_size_in_bytes;
+  }
+
+  View(const shape_t shape, const strides_t strides, const size_t offset,
+       const DType dtype, device::DeviceKind device)
+      : _shape(shape), _strides(strides), _offset(offset), _dtype(dtype),
+        _device(device) {
+    size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
+                                    std::multiplies<size_t>()) *
+                    dtype_to_size(dtype);
+    _nbytes = nbytes;
+    _ptr = device::allocate(nbytes, device);
+    _initialized = true;
+
+    PG_CHECK_RUNTIME(is_dense(), "Cannot create view with holes.");
+  }
+
+  View(const shape_t shape, const strides_t strides, const DType dtype,
+       device::DeviceKind device)
+      : _shape(shape), _strides(strides), _dtype(dtype), _device(device) {
+    size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
+                                    std::multiplies<size_t>()) *
+                    dtype_to_size(dtype);
+    _nbytes = nbytes;
+    _ptr = device::allocate(nbytes, device);
+    _offset = 0;
+    _initialized = true;
+
+    PG_CHECK_RUNTIME(is_dense(), "Cannot create view with holes.");
+  }
+
   View(const shape_t shape, DType dtype, device::DeviceKind device,
        bool init = true) {
     _shape = shape;
@@ -132,8 +175,6 @@ public:
   }
 
   View() = default;
-
-  bool is_initialized() const { return _initialized; }
 
   // Copy and move constructors
   View(const View &other) {

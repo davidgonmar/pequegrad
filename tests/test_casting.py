@@ -1,5 +1,6 @@
 from pequegrad.autodiff import grads
-from pequegrad.tensor import Tensor, dt, device
+from pequegrad.tensor import Tensor
+from pequegrad import device, dt
 import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor

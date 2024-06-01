@@ -1,4 +1,4 @@
-from pequegrad.tensor import Tensor, CUDA_AVAILABLE, device
+from pequegrad import Tensor, CUDA_AVAILABLE, device
 import numpy as np
 import pytest
 
