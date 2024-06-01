@@ -39,27 +39,5 @@ __global__ void where_kernel(KERNEL_PARAMS_TER(int));
 
 enum class TernaryKernelType { WHERE };
 
-template <typename T>
-void launch_ternary_kernel_helper(
-    TernaryKernelType kernel_type, dim3 grid_size, dim3 block_size,
-    const stride_t *first_strides, const stride_t *second_strides,
-    const stride_t *third_strides, const size_t *shape, const size_t num_dims,
-    const T *first, const T *second, const T *third, T *out) {
-  switch (kernel_type) {
-  case TernaryKernelType::WHERE:
-    where_kernel<<<grid_size, block_size>>>(first_strides, second_strides,
-                                            third_strides, shape, num_dims,
-                                            first, second, third, out);
-    break;
-  }
-}
-
-void launch_ternary_kernel(TernaryKernelType kt, DType dtype, dim3 grid_size,
-                           dim3 block_size, const stride_t *first_strides,
-                           const stride_t *second_strides,
-                           const stride_t *third_strides, const size_t *shape,
-                           const size_t num_dims, const void *first,
-                           const void *second, const void *third, void *out);
-
 } // namespace cuda
 } // namespace pg

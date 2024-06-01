@@ -5,40 +5,6 @@ namespace pg {
 namespace cuda {
 // All kernels here assume contiguous (natural) memory
 
-// Similar to
-// https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf. If
-// size exceeds block size, then we need to do a reduction across blocks, kernel
-// caller does that. Kernel computes accumulates vector_a * vector_b. Max
-// accumulation range depends on the maximum block size of the GPU.
-template <typename T>
-__global__ void vector_dot_product_accum_kernel(const T *a, const T *b, T *out,
-                                                size_t size) {
-  // https://stackoverflow.com/a/27570775
-  extern __shared__ __align__(sizeof(T)) unsigned char my_smem[];
-  T *shared = reinterpret_cast<T *>(my_smem);
-  const int idx = threadIdx.x;
-
-  // only compute product if we are within size
-  // else just set to 0, since uninitialized memory is undefined
-  if (blockIdx.x * blockDim.x + idx < size) {
-    shared[idx] =
-        a[blockIdx.x * blockDim.x + idx] * b[blockIdx.x * blockDim.x + idx];
-  } else {
-    shared[idx] = 0;
-  }
-
-  __syncthreads();
-
-  for (int stride = 1; stride < blockDim.x; stride *= 2) {
-    if (idx % (stride * 2) == 0) {
-      shared[idx] += shared[idx + stride];
-    }
-    __syncthreads();
-  }
-  if (idx == 0)
-    out[blockIdx.x] = shared[0];
-}
-
 template <typename T>
 __global__ void vector_outer_product_kernel(T *lhs, T *rhs, T *out,
                                             size_t lhs_size, size_t rhs_size) {
@@ -133,18 +99,5 @@ batched_matmul_kernel(const T *a, const T *b, T *out, const size_t *_a_shape,
   out[batch_offset_out + row * size2 + col] = accum;
 }
 
-void launch_batched_matmul_kernel(dim3 grid_size, dim3 block_size, DType dtype,
-                                  const void *a, const void *b, void *out,
-                                  const size_t *a_shape, const size_t *b_shape,
-                                  const size_t n_dims);
-
-void launch_vector_dot_product_accum_kernel(dim3 grid_size, dim3 block_size,
-                                            size_t smem_size, DType dtype,
-                                            const void *a, const void *b,
-                                            void *out, size_t size);
-
-void launch_vector_outer_product_kernel(dim3 grid_size, dim3 block_size,
-                                        DType dtype, void *a, void *b,
-                                        void *out, size_t m, size_t n);
 } // namespace cuda
 } // namespace pg

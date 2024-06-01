@@ -129,28 +129,5 @@ __global__ void mean_kernel(const T *in, T *out, const stride_t *in_strides,
 
 enum class ReduceKernelType { SUM, MAX, MEAN };
 
-template <typename T>
-void launch_reduce_kernel_helper(ReduceKernelType type, dim3 blocks,
-                                 dim3 threads, const T *in, T *out,
-                                 const stride_t *in_strides,
-                                 const size_t *in_shape, const size_t n_dims,
-                                 const size_t red_axis) {
-  size_t smem = n_dims * sizeof(stride_t) + n_dims * sizeof(size_t);
-  if (type == ReduceKernelType::SUM) {
-    sum_kernel<T><<<blocks, threads, smem>>>(in, out, in_strides, in_shape,
-                                             n_dims, red_axis);
-  } else if (type == ReduceKernelType::MAX) {
-    max_kernel<T><<<blocks, threads, smem>>>(in, out, in_strides, in_shape,
-                                             n_dims, red_axis);
-  } else if (type == ReduceKernelType::MEAN) {
-    mean_kernel<T><<<blocks, threads, smem>>>(in, out, in_strides, in_shape,
-                                              n_dims, red_axis);
-  }
-}
-
-void launch_reduce_kernel(ReduceKernelType type, DType dtype, dim3 blocks,
-                          dim3 threads, const void *in, void *out,
-                          const stride_t *in_strides, const size_t *in_shape,
-                          const size_t n_dims, const size_t red_axis);
 } // namespace cuda
 } // namespace pg

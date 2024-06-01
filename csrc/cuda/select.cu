@@ -1,13 +1,14 @@
 #include "ad_primitives.hpp"
 #include "cuda_utils.cuh"
-#include "select_helpers.cuh"
+#include "select.cuh"
 #include "shape.hpp"
-#include "unary_helpers.cuh"
+#include "unary.cuh"
 #include "utils.hpp"
 #include "view_helpers.cuh"
 #include <memory>
 #include <numeric>
 #include <variant>
+
 namespace pg {
 CudaSelect convert_to_slice(const select_item_t &_item,
                             std::optional<Tensor> tensor = std::nullopt) {
