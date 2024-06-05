@@ -79,3 +79,23 @@ def get_mnist_dataset(
             Tensor(y_test, device=tensor_device),
         )
     )
+
+
+class MNISTDataset:
+    def __init__(self, device, train=True):
+        self.device = device
+        self.train = train
+        x_train, y_train, x_test, y_test = get_mnist_dataset(device)
+
+        if train:
+            self.x, self.y = x_train, y_train
+            del x_test, y_test
+        else:
+            self.x, self.y = x_test, y_test
+            del x_train, y_train
+
+    def __getitem__(self, idx):
+        return self.x[idx], self.y[idx]
+
+    def __len__(self):
+        return len(self.x)

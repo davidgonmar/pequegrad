@@ -1,4 +1,4 @@
-from pequegrad.extra.mnist import get_mnist_dataset
+from pequegrad.extra.mnist import MNISTDataset
 import numpy as np
 from pequegrad.modules import Linear, StatefulModule
 from pequegrad.context import no_grad
@@ -6,6 +6,7 @@ import argparse
 import time
 from pequegrad.backend.c import device, grads
 from pequegrad.optim import Adam
+from pequegrad.data.dataloader import DataLoader
 
 np.random.seed(0)
 
@@ -26,9 +27,11 @@ class MLP(StatefulModule):
         return self.fc2.forward(input)
 
 
-def train(model, X_train, Y_train, epochs=13, batch_size=4096):
+def train(model, ds, epochs=13, batch_size=4096):
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.021)
+
+    loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
     def train_step(batch_X, batch_Y):
         prediction = model.forward(batch_X)
@@ -36,31 +39,30 @@ def train(model, X_train, Y_train, epochs=13, batch_size=4096):
         g = grads(model.parameters(), loss)
         return [loss] + g
 
-    for epoch in range(epochs):
-        indices = np.random.choice(len(X_train), batch_size)
-        batch_X = X_train[indices]
-        batch_Y = Y_train[indices]
-        outs = train_step(batch_X, batch_Y)
+    i = 0
+    for x, y in loader:
+        outs = train_step(x, y)
         loss = outs[0]
         g = outs[1:]
         optim.step(g)
-        print(f"Epoch {epoch} | Loss {loss.numpy()}")
+        print(f"Step {i} | Loss {loss.numpy()}")
+        if i >= epochs:
+            break
 
     return model
 
 
-def test_model(model, X_test, Y_test):
-    with no_grad():
-        batch_size = 2048
-        # Evaluate the model
-        correct = 0
-        for i in range(0, len(X_test), batch_size):
-            end_idx = min(i + batch_size, len(X_test))
-            batch_X = X_test[i:end_idx]
-            batch_Y = Y_test[i:end_idx]
-            prediction = model.forward(batch_X)
-            correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
-        return correct, len(X_test)
+def test_model(model, ds):
+    correct = 0
+    total = 0
+    loader = DataLoader(ds, batch_size=4096)
+    for x, y in loader:
+        with no_grad():
+            outputs = model.forward(x)
+            correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
+            total += y.shape[0]
+    print(f"Correct: {correct}, Total: {total}, Accuracy: {correct / total:.3f}")
+    return correct, total
 
 
 if __name__ == "__main__":
@@ -86,23 +88,24 @@ if __name__ == "__main__":
         mlp.to(device.cpu)
         print("Using CPU")
         device = device.cpu
-    X_train, y_train, X_test, y_test = get_mnist_dataset(tensor_device=device)
+    train_ds = MNISTDataset(device=device)
+    test_ds = MNISTDataset(device=device, train=False)
 
     if MODE == "train":
         print("Training the model")
         start = time.time()
-        mlp = train(mlp, X_train, y_train)
+        mlp = train(mlp, train_ds)
         print(f"Training took {time.time() - start:.2f} seconds")
         mlp.save(model_path)
 
         print("Model saved to", model_path)
         print("Testing the model")
-        correct, total = test_model(mlp, X_test, y_test)
+        correct, total = test_model(mlp, test_ds)
         print(f"Test accuracy: {correct / total:.3f}")
     else:
         print("Evaluating the model")
         mlp.load(model_path)
         print("Model loaded from", model_path)
         print("Testing the model")
-        correct, total = test_model(mlp, X_test, y_test)
+        correct, total = test_model(mlp, test_ds)
         print(f"Test accuracy: {correct / total:.3f}")
