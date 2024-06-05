@@ -20,7 +20,7 @@ class ToTensor(Mod):
     def forward(self, x: PIL.Image.Image):
         assert isinstance(x, PIL.Image.Image), "Input must be a PIL image"
 
-        return np.array(x) / 255.0
+        return (np.array(x) / 255.0).transpose(2, 0, 1)
 
 
 class Normalize(Mod):
@@ -30,12 +30,13 @@ class Normalize(Mod):
 
     def forward(self, x: PIL.Image.Image | Tensor):
         if isinstance(x, PIL.Image.Image):
-            x = np.array(x)
-            x = x / 255.0
+            x = np.array(x).transpose(2, 0, 1) / 255.0
+            x = Tensor(x)
+        elif isinstance(x, np.ndarray):
             x = Tensor(x)
 
-        x = x - self.mean
-        x = x / self.std
+        x = x - Tensor(self.mean).reshape((3, 1, 1)).astype(x.dtype)
+        x = x / Tensor(self.std).reshape((3, 1, 1)).astype(x.dtype)
 
         return x
 
