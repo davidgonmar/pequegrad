@@ -2,9 +2,10 @@ from pequegrad import Tensor, device, grads
 import pequegrad.modules as nn
 from pequegrad.optim import SGD
 import argparse
-import torch
-import torchvision
 import numpy as np
+import pequegrad.transforms as transforms
+from pequegrad.data.dataloader import DataLoader
+from pequegrad.extra.cifar_100 import CIFAR100Dataset
 
 
 class AlexNet(nn.StatefulModule):
@@ -68,25 +69,21 @@ class AlexNet(nn.StatefulModule):
 # download cifar from torch
 
 
-transform = torchvision.transforms.Compose(
+transform = transforms.Compose(
     [
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        torchvision.transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Resize((224, 224)),
     ]
 )
 
-trainset = torchvision.datasets.CIFAR100(
-    root="./data", train=True, download=True, transform=transform
-)
+trainset = CIFAR100Dataset(train=True, transform=transform)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=32, shuffle=True)
+trainloader = DataLoader(trainset, batch_size=32, shuffle=True)
 
-testset = torchvision.datasets.CIFAR100(
-    root="./data", train=False, download=True, transform=transform
-)
+testset = CIFAR100Dataset(train=False, transform=transform)
 
-testloader = torch.utils.data.DataLoader(testset, batch_size=40, shuffle=False)
+testloader = DataLoader(testset, batch_size=40, shuffle=False)
 
 
 # allow to continue training from a checkpoint
@@ -135,11 +132,12 @@ if not args.test:
             inputs, labels = data
 
             inputs = Tensor(inputs.numpy().astype("float32"), device=DEVICE)
-            labels = Tensor(labels.numpy().astype("float32"), device=DEVICE)
+            labels = Tensor(labels.astype("float32"), device=DEVICE)
+            # check image
+            # print(inputs.numpy())
 
             outputs = model(inputs)
             loss = outputs.cross_entropy_loss_indices(labels)
-            # format day_month_hour_minute
             g = grads(model.parameters(), loss)
             optim.step(g)
             print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
@@ -152,7 +150,7 @@ if args.test:
     for data in testloader:
         images, labels = data
         images = Tensor(images.numpy().astype("float32"), device=DEVICE)
-        labels = Tensor(labels.numpy().astype("float32"), device=DEVICE)
+        labels = Tensor(labels.astype("float32"), device=DEVICE)
         outputs = model(images)
         total += labels.shape[0]
         correct += np.sum(outputs.numpy().argmax(1) == labels.numpy())

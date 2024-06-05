@@ -26,6 +26,7 @@ class SGD:
             p.assign(p - self.lr * vt)
             self.vt_last[i] = vt.eval().detach()
             del gt
+
         del g
 
 
