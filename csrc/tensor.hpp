@@ -576,7 +576,7 @@ public:
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
     copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
-    return Tensor(nbytes, shape(), strides(), new_ptr, dtype(),
+    return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
                   device::DeviceKind::CUDA);
   }
 
