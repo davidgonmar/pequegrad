@@ -106,6 +106,8 @@ input/
 saved/
 datasets/
 
+!pequegrad/data/
+
 # editor, os cache directory
 .vscode/
 .idea/
