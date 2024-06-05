@@ -490,3 +490,54 @@ def local_response_norm(
     norm_factor = (unfolded**2).mean(1, keepdim=True) * alpha + k
 
     return self / norm_factor**beta
+
+
+def chunk(self, chunks: int, dim: int = 0) -> List["Tensor"]:
+    """
+    Splits the tensor into a number of chunks along a given dimension
+    """
+    assert (
+        self.shape[dim] % chunks == 0
+    ), "tensor must be divisible by the number of chunks"
+    chunk_size = self.shape[dim] // chunks
+    slices_for_getdim = [slice(None) for _ in range(self.dim)]
+    chunks_ = []
+    for ch in range(chunks):
+        slices_for_getdim[dim] = slice(ch * chunk_size, (ch + 1) * chunk_size)
+        chunks_.append(self[tuple(slices_for_getdim)])
+    return chunks_
+
+
+def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
+    """
+    Concatenates the given sequence of tensors in the given dimension
+    """
+    n = len(tensors)
+
+    if n == 1:
+        return tensors[0]
+
+    assert all(
+        tensors[0].shape == t.shape for t in tensors[1:]
+    ), "all input tensors must have the same shape"
+
+    new_shape = list(tensors[0].shape)
+
+    new_shape[dim] = sum(t.shape[dim] for t in tensors)
+
+    out = pg.fill(
+        new_shape,
+        tensors[0].dtype,
+        0,
+        tensors[0].device,
+    )
+
+    start = 0
+
+    for t in tensors:
+        slices = [slice(None) for _ in range(t.dim)]
+        slices[dim] = slice(start, start + t.shape[dim])
+        out = pg.assign_at(out, t, tuple(slices))
+        start += t.shape[dim]
+
+    return out

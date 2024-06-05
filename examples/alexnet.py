@@ -112,6 +112,12 @@ parser.add_argument(
     help="Number of epochs to train the model",
 )
 
+parser.add_argument(
+    "--lr",
+    type=float,
+    default=0.01,
+    help="Learning rate for the optimizer",
+)
 DEVICE = device.cuda
 model = AlexNet(num_classes=100).to(DEVICE)
 print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
@@ -122,7 +128,7 @@ if args.checkpoint is not None:
     model.load(args.checkpoint)
 
 if not args.test:
-    optim = SGD(model.parameters(), lr=0.01)
+    optim = SGD(model.parameters(), lr=args.lr)
 
     for epoch in range(args.epochs):
         for i, data in enumerate(trainloader, 0):
