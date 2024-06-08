@@ -33,6 +33,36 @@ std::vector<Tensor> Add::backward(const std::vector<Tensor> &primals,
   return {tangents[0], tangents[0]};
 }
 
+std::vector<DType>
+FromNumpy::infer_output_dtypes(const std::vector<Tensor> &inputs) {
+  return {_dtype};
+}
+
+std::vector<shape_t>
+FromNumpy::infer_output_shapes(const std::vector<Tensor> &inputs) {
+  return {_shape};
+}
+
+void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs) {
+  auto _ptr = device::allocate(_buffer_size * dtype_to_size(_dtype),
+                               device::DeviceKind::CPU);
+  std::memcpy(_ptr.get(), _data_ptr, _buffer_size * dtype_to_size(_dtype));
+  Tensor arr(_buffer_size * dtype_to_size(_dtype), _shape, _strides, _ptr,
+             _dtype, device::DeviceKind::CPU);
+
+  outputs[0].init_view(std::make_shared<View>(arr.view()));
+}
+
+void FromNumpy::dispatch_cpu(const std::vector<Tensor> &inputs,
+                             std::vector<Tensor> &outputs) {
+  _dispatch_general(outputs);
+}
+
+void FromNumpy::dispatch_cuda(const std::vector<Tensor> &inputs,
+                              std::vector<Tensor> &outputs) {
+  _dispatch_general(outputs);
+  outputs[0].to_(device::DeviceKind::CUDA);
+}
 std::vector<shape_t>
 Add::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};

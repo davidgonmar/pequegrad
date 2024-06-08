@@ -32,6 +32,7 @@
 namespace pg {
 class ADPrimitive {
 public:
+  virtual bool eager() { return false; }
   /**
    * Dispatch is responsible for allocating the memory, and populating
    * the `View` objects in the output tensors. The `View` objects have
@@ -81,6 +82,28 @@ public:
 };
 
 class UnaryPrimitive : public ADPrimitive {};
+
+class FromNumpy : public ADPrimitive {
+protected:
+  shape_t _shape;
+  DType _dtype;
+  strides_t _strides;
+  void *_data_ptr;
+  size_t _buffer_size;
+  void _dispatch_general(std::vector<Tensor> &outputs);
+
+public:
+  bool eager() { return true; }
+  explicit FromNumpy(shape_t shape, DType dtype, strides_t strides,
+                     void *data_ptr, size_t buffer_size)
+      : _shape(shape), _dtype(dtype), _strides(strides), _data_ptr(data_ptr),
+        _buffer_size(buffer_size) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(FromNumpy)
+  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_INFER_OUTPUT_DTYPES
+};
 class Log : public UnaryPrimitive {
 public:
   DEFINE_DISPATCH_CPU

@@ -481,14 +481,11 @@ public:
       shape.assign(py_shape.begin(), py_shape.end());
     }
 
-    auto _ptr = device::allocate(size * dtype_to_size(dtype_from_pytype<T>()),
-                                 device::DeviceKind::CPU);
-    std::memcpy(_ptr.get(), buffer_info.ptr, size * sizeof(T));
-    Tensor arr(buffer_info.size * dtype_to_size(dtype_from_pytype<T>()), shape,
-               strides, _ptr, dtype_from_pytype<T>(), device::DeviceKind::CPU);
-    // set primitive
-    arr.set_ad_node(ADNode()
-    return arr.to(device);
+    DType dtype = dtype_from_pytype<T>();
+    return Tensor::from_primitive(
+        std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr,
+                                    size),
+        std::vector<Tensor>(), device);
   }
 
   bool is_dense() const {
@@ -534,7 +531,7 @@ public:
     }
     if (!is_initialized()) {
       throw std::runtime_error(
-          "Cannot move uninitialized tensor. Eval it first.");
+          "Cannot move uninitialized tensor. Eval it first : " + str());
     }
     if (device() == device::DeviceKind::CUDA) {
       size_t nbytes = this->nbytes();
@@ -560,7 +557,7 @@ public:
     }
     if (!is_initialized()) {
       throw std::runtime_error(
-          "Cannot move uninitialized tensor. Eval it first.");
+          "Cannot move uninitialized tensor. Eval it first: " + str());
     }
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
@@ -575,7 +572,7 @@ public:
     }
     if (!is_initialized()) {
       throw std::runtime_error(
-          "Cannot move uninitialized tensor. Eval it first.");
+          "Cannot move uninitialized tensor. Eval it first : " + str());
     }
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
@@ -587,15 +584,7 @@ public:
   static Tensor
   from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
                  std::vector<Tensor> inputs,
-                 std::optional<device::DeviceKind> device = std::nullopt) {
-    if (inputs.size() == 0) {
-      PG_CHECK_ARG(device.has_value(),
-                   "Device must be specified for leaf nodes.");
-    }
-
-    return Tensor(primitive, inputs, device);
-  }
-
+                 std::optional<device::DeviceKind> device = std::nullopt);
   Tensor eval(bool detach = true);
 
   Tensor() {}
@@ -612,12 +601,6 @@ public:
   }
   void set_ad_node(std::shared_ptr<ADNode> ad_node) { _ad_node = ad_node; }
 
-private:
-  std::shared_ptr<View> _view = std::make_shared<View>();
-
-  std::shared_ptr<ADNode> _ad_node =
-      std::make_shared<ADNode>(); // creates a leaf node by default
-
   Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
          const std::shared_ptr<void> &ptr, DType dtype,
          device::DeviceKind device)
@@ -628,6 +611,13 @@ private:
          device::DeviceKind device)
       : _view(std::make_shared<View>(ptr, nbytes, shape, strides, offset, dtype,
                                      device)) {}
+
+private:
+  std::shared_ptr<View> _view = std::make_shared<View>();
+
+  std::shared_ptr<ADNode> _ad_node =
+      std::make_shared<ADNode>(); // creates a leaf node by default
+
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs,
          std::optional<device::DeviceKind> device = std::nullopt);

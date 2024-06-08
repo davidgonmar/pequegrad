@@ -45,7 +45,23 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const {
 }
 
 std::vector<Tensor> &ADNode::children() { return _children; }
+Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
+                              std::vector<Tensor> inputs,
+                              std::optional<device::DeviceKind> device) {
+  if (inputs.size() == 0) {
+    PG_CHECK_ARG(device.has_value(),
+                 "Device must be specified for leaf nodes.");
+  }
 
+  Tensor t = Tensor(primitive, inputs, device);
+
+  // check if primitive is marked as eager
+  if (primitive->eager()) {
+    t.eval();
+  }
+
+  return t;
+}
 Tensor Tensor::eval(bool detach) {
   if (is_evaled()) {
     if (detach) {
@@ -177,7 +193,13 @@ DType Tensor::dtype() const {
   return _view->dtype();
 }
 Tensor Tensor::copy_graph(std::vector<Tensor> &inputs) const {
-  Tensor copy = Tensor::from_primitive(_ad_node->primitive(), inputs, device());
+  Tensor copy = Tensor(*this);
+  // create new ad node
+  copy._ad_node = std::make_shared<ADNode>(*_ad_node);
+  // set new children
+  copy._ad_node->set_children(inputs);
+  // reset view
+  copy._view = std::make_shared<View>(*_view);
 
   return copy;
 }

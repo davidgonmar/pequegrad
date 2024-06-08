@@ -14,6 +14,10 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
   std::cout << "here0" << std::endl;
   // First pass, create new  tensors
   copy_lambda copy = [&](Tensor &t) {
+    // check if tensor is already copied
+    if (old_to_new.find(&t) != old_to_new.end()) {
+      return;
+    }
     // first children
     for (Tensor &child : t.children()) {
       if (old_to_new.find(&child) == old_to_new.end()) {
