@@ -2,6 +2,49 @@
 
 namespace pg {
 
+std::pair<std::vector<Tensor>, std::vector<Tensor>>
+clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
+  std::vector<Tensor> new_outputs;
+  std::vector<Tensor> new_inputs;
+  using copy_lambda = std::function<void(Tensor &)>;
+
+  // copy inputs first
+  std::map<Tensor *, Tensor *> old_to_new;
+
+  std::cout << "here0" << std::endl;
+  // First pass, create new  tensors
+  copy_lambda copy = [&](Tensor &t) {
+    // first children
+    for (Tensor &child : t.children()) {
+      if (old_to_new.find(&child) == old_to_new.end()) {
+        copy(child);
+      }
+    }
+
+    std::cout << "here1" << std::endl;
+    // then get new childrens
+    std::vector<Tensor> new_children;
+    for (Tensor &child : t.children()) {
+      new_children.push_back(*old_to_new.at(&child));
+    }
+    Tensor new_t = t.copy_graph(new_children);
+    old_to_new[&t] = &new_t;
+
+    std::cout << "here2" << std::endl;
+  };
+
+  for (Tensor &t : outputs) {
+    copy(t);
+    new_outputs.push_back(*old_to_new.at(&t));
+  }
+
+  for (Tensor &t : inputs) {
+    copy(t);
+    new_inputs.push_back(*old_to_new.at(&t));
+  }
+
+  return std::make_pair(new_outputs, new_inputs);
+}
 class ComputeGraph {
 public:
   ComputeGraph() = default;

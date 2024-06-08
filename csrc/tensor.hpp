@@ -331,9 +331,11 @@ public:
     this->id = other.id;
     return *this;
   }
-
+  Tensor copy_graph(std::vector<Tensor> &inputs) const;
   Tensor copy_but_lose_grad_info() {
     Tensor copy = *this;
+    // print primitive
+
     copy._ad_node = std::make_shared<ADNode>(copy._ad_node->primitive(),
                                              copy._ad_node->children());
 
@@ -484,6 +486,8 @@ public:
     std::memcpy(_ptr.get(), buffer_info.ptr, size * sizeof(T));
     Tensor arr(buffer_info.size * dtype_to_size(dtype_from_pytype<T>()), shape,
                strides, _ptr, dtype_from_pytype<T>(), device::DeviceKind::CPU);
+    // set primitive
+    arr.set_ad_node(ADNode()
     return arr.to(device);
   }
 

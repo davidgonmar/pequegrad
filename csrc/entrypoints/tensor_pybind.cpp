@@ -41,6 +41,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def(#op, py::overload_cast<const Tensor &, double>(&pg::op));              \
   m.def(#op, py::overload_cast<double, const Tensor &>(&pg::op))
 
+  m.def("clone_graph", clone_graph);
   BIND_BINOP_WITH_SCALAR_OVERLOADS(add);
   m.def("add_inplace", [](Tensor &a, const Tensor &b) { add_inplace(a, b); });
   BIND_BINOP_WITH_SCALAR_OVERLOADS(sub);

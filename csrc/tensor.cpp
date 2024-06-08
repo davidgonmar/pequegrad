@@ -176,6 +176,11 @@ DType Tensor::dtype() const {
   // primitive: " + _ad_node->primitive()->str());
   return _view->dtype();
 }
+Tensor Tensor::copy_graph(std::vector<Tensor> &inputs) const {
+  Tensor copy = Tensor::from_primitive(_ad_node->primitive(), inputs, device());
+
+  return copy;
+}
 
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
                std::vector<Tensor> inputs,

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class Dataset(ABC):
     @abstractmethod
     def __init__(self):
