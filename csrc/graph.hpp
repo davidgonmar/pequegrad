@@ -6,49 +6,55 @@ std::pair<std::vector<Tensor>, std::vector<Tensor>>
 clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
   std::vector<Tensor> new_outputs;
   std::vector<Tensor> new_inputs;
+  std::vector<Tensor> cloned_tensors;
   using copy_lambda = std::function<void(Tensor &)>;
 
-  // copy inputs first
-  std::map<Tensor *, Tensor *> old_to_new;
+  auto tensorComparator = [](const Tensor &lhs, const Tensor &rhs) {
+    // ??? weird but works. todo figure this out
+    return lhs.id < rhs.id;
+  };
 
-  std::cout << "here0" << std::endl;
+  std::map<Tensor, Tensor, decltype(tensorComparator)> old_to_new(
+      tensorComparator);
+
   // First pass, create new  tensors
   copy_lambda copy = [&](Tensor &t) {
     // check if tensor is already copied
-    if (old_to_new.find(&t) != old_to_new.end()) {
+    if (old_to_new.find(t) != old_to_new.end()) {
       return;
     }
+
     // first children
+    // print children length
     for (Tensor &child : t.children()) {
-      if (old_to_new.find(&child) == old_to_new.end()) {
+      if (old_to_new.find(child) == old_to_new.end()) {
         copy(child);
       }
     }
-
-    std::cout << "here1" << std::endl;
-    // then get new childrens
+    // then get new children
     std::vector<Tensor> new_children;
     for (Tensor &child : t.children()) {
-      new_children.push_back(*old_to_new.at(&child));
+      new_children.push_back(old_to_new.at(child));
     }
-    Tensor new_t = t.copy_graph(new_children);
-    old_to_new[&t] = &new_t;
-
-    std::cout << "here2" << std::endl;
+    cloned_tensors.emplace_back(t.copy_graph(new_children));
+    Tensor &new_t = cloned_tensors.back();
+    old_to_new[t] = new_t;
   };
 
   for (Tensor &t : outputs) {
     copy(t);
-    new_outputs.push_back(*old_to_new.at(&t));
+    new_outputs.push_back(old_to_new.at(t));
   }
 
   for (Tensor &t : inputs) {
     copy(t);
-    new_inputs.push_back(*old_to_new.at(&t));
+    new_inputs.push_back(old_to_new.at(t));
   }
+  auto x = std::make_pair(new_outputs, new_inputs);
 
-  return std::make_pair(new_outputs, new_inputs);
+  return x;
 }
+
 class ComputeGraph {
 public:
   ComputeGraph() = default;

@@ -273,7 +273,7 @@ public:
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
-  std::vector<Tensor> _children;
+  std::vector<Tensor> _children = {};
   shape_t _inferred_shape;
 };
 
@@ -482,10 +482,11 @@ public:
     }
 
     DType dtype = dtype_from_pytype<T>();
-    return Tensor::from_primitive(
+    Tensor a = Tensor::from_primitive(
         std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr,
                                     size),
-        std::vector<Tensor>(), device);
+        {}, device);
+    return a;
   }
 
   bool is_dense() const {

@@ -57,7 +57,7 @@ Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
 
   // check if primitive is marked as eager
   if (primitive->eager()) {
-    t.eval();
+    t.eval(false);
   }
 
   return t;
