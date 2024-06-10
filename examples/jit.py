@@ -3,12 +3,15 @@ from pequegrad.compile import jit
 import numpy as np
 import time
 
+
 @jit
 def some_function(x):
     return x.log().exp().log().exp()
 
+
 def non_jitted(x):
     return x.log().exp().log().exp()
+
 
 for i in range(10):
     x = Tensor(np.random.randn(1000, 1000), device=device.cuda)

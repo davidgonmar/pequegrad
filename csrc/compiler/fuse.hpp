@@ -85,6 +85,16 @@ struct Expr {
       : inputs(inputs), output(output), rendered(rendered) {}
 };
 
+std::string load_input(std::string varname, DType dt, std::string base_idx,
+                       shape_t shape, std::string strides) {
+  std::string s = "";
+  for (size_t i = 0; i < shape.size(); i++) {
+    // hard code strides with the form varname_stride_idx
+    s += varname + "_stride_" + std::to_string(i) + "_" + std::to_string(i) +
+         " = " + strides[i] + ";\n";
+  }
+  // TODO
+}
 void apply_expr(Expr expr) {
   Tensor &out = expr.output;
   std::string kernel_guard = render_guard("idx_x", std::to_string(out.numel()));

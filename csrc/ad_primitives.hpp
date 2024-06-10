@@ -241,15 +241,34 @@ protected:
   axes_t _axes;
   bool _keepdims;
 
-  const shape_t _reduce_single_shape_assuming_keepdims(View &input_view,
-                                                       axis_t single_axis) {
+  const shape_t
+  _reduce_single_shape_assuming_keepdims(View &input_view,
+                                         std::vector<axis_t> axes) {
     shape_t shape = shape_t(input_view.shape()); // copy the shape
-    if (single_axis < 0) {
-      single_axis = shape.size() + single_axis;
+    for (size_t i = 0; i < axes.size(); i++) {
+      int single_axis = axes[i];
+      if (single_axis < 0) {
+        single_axis = shape.size() + single_axis;
+        PG_CHECK_ARG(single_axis < shape.size(), "axis out of bounds, got ",
+                     single_axis, " for shape ", vec_to_string(shape));
+      }
+      shape[single_axis] = 1;
     }
-    PG_CHECK_ARG(single_axis < shape.size(), "axis out of bounds, got ",
-                 single_axis, " for shape ", vec_to_string(shape));
-    shape[single_axis] = 1;
+
+    return shape;
+  }
+
+  const shape_t _reduce_single_shape_assuming_keepdims(View &input_view,
+                                                       axis_t axis) {
+
+    shape_t shape = shape_t(input_view.shape()); // copy the shape
+    if (axis < 0) {
+      axis = shape.size() + axis;
+    }
+    PG_CHECK_ARG(axis < shape.size(), "axis out of bounds, got ", axis,
+                 " for shape ", vec_to_string(shape));
+    shape[axis] = 1;
+
     return shape;
   }
 

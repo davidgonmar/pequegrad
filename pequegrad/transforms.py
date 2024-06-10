@@ -34,6 +34,12 @@ class Resize(Mod):
                 Tensor(np.array(Image.fromarray(x).resize(self.size))).permute(2, 0, 1)
                 / 255.0
             )
+        else:
+            assert isinstance(
+                x, Image.Image
+            ), "Input must be a PIL image, got {}".format(type(x))
+
+            return np.array(x.resize(self.size)).transpose(2, 0, 1)
 
 
 class ToTensor(Mod):

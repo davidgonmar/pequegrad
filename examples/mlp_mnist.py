@@ -7,6 +7,7 @@ import time
 from pequegrad.backend.c import device, grads
 from pequegrad.optim import Adam
 from pequegrad.data.dataloader import DataLoader
+from pequegrad.compile import jit
 
 np.random.seed(0)
 
@@ -53,15 +54,23 @@ def train(model, ds, epochs=13, batch_size=4096):
 
 
 def test_model(model, ds):
+    import time
+
     correct = 0
     total = 0
     loader = DataLoader(ds, batch_size=4096)
+    start = time.time()
+    use_jit = False  # does not work correctly yet
+    step = jit(model.forward, aot_grads=False) if use_jit else model.forward
     for x, y in loader:
         with no_grad():
-            outputs = model.forward(x)
+            outputs = step(x)
             correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
             total += y.shape[0]
-    print(f"Correct: {correct}, Total: {total}, Accuracy: {correct / total:.3f}")
+    end = time.time()
+    print(
+        f"Correct: {correct}, Total: {total}, Accuracy: {correct / total:.3f}, Time: {end - start:.2f}s"
+    )
     return correct, total
 
 

@@ -2,14 +2,25 @@
 
 #include "dtype.hpp"
 #include "shape.hpp"
+#include <cub/block/block_reduce.cuh>
 
 namespace pg {
+
+template <typename T> __device__ bool isin(T el, const T *arr, size_t n) {
+  for (size_t i = 0; i < n; i++) {
+    if (arr[i] == el) {
+      return true;
+    }
+  }
+  return false;
+}
 namespace cuda {
 // operation and initial accumulator value
-template <typename Op, typename T>
+template <typename Op, typename T, int THREADS_PER_BLOCK>
 __device__ void reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
                                const size_t *_in_shape, const size_t n_dims,
-                               const size_t red_axis) {
+                               const stride_t *red_axes,
+                               const size_t n_red_axes) {
   // the general explanation is:
   // each idx represents one output value, so each thread will reduce to said
   // output value therefore, we'll loop accross the reduced dimension, and
@@ -30,8 +41,10 @@ __device__ void reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
   // shape[dim=1] in the loop, we will not use the idx accross that dimension,
   // but the iterator value (i).
   extern __shared__ int8_t smem[];
-  int idx =
-      blockDim.x * blockIdx.x + threadIdx.x; // one element of the output array
+  // cub
+  typedef cub::BlockReduce<T, THREADS_PER_BLOCK> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  int idx = blockIdx.x; // one element of the output array
 
   size_t *in_shape = (size_t *)smem;
   stride_t *in_strides = (stride_t *)(smem + n_dims * sizeof(size_t));
@@ -44,26 +57,30 @@ __device__ void reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
   Op op;
 
   int total_out_elements = 1;
+  int red_elements = 1;
   for (int i = 0; i < n_dims; i++) {
-    total_out_elements *= in_shape[i];
+    if (!isin((stride_t)i, red_axes, n_red_axes)) {
+      total_out_elements *= in_shape[i];
+    } else {
+      red_elements *= in_shape[i];
+    }
   }
-  total_out_elements /= in_shape[red_axis];
 
   if (idx >= total_out_elements) {
     return;
   }
 
-  int red_elements = in_shape[red_axis];
-
   T accum = op.initial_value();
 
-  for (int i = 0; i < red_elements; i++) {
-    int reduced_idx = idx;
+  for (int i = threadIdx.x; i < red_elements; i += THREADS_PER_BLOCK) {
+    int reduced_idx = idx; // idx -> idxs in output
     int in_idx = 0;
+    int remaining_i = i; // i -> idxs in reduced dimension
     for (int j = n_dims - 1; j >= 0; j--) {
-      if (j == red_axis) {
-        in_idx +=
-            i * in_strides[j] / sizeof(T); // simply advance by 'i * stride'
+      if (isin((stride_t)j, red_axes, n_red_axes)) { // if we are reducing
+        int current_dim_idx = remaining_i % in_shape[j];
+        in_idx += current_dim_idx * in_strides[j] / sizeof(T);
+        remaining_i /= in_shape[j];
       } else { // do the general algorithm to go from idx -> actual displacement
         int current_dim_idx = reduced_idx % in_shape[j];
         in_idx += current_dim_idx * in_strides[j] / sizeof(T);
@@ -73,17 +90,25 @@ __device__ void reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
     T el = in[in_idx];
     accum = op.apply(accum, el);
   }
-  accum = op.post_reduce(accum, red_elements);
-  out[idx] = accum;
+  // now, we have accumulated value in 'accum' per thread
+  // block reduce it
+  accum = BlockReduce(temp_storage).Reduce(accum, op);
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    accum = op.post_reduce(accum, red_elements);
+    out[idx] = accum;
+  }
 }
 
 template <typename T> struct SumOp {
+  __device__ T operator()(T a, T b) { return a + b; }
   __device__ T apply(T a, T b) { return a + b; }
   __device__ T initial_value() { return (T)0; }
   __device__ T post_reduce(T a, size_t n) { return a; }
 };
 
 template <typename T> struct MaxOp {
+  __device__ T operator()(T a, T b) { return max(a, b); }
   __device__ T apply(T a, T b) { return max(a, b); }
   // depending on the type, we might want to use the smallest possible value
   __device__ T initial_value() {
@@ -101,6 +126,7 @@ template <typename T> struct MaxOp {
 };
 
 template <typename T> struct MeanOp {
+  __device__ T operator()(T a, T b) { return a + b; }
   __device__ T apply(T a, T b) { return a + b; }
   __device__ T initial_value() { return (T)0; }
   __device__ T post_reduce(T a, size_t n) { return a / n; }
@@ -109,22 +135,25 @@ template <typename T> struct MeanOp {
 template <typename T>
 __global__ void sum_kernel(const T *in, T *out, const stride_t *in_strides,
                            const size_t *in_shape, const size_t n_dims,
-                           const size_t red_axis) {
-  reduce_base_fn<SumOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
+                           const stride_t *red_axes, const size_t n_red_axes) {
+  reduce_base_fn<SumOp<T>, T, DEFAULT_BLOCK_SIZE>(in, out, in_strides, in_shape,
+                                                  n_dims, red_axes, n_red_axes);
 }
 
 template <typename T>
 __global__ void max_kernel(const T *in, T *out, const stride_t *in_strides,
                            const size_t *in_shape, const size_t n_dims,
-                           const size_t red_axis) {
-  reduce_base_fn<MaxOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
+                           const stride_t *red_axes, const size_t n_red_axes) {
+  reduce_base_fn<MaxOp<T>, T, DEFAULT_BLOCK_SIZE>(in, out, in_strides, in_shape,
+                                                  n_dims, red_axes, n_red_axes);
 }
 
 template <typename T>
 __global__ void mean_kernel(const T *in, T *out, const stride_t *in_strides,
                             const size_t *in_shape, const size_t n_dims,
-                            const size_t red_axis) {
-  reduce_base_fn<MeanOp<T>, T>(in, out, in_strides, in_shape, n_dims, red_axis);
+                            const stride_t *red_axes, const size_t n_red_axes) {
+  reduce_base_fn<MeanOp<T>, T, DEFAULT_BLOCK_SIZE>(
+      in, out, in_strides, in_shape, n_dims, red_axes, n_red_axes);
 }
 
 enum class ReduceKernelType { SUM, MAX, MEAN };
