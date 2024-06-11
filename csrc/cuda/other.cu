@@ -1,10 +1,15 @@
 #include "./binary.cuh"
 #include "./unary.cuh"
 #include "ad_primitives.hpp"
+#include "compiler/expr.hpp"
 #include "cuda_utils.cuh"
 #include "tensor.hpp"
 #include "view_helpers.cuh"
 #include <cuda.h>
+#include <cuda_runtime.h>
+#include <iostream>
+#include <memory>
+#include <vector>
 
 namespace pg {
 
@@ -71,14 +76,107 @@ void AsType::dispatch_cuda(const std::vector<Tensor> &inputs,
       std::make_shared<View>(cuda::view::astype(a.view(), _dtype_to)));
 }
 
-#include <cuda_runtime.h>
-#include <iostream>
-#include <memory>
-#include <vector>
+std::string dtype_to_cpp_string(DType dtype) {
+  return dtype == DType::Float32   ? "float"
+         : dtype == DType::Float64 ? "double"
+                                   : "int";
+}
 
 void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
                                       std::vector<Tensor> &outputs) {
-  PG_CHECK_ARG(_handle != nullptr, "Function pointer is null");
+
+  if (this->fn_ptr == nullptr) {
+    // first get the inputs of ast
+    std::vector<std::shared_ptr<AstLoadExpr>> inputs_ast = get_leafs(ast);
+    // for each input, set its strides to the strides of the corresponding
+    // tensor
+    PG_CHECK_RUNTIME(
+        inputs.size() == inputs_ast.size(),
+        "Number of inputs does not match number of AST inputs, got ",
+        inputs.size(), " and ", inputs_ast.size());
+    for (size_t i = 0; i < inputs_ast.size(); i++) {
+      inputs_ast[i]->strides = inputs[i].strides();
+    }
+
+    // assert that ast is a store expr and set its strides and shape
+    outputs[0].init_view(std::make_shared<View>(
+        outputs[0].shape(), outputs[0].dtype(), device::CUDA));
+    PG_CHECK_RUNTIME(std::dynamic_pointer_cast<AstStoreExpr>(ast) != nullptr,
+                     "AST is not a store expression");
+    auto store = std::dynamic_pointer_cast<AstStoreExpr>(ast);
+    store->shape = outputs[0].shape();
+    store->strides = outputs[0].strides();
+    std::string x = store->render_idxs() + store->render();
+    std::string ker_inner =
+        "size_t idx = blockDim.x * blockIdx.x + threadIdx.x;\n" + x;
+
+    // now render the kernel
+    std::string ker =
+        "__global__ void kernel_" + std::to_string(outputs[0].id) + "(";
+    std::string kernel_name = "kernel_" + std::to_string(outputs[0].id);
+    // for each input, render dtype and name
+    for (size_t i = 0; i < inputs.size(); i++) {
+      ker += dtype_to_cpp_string(inputs[i].dtype()) + " *" +
+             inputs_ast[i]->name + ",\n";
+    }
+    ker += dtype_to_cpp_string(outputs[0].dtype()) + " *out) {\n" + ker_inner +
+           "\n}";
+
+    nvrtcProgram prog;
+    // apend extern C
+    std::string file = "extern \"C\" {\n" + ker + "\n}";
+    nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
+
+    if (std::getenv("PG_KERNEL_DB") != nullptr) {
+      std::cout << "file: " << file << std::endl;
+    }
+    nvrtcResult compileResult = nvrtcCompileProgram(prog, 0, nullptr);
+
+    // Check for compilation errors
+    if (compileResult != NVRTC_SUCCESS) {
+      size_t logSize;
+      nvrtcGetProgramLogSize(prog, &logSize);
+      char *log = new char[logSize];
+      nvrtcGetProgramLog(prog, log);
+
+      std::cerr << "NVRTC compilation failed:\n" << log << std::endl;
+      delete[] log;
+
+      nvrtcDestroyProgram(&prog);
+      return;
+    }
+
+    size_t ptxSize;
+    nvrtcGetPTXSize(prog, &ptxSize);
+    char *ptx = new char[ptxSize];
+    nvrtcGetPTX(prog, ptx);
+
+    CUmodule cuModule;
+    CUfunction cuFunction;
+    cuInit(0);
+    CUcontext cuContext;
+    CUresult R0 = cuCtxCreate(&cuContext, 0, 0);
+    PG_CHECK_RUNTIME(R0 == CUDA_SUCCESS,
+                     "Failed to create context: got " + std::to_string(R0));
+    CUresult R1 = cuModuleLoadData(&cuModule, ptx);
+    PG_CHECK_RUNTIME(R1 == CUDA_SUCCESS,
+                     "Failed to load data: got " + std::to_string(R1));
+    CUresult R =
+        cuModuleGetFunction(&cuFunction, cuModule, kernel_name.c_str());
+    PG_CHECK_RUNTIME(R == CUDA_SUCCESS, "Failed to get function: got " +
+                                            std::to_string(R) + " for kernel " +
+                                            kernel_name);
+
+    PG_CHECK_RUNTIME(cuFunction != nullptr, "Failed to get function");
+    // Store the function pointer in a void*
+    void *function_ptr = reinterpret_cast<void *>(cuFunction);
+    PG_CHECK_RUNTIME(function_ptr != nullptr, "Failed to get function pointer");
+    // Clean up
+    nvrtcDestroyProgram(&prog);
+    delete[] ptx;
+    this->fn_ptr = function_ptr;
+  }
+  // Prepare grid and block dimensions
 
   // Prepare grid and block dimensions
   dim3 threads_per_block(128, 1, 1);
@@ -92,21 +190,21 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
   // Prepare kernel arguments
   std::vector<void *> kernel_args;
   for (const auto &input : inputs) {
-    float *in_data = static_cast<float *>(input.get_base_ptr());
-    kernel_args.push_back(&in_data);
+    void *in_data = input.get_base_ptr();
+    kernel_args.push_back(in_data);
   }
-  float *out_data = static_cast<float *>(outputs[0].get_base_ptr());
-  kernel_args.push_back(&out_data);
+  void *out_data = outputs[0].get_base_ptr();
+  kernel_args.push_back(out_data);
 
   // Convert to array of pointers
   std::vector<void *> kernel_args_ptrs;
   for (auto &arg : kernel_args) {
-    kernel_args_ptrs.push_back(arg);
+    kernel_args_ptrs.push_back(&arg);
   }
 
   // Launch the kernel
   CUresult launch_result = cuLaunchKernel(
-      (CUfunction)_handle, blocks_per_grid.x, blocks_per_grid.y,
+      (CUfunction)this->fn_ptr, blocks_per_grid.x, blocks_per_grid.y,
       blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
       threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
 
@@ -119,6 +217,8 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
 
   // Synchronize to ensure kernel execution is complete
   PG_CUDA_KERNEL_END;
+
+  // cache
 }
 
 } // namespace pg

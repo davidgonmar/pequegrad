@@ -59,7 +59,6 @@ Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
   if (primitive->eager()) {
     t.eval(false);
   }
-
   return t;
 }
 Tensor Tensor::eval(bool detach) {
@@ -227,6 +226,17 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
 ADNode &Tensor::ad_node() const { return *_ad_node; }
 void ADNode::set_children(const std::vector<Tensor> &children) {
   _children = children;
+}
+
+void ADNode::replace_child(const Tensor &old_child, const Tensor &new_child) {
+  // we need to specifically find the one with the same id
+  auto it = std::find_if(_children.begin(), _children.end(),
+                         [&](const Tensor &t) { return t.id == old_child.id; });
+  if (it != _children.end()) {
+    *it = new_child;
+  } else {
+    throw std::runtime_error("Child to replace not found");
+  }
 }
 
 void ADNode::set_primitive(const ADPrimitive &primitive) {

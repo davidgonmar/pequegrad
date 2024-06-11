@@ -16,11 +16,10 @@ def _fn3(x):
 
 
 def _fn4(x, y):
-    return x + y
+    return x + y.exp()
 
 
 class TestCompile:
-    @pytest.mark.skip(reason="does not work")
     @pytest.mark.parametrize("fn", [_fn4])
     def test_compile2(self, fn):
         arr1 = np.random.randn(200).astype(np.float32)

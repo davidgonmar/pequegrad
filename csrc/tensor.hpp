@@ -270,6 +270,7 @@ public:
   void set_primitive(const ADPrimitive &primitive);
   void set_primitive(std::shared_ptr<ADPrimitive> &&primitive);
   void set_children(const std::vector<Tensor> &children);
+  void replace_child(const Tensor &old_child, const Tensor &new_child);
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;

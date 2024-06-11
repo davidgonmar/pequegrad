@@ -62,6 +62,7 @@ file(GLOB PG_SOURCES
         csrc/entrypoints/tensor_pybind.cpp
         csrc/entrypoints/npybind_utils.cpp
         csrc/*.cpp
+        csrc/compiler/*.cpp
     )
 
 pybind11_add_module(pequegrad_c ${PG_SOURCES})

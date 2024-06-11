@@ -1,4 +1,5 @@
 #include "ad_primitives.hpp"
+#include "compiler/expr.hpp"
 #include "ops.hpp"
 #include "tensor.hpp"
 #include "utils.hpp"
@@ -63,6 +64,7 @@ void FromNumpy::dispatch_cuda(const std::vector<Tensor> &inputs,
   _dispatch_general(outputs);
   outputs[0].to_(device::DeviceKind::CUDA);
 }
+
 std::vector<shape_t>
 Add::infer_output_shapes(const std::vector<Tensor> &inputs) {
   return {inputs[0].shape()};

@@ -1,5 +1,5 @@
 #pragma once
-#include "fuse.hpp"
+#include "expr.hpp"
 
 namespace pg {
 
@@ -15,17 +15,24 @@ BroadcastTo &get_broadcast(Tensor &tensor) {
   return dynamic_cast<BroadcastTo &>(*tensor.ad_node().primitive().get());
 }
 
-void compile(Tensor &out) {
-  // First pass -> remove unnecesary broadcast
+void remove_useless_broadcast(Tensor &out) {
   for (Tensor &node : out.ad_node().children()) {
     if (is_broadcast(node)) {
       auto &broadcast = get_broadcast(node);
-      if (broadcast.shape_to() == out.shape()) {
+      if (broadcast.shape_to() == node.shape()) {
         Tensor &child = node.ad_node().children()[0];
-        node.set_ad_node(child.ad_node());
+        // connect out with the child
+        out.ad_node().replace_child(node, child);
+        remove_useless_broadcast(child);
+        continue;
       }
     }
+    remove_useless_broadcast(node);
   }
+}
+void compile(Tensor &out) {
+  // First pass -> remove unnecesary broadcast
+  remove_useless_broadcast(out);
   fuse(out);
 }
 } // namespace pg
