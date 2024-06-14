@@ -196,6 +196,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
                                         dtype_to_string(arr.dtype()));
              }
            })
+      .def("__hash__", [](const Tensor &t) { return t.id; })
+      .def_property_readonly("id", [](const Tensor &t) { return t.id; })
       .def("numpy",
            [](Tensor &arr) -> NpArrayVariant {
              if (!arr.is_evaled())
