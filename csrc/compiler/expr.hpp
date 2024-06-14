@@ -53,6 +53,7 @@ public:
 enum class AstBinaryOp {
   Add,
   Mul,
+  Max,
 };
 
 class AstBinaryExpr : public AstExpr {
@@ -69,6 +70,9 @@ public:
       PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
     } else if (op == AstBinaryOp::Mul) {
       return lhs_str + " * " + rhs_str;
+      PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
+    } else if (op == AstBinaryOp::Max) {
+      return "fmax(" + lhs_str + ", " + rhs_str + ")";
       PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
     }
     PG_CHECK_RUNTIME(false, "Unsupported binary op: " +
@@ -97,6 +101,10 @@ public:
       if (i != shape.size() - 1) {
         st += " + ";
       }
+    }
+    // if strides is empty (scalar), st = 0
+    if (st == "") {
+      st = "0";
     }
 
     return name + "[" + st + "]";

@@ -37,6 +37,14 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->dtype = curr.dtype();
     return expr;
   }
+  if (is<Max>(prim)) {
+    auto expr = std::make_shared<AstBinaryExpr>();
+    expr->op = AstBinaryOp::Max;
+    expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
+    expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
+    expr->dtype = curr.dtype();
+    return expr;
+  }
   // print primitive
   // else, it's a load
   auto expr = std::make_shared<AstLoadExpr>();
@@ -76,6 +84,10 @@ get_leafs(std::shared_ptr<AstExpr> node) {
 void fuse(Tensor &out) {
   std::map<std::shared_ptr<AstLoadExpr>, std::shared_ptr<Tensor>> memo;
   std::shared_ptr<AstExpr> ast = get_ast_expr(out, memo);
+  // if ast is a load, it means we did not really do anything
+  if (std::dynamic_pointer_cast<AstLoadExpr>(ast)) {
+    return;
+  }
   //
 
   // Add a store operation after ast

@@ -48,7 +48,13 @@ bind_method(
     "ones",
     classmethod(lambda cls, shape, **kwargs: cls(np.ones(shape), **kwargs)),
 )
-bind_method(Tensor, "relu", lambda x: pg.max(x, Tensor(0, device=x.device)))
+
+
+def relu(self):
+    return pg.max(self, Tensor(0, device=self.device))
+
+
+bind_method(Tensor, "relu", relu)
 bind_method(Tensor, "unfold", lambda *args, **kwargs: pg.im2col(*args, **kwargs))
 bind_method(Tensor, "fold", lambda *args, **kwargs: pg.col2im(*args, **kwargs))
 bind_method(Tensor, "one_hot", classmethod(one_hot))
@@ -60,8 +66,13 @@ bind_method(Tensor, "logsumexp", logsumexp)
 bind_method(Tensor, "softmax", softmax)
 bind_method(
     Tensor,
-    "max",
+    "max_reduce",
     lambda self, dim=None, keepdim=False: pg.max_reduce(self, dim, keepdim),
+)
+bind_method(
+    Tensor,
+    "max",
+    lambda self, other: pg.max(self, other),
 )
 bind_method(Tensor, "exp", lambda self: pg.exp(self))
 bind_method(
