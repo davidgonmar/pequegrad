@@ -332,7 +332,7 @@ public:
     this->id = other.id;
     return *this;
   }
-  Tensor copy_graph(std::vector<Tensor> &inputs) const;
+  Tensor copy_graph(std::vector<Tensor> &inputs);
   Tensor copy_but_lose_grad_info() {
     Tensor copy = *this;
     // print primitive

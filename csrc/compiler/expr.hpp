@@ -137,6 +137,9 @@ public:
         st += " + ";
       }
     }
+    if (st == "") {
+      st = "0";
+    }
 
     return name + "[" + st + "] = " + value->render() + ";";
   }
@@ -168,6 +171,7 @@ class CompiledPrimitive : public ADPrimitive {
 
   // cache for function pointer
   void *fn_ptr = nullptr;
+  std::string _cuda_code;
 
 public:
   CompiledPrimitive(std::string name, std::shared_ptr<AstExpr> ast)

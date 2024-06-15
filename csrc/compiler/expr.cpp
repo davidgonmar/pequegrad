@@ -81,11 +81,39 @@ get_leafs(std::shared_ptr<AstExpr> node) {
   return leafs;
 }
 
+int get_depth(std::shared_ptr<AstExpr> node) {
+  using recurse_lambda_t = std::function<int(std::shared_ptr<AstExpr>)>;
+  recurse_lambda_t recurse = [&](std::shared_ptr<AstExpr> node) {
+    if (std::dynamic_pointer_cast<AstLoadExpr>(node)) {
+      return 1;
+    }
+    if (std::dynamic_pointer_cast<AstUnaryExpr>(node)) {
+      auto unary = std::dynamic_pointer_cast<AstUnaryExpr>(node);
+      return 1 + recurse(unary->child);
+    }
+    if (std::dynamic_pointer_cast<AstBinaryExpr>(node)) {
+      auto binary = std::dynamic_pointer_cast<AstBinaryExpr>(node);
+      return 1 + std::max(recurse(binary->lhs), recurse(binary->rhs));
+    }
+    if (std::dynamic_pointer_cast<AstStoreExpr>(node)) {
+      auto store = std::dynamic_pointer_cast<AstStoreExpr>(node);
+      return recurse(store->value);
+    }
+  };
+  return recurse(node);
+}
+
 void fuse(Tensor &out) {
   std::map<std::shared_ptr<AstLoadExpr>, std::shared_ptr<Tensor>> memo;
   std::shared_ptr<AstExpr> ast = get_ast_expr(out, memo);
   // if ast is a load, it means we did not really do anything
   if (std::dynamic_pointer_cast<AstLoadExpr>(ast)) {
+    return;
+  }
+  // if depth of the ast is 1, we can't really fuse anything
+
+  // so check for depth
+  if (get_depth(ast) < 3) { // 2 since we dont take load into account
     return;
   }
   //

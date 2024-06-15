@@ -108,7 +108,10 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     store->strides = outputs[0].strides();
     std::string x = store->render_idxs() + store->render();
     std::string ker_inner =
-        "size_t idx = blockDim.x * blockIdx.x + threadIdx.x;\n" + x;
+        "size_t idx = blockDim.x * blockIdx.x + threadIdx.x;\n";
+    ker_inner +=
+        "if (idx >= " + std::to_string(outputs[0].numel()) + ") return;\n";
+    ker_inner += x;
 
     // now render the kernel
     std::string ker =
@@ -119,6 +122,7 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
       ker += dtype_to_cpp_string(inputs[i].dtype()) + " *" +
              inputs_ast[i]->name + ",\n";
     }
+
     ker += dtype_to_cpp_string(outputs[0].dtype()) + " *out) {\n" + ker_inner +
            "\n}";
 
@@ -153,11 +157,7 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
 
     CUmodule cuModule;
     CUfunction cuFunction;
-    cuInit(0);
     CUcontext cuContext;
-    CUresult R0 = cuCtxCreate(&cuContext, 0, 0);
-    PG_CHECK_RUNTIME(R0 == CUDA_SUCCESS,
-                     "Failed to create context: got " + std::to_string(R0));
     CUresult R1 = cuModuleLoadData(&cuModule, ptx);
     PG_CHECK_RUNTIME(R1 == CUDA_SUCCESS,
                      "Failed to load data: got " + std::to_string(R1));
@@ -174,7 +174,9 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     // Clean up
     nvrtcDestroyProgram(&prog);
     delete[] ptx;
-    this->fn_ptr = function_ptr;
+    this->fn_ptr = reinterpret_cast<void *>(cuModule);
+    this->_cuda_code = ker;
+    this->_name = kernel_name;
   }
   // Prepare grid and block dimensions
 
@@ -203,16 +205,37 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
   }
 
   // Launch the kernel
+  // create stream to launch kernel
+  // first check if function is valid
+  CUmodule cuModule = (CUmodule)this->fn_ptr;
+  if (cuModule == nullptr) {
+    PG_CHECK_RUNTIME(false, "Module pointer is null");
+  }
+
+  CUfunction cuFunction;
+  CUresult R = cuModuleGetFunction(&cuFunction, cuModule, this->_name.c_str());
+
+  // check if function is valid
+  if (cuFunction == nullptr) {
+    PG_CHECK_RUNTIME(false, "Function pointer is null");
+  }
+
   CUresult launch_result = cuLaunchKernel(
-      (CUfunction)this->fn_ptr, blocks_per_grid.x, blocks_per_grid.y,
-      blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
-      threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
+      cuFunction, blocks_per_grid.x, blocks_per_grid.y, blocks_per_grid.z,
+      threads_per_block.x, threads_per_block.y, threads_per_block.z, 0, NULL,
+      kernel_args_ptrs.data(), NULL);
 
   if (launch_result != CUDA_SUCCESS) {
     const char *error_string;
     cuGetErrorString(launch_result, &error_string);
-    PG_CHECK_RUNTIME(false,
-                     "Error launching kernel: " + std::string(error_string));
+    PG_CHECK_RUNTIME(
+        false, "Error launching kernel: " + std::string(error_string) +
+                   " "
+                   "for kernel " +
+                   std::to_string(outputs[0].id) + " with code \n" +
+                   this->_cuda_code + "\n Launched with: \n" +
+                   vec_to_string(kernel_args_ptrs) +
+                   "\n and fn_ptr: " + std::to_string((size_t)this->fn_ptr));
   }
 
   // Synchronize to ensure kernel execution is complete

@@ -21,3 +21,6 @@ else:
     )
 
 from pequegrad_c import *
+
+# grads()
+load_cuda_driver_api(True)

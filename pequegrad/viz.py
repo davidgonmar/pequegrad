@@ -1,40 +1,73 @@
 import networkx as nx
-import matplotlib.pyplot as plt
+from pyvis.network import Network
 
 
-def viz(tensor, viz=True):
+def viz(tensor_or_tensors, viz=True, name="graph"):
     G = nx.DiGraph()
 
     def add_node(tensor):
         if tensor not in seen:
-            if tensor.ad_context() == "AsType":
-                print(tensor.children())
             node_name = tensor.id
-            G.add_node(node_name, label=f"{node_name}\n({tensor.ad_context()})")
+            G.add_node(
+                node_name,
+                label=f"{node_name}\n({tensor.ad_context()}), shape: {tensor.shape}, evaled: {tensor.is_evaled()}",
+            )
             seen.add(tensor)
             for child in tensor.children():
                 child_name = child.id
-                G.add_node(child_name, label=f"{child_name}\n({child.ad_context()})")
+                G.add_node(
+                    child_name,
+                    label=f"{child_name}\n({child.ad_context()}), shape: {child.shape}, evaled: {child.is_evaled()}",
+                )
                 G.add_edge(child_name, node_name)
                 add_node(child)
 
     seen = set()
-    add_node(tensor)
+    for tensor in (
+        tensor_or_tensors
+        if isinstance(tensor_or_tensors, (list, tuple))
+        else [tensor_or_tensors]
+    ):
+        add_node(tensor)
 
     if viz:
-        pos = nx.spring_layout(G)
-        labels = nx.get_node_attributes(G, "label")
-        nx.draw(
-            G,
-            pos,
-            labels=labels,
-            with_labels=True,
-            node_size=3000,
-            node_color="lightblue",
-            font_size=10,
-            font_weight="bold",
-            arrows=True,
+        net = Network(notebook=True, directed=True)
+
+        for node, data in G.nodes(data=True):
+            net.add_node(
+                node, label=data["label"], title=data["label"], shape="ellipse"
+            )
+        for source, target in G.edges():
+            net.add_edge(source, target, arrows="to")
+
+        net.set_options(
+            """
+        var options = {
+          "layout": {
+            "hierarchical": {
+              "enabled": true,
+              "direction": "UD",
+              "sortMethod": "directed",
+              "nodeSpacing": 300
+            }
+          },
+          "edges": {
+            "smooth": {
+              "type": "cubicBezier",
+              "forceDirection": "vertical",
+              "roundness": 0.4
+            }
+          },
+          "physics": {
+            "hierarchicalRepulsion": {
+              "nodeDistance": 300
+            },
+            "minVelocity": 0.75
+          }
+        }
+        """
         )
-        plt.show()
+
+        net.show(name + ".html")
 
     return G

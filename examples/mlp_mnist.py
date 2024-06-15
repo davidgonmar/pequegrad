@@ -8,6 +8,7 @@ from pequegrad.backend.c import device, grads
 from pequegrad.optim import Adam
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.compile import jit
+from pequegrad.tensor import Tensor
 
 np.random.seed(0)
 
@@ -20,15 +21,18 @@ USE_GRAPH = True
 
 class MLP(StatefulModule):
     def __init__(self):
-        self.fc1 = Linear(784, 200)
-        self.fc2 = Linear(200, 10)
+        self.fc1 = Linear(784, 284)
+        self.fc2 = Linear(284, 10)
 
     def forward(self, input):
         input = self.fc1.forward(input).relu()
-        return self.fc2.forward(input)
+        input = self.fc2.forward(input)
+        return input
 
 
 def train(model, ds, epochs=13, batch_size=4096):
+    start = None
+    epochs = 13
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.021)
 
@@ -36,19 +40,34 @@ def train(model, ds, epochs=13, batch_size=4096):
 
     def train_step(batch_X, batch_Y):
         prediction = model.forward(batch_X)
-        loss = prediction.cross_entropy_loss_indices(batch_Y)
+        loss = prediction.cross_entropy_loss_probs(batch_Y)
         g = grads(model.parameters(), loss)
         return [loss] + g
 
     i = 0
+    use_jit = False
+    train_step = (
+        jit(train_step, externals=model.parameters()) if use_jit else train_step
+    )
     for x, y in loader:
-        outs = train_step(x, y)
+        if i == 1:
+            start = time.time()
+        batch_y_onehot = Tensor.one_hot(10, y, device=device)
+        outs = train_step(x, batch_y_onehot)
         loss = outs[0]
         g = outs[1:]
+
+        # viz.viz(loss, "loss")
+
         optim.step(g)
+
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break
+        i += 1
+
+    end = time.time()
+    print(f"Training time: {end - start:.2f}s")
 
     return model
 
@@ -60,8 +79,7 @@ def test_model(model, ds):
     total = 0
     loader = DataLoader(ds, batch_size=4096)
     start = time.time()
-    use_jit = False  # does not work correctly yet
-    step = jit(model.forward, aot_grads=False) if use_jit else model.forward
+    step = model.forward
     for x, y in loader:
         with no_grad():
             outputs = step(x)
@@ -102,9 +120,7 @@ if __name__ == "__main__":
 
     if MODE == "train":
         print("Training the model")
-        start = time.time()
         mlp = train(mlp, train_ds)
-        print(f"Training took {time.time() - start:.2f} seconds")
         mlp.save(model_path)
 
         print("Model saved to", model_path)

@@ -2,12 +2,13 @@
 
 namespace pg {
 
-std::pair<std::vector<Tensor>, std::vector<Tensor>>
-clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
+std::tuple<std::vector<Tensor>, std::vector<Tensor>, std::vector<Tensor>>
+clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
+            std::vector<Tensor> &externals) {
   std::vector<Tensor> new_outputs;
   std::vector<Tensor> new_inputs;
-  std::vector<Tensor> cloned_tensors;
-  using copy_lambda = std::function<void(Tensor &)>;
+
+  using copy_lambda = std::function<void(Tensor &, bool)>;
 
   auto tensorComparator = [](const Tensor &lhs, const Tensor &rhs) {
     // ??? weird but works. todo figure this out
@@ -17,10 +18,30 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
   std::map<Tensor, Tensor, decltype(tensorComparator)> old_to_new(
       tensorComparator);
 
+  using notin_lambda_t =
+      std::function<bool(const std::vector<Tensor> &, const Tensor &)>;
+  notin_lambda_t notin = [&](const std::vector<Tensor> &vec, const Tensor &t) {
+    for (const Tensor &v : vec) {
+      if (v.id == t.id) {
+        return false;
+      }
+    }
+    return true;
+  };
   // First pass, create new  tensors
-  copy_lambda copy = [&](Tensor &t) {
+  copy_lambda copy = [&](Tensor &t, bool isinput) {
+    // we need to find leafs that are not inputs (e.g. constants OR model
+    // weights) those will be old_to_new[t] = t
+
     // check if tensor is already copied
     if (old_to_new.find(t) != old_to_new.end()) {
+      return;
+    }
+
+    if (isinput) {
+      // if it's an input, we just copy it
+      Tensor &new_t = t.copy_graph(std::vector<Tensor>());
+      old_to_new[t] = new_t;
       return;
     }
 
@@ -28,7 +49,7 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
     // print children length
     for (Tensor &child : t.children()) {
       if (old_to_new.find(child) == old_to_new.end()) {
-        copy(child);
+        copy(child, false);
       }
     }
     // then get new children
@@ -36,21 +57,21 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
     for (Tensor &child : t.children()) {
       new_children.push_back(old_to_new.at(child));
     }
-    cloned_tensors.emplace_back(t.copy_graph(new_children));
-    Tensor &new_t = cloned_tensors.back();
+    Tensor &new_t = t.copy_graph(new_children);
     old_to_new[t] = new_t;
   };
 
   for (Tensor &t : outputs) {
-    copy(t);
+    copy(t, false);
     new_outputs.push_back(old_to_new.at(t));
   }
 
   for (Tensor &t : inputs) {
-    copy(t);
+    copy(t, true);
     new_inputs.push_back(old_to_new.at(t));
   }
-  auto x = std::make_pair(new_outputs, new_inputs);
+
+  auto x = std::make_tuple(new_outputs, new_inputs, externals);
 
   return x;
 }

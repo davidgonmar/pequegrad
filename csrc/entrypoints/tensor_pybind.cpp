@@ -147,6 +147,12 @@ PYBIND11_MODULE(pequegrad_c, m) {
       py::arg("required_tensors"), py::arg("output"),
       py::arg("tangent") = std::nullopt);
 
+  m.def("load_cuda_driver_api", [](bool x) {
+    cuDevicePrimaryCtxRetain(0, 0); // This is a dummy call to load the driver
+    cuInit(0);
+    return true;
+  });
+
 #define BIND_BINOP_WITH_OVERLOAD_CLASS(pyname, op)                             \
   def(#pyname, py::overload_cast<const Tensor &, const Tensor &>(&pg::op))     \
       .def(#pyname, py::overload_cast<const Tensor &, double>(&pg::op))        \
@@ -196,6 +202,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
                                         dtype_to_string(arr.dtype()));
              }
            })
+      .def("is_evaled", &Tensor::is_evaled)
       .def("__hash__", [](const Tensor &t) { return t.id; })
       .def_property_readonly("id", [](const Tensor &t) { return t.id; })
       .def("numpy",

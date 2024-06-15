@@ -191,15 +191,16 @@ DType Tensor::dtype() const {
   // primitive: " + _ad_node->primitive()->str());
   return _view->dtype();
 }
-Tensor Tensor::copy_graph(std::vector<Tensor> &inputs) const {
+Tensor Tensor::copy_graph(std::vector<Tensor> &inputs) {
   Tensor copy = Tensor(*this);
   // create new ad node
   copy._ad_node = std::make_shared<ADNode>(*_ad_node);
   // set new children
   copy._ad_node->set_children(inputs);
   // reset view
-  copy._view = std::make_shared<View>(*_view);
-
+  copy._view = std::make_shared<View>(this->shape(), this->dtype(),
+                                      this->device(), false);
+  copy.id = Tensor::get_next_id();
   return copy;
 }
 
