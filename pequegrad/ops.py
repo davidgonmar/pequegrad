@@ -349,7 +349,7 @@ def max_pool2d(
     self, kernel_size: Tuple[int, int], stride: Tuple[int, int] = None
 ) -> "Tensor":
     """Returns the 2d maxpooling of the tensor with the given kernel size"""
-    return _pool2d(self, kernel_size, stride, "max")
+    return _pool2d(self, kernel_size, stride, "max_reduce")
 
 
 def avg_pool2d(

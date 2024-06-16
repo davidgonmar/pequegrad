@@ -15,6 +15,7 @@ import argparse
 import time
 from pequegrad.backend.c import device, Tensor, grads
 from pequegrad.data.dataloader import DataLoader
+from pequegrad.compile import jit
 
 np.random.seed(0)
 
@@ -56,6 +57,7 @@ def test_model(model, ds):
             y_pred = model.forward(x).numpy()
             y_pred = np.argmax(y_pred, axis=1)
             correct += np.sum(y_pred == y.numpy())
+            total += y.shape[0]
         return correct, total
 
 
@@ -69,6 +71,7 @@ def train(model, ds, epochs=13, batch_size=512):
         g = grads(model.parameters(), loss)
         return [loss] + g
 
+    training_step = jit(training_step, externals=model.parameters())
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
     start = None
     i = 0
@@ -125,7 +128,7 @@ if __name__ == "__main__":
 
     else:
         ds = MNISTDataset(device=dev, train=True)
-        print("Evaluating model...", end="\r")
+        print("Training...")
         train(model, ds, epochs=13)
 
         correct, total = test_model(model, ds)

@@ -84,7 +84,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->val = dynamic_cast<Fill *>(prim.get())->value();
     return expr;
   }
-  /*if (is<Permute>(prim)) {
+  if (is<Permute>(prim)) {
     auto expr = std::make_shared<AstPermuteOp>();
     // with permute, we must use a load as input
     auto load = std::make_shared<AstLoadExpr>();
@@ -96,8 +96,8 @@ std::shared_ptr<AstExpr> get_ast_expr(
     load->dtype = child_t.dtype();
     load->shape = child_t.shape();
     memo[load] = std::make_shared<Tensor>(child_t);
-  }*/
-  /*if (is<BroadcastTo>(prim)) {
+  }
+  if (is<BroadcastTo>(prim)) {
     auto expr = std::make_shared<AstBroadcastOp>();
     // with broadcast, we must use a load as input
     auto load = std::make_shared<AstLoadExpr>();
@@ -109,7 +109,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     load->dtype = child_t.dtype();
     load->shape = child_t.shape();
     memo[load] = std::make_shared<Tensor>(child_t);
-  }*/
+  }
   // print primitive
   // else, it's a load
   auto expr = std::make_shared<AstLoadExpr>();
