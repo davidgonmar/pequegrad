@@ -45,6 +45,45 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->dtype = curr.dtype();
     return expr;
   }
+  if (is<Gt>(prim)) {
+    auto expr = std::make_shared<AstBinaryExpr>();
+    expr->op = AstBinaryOp::Gt;
+    expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
+    expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
+    expr->dtype = curr.dtype();
+    return expr;
+  }
+  if (is<Lt>(prim)) {
+    auto expr = std::make_shared<AstBinaryExpr>();
+    expr->op = AstBinaryOp::Lt;
+    expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
+    expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
+    expr->dtype = curr.dtype();
+    return expr;
+  }
+  if (is<Eq>(prim)) {
+    auto expr = std::make_shared<AstBinaryExpr>();
+    expr->op = AstBinaryOp::Eq;
+    expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
+    expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
+    expr->dtype = curr.dtype();
+    return expr;
+  }
+  if (is<Where>(prim)) {
+    auto expr = std::make_shared<AstTernaryExpr>();
+    expr->op = AstTernaryOp::Where;
+    expr->first = get_ast_expr(curr.ad_node().children()[0], memo);
+    expr->second = get_ast_expr(curr.ad_node().children()[1], memo);
+    expr->third = get_ast_expr(curr.ad_node().children()[2], memo);
+    expr->dtype = curr.dtype();
+    return expr;
+  }
+  if (is<Fill>(prim)) {
+    auto expr = std::make_shared<AstConstExpr>();
+    expr->dtype = curr.dtype();
+    expr->val = dynamic_cast<Fill *>(prim.get())->value();
+    return expr;
+  }
   // print primitive
   // else, it's a load
   auto expr = std::make_shared<AstLoadExpr>();
@@ -76,6 +115,12 @@ get_leafs(std::shared_ptr<AstExpr> node) {
       auto store = std::dynamic_pointer_cast<AstStoreExpr>(node);
       return recurse(store->value);
     }
+    if (std::dynamic_pointer_cast<AstTernaryExpr>(node)) {
+      auto ternary = std::dynamic_pointer_cast<AstTernaryExpr>(node);
+      recurse(ternary->first);
+      recurse(ternary->second);
+      recurse(ternary->third);
+    }
   };
   recurse(node);
   return leafs;
@@ -99,6 +144,11 @@ int get_depth(std::shared_ptr<AstExpr> node) {
       auto store = std::dynamic_pointer_cast<AstStoreExpr>(node);
       return recurse(store->value);
     }
+    if (std::dynamic_pointer_cast<AstTernaryExpr>(node)) {
+      auto ternary = std::dynamic_pointer_cast<AstTernaryExpr>(node);
+      return 1 + std::max({recurse(ternary->first), recurse(ternary->second),
+                           recurse(ternary->third)});
+    }
   };
   return recurse(node);
 }
@@ -110,13 +160,7 @@ bool fuse(Tensor &out) {
   if (std::dynamic_pointer_cast<AstLoadExpr>(ast)) {
     return false;
   }
-  // if depth of the ast is 1, we can't really fuse anything
-
-  // so check for depth
-  if (get_depth(ast) < 3) { // 2 since we dont take load into account
-    return false;
-  }
-  //
+  // if depth of the ast is 1, we still specialize shapes and strides
 
   // Add a store operation after ast
   std::shared_ptr<AstStoreExpr> store = std::make_shared<AstStoreExpr>();
@@ -128,13 +172,15 @@ bool fuse(Tensor &out) {
   // first, count inputs
   std::vector<std::shared_ptr<AstLoadExpr>> leafs = get_leafs(ast);
   size_t n_inputs = leafs.size();
+  if (n_inputs == 0) {
+    return false;
+  }
   std::string signature_str;
   for (size_t i = 0; i < n_inputs; i++) {
     AstLoadExpr inp = *leafs[i].get();
     signature_str +=
         "const" + dtype_to_string(inp.dtype) + " *in" + std::to_string(i);
   }
-
   std::vector<Tensor> inputs;
   for (size_t i = 0; i < n_inputs; i++) {
     inputs.push_back(std::move(*memo[leafs[i]].get()));

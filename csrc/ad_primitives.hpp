@@ -529,6 +529,8 @@ public:
   DEFINE_INFER_OUTPUT_SHAPES
   DEFINE_INFER_OUTPUT_DTYPES
   DEFINE_BACKWARD
+
+  double value() { return _value; }
 };
 
 } // namespace pg

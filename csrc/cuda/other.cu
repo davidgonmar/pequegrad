@@ -84,7 +84,6 @@ std::string dtype_to_cpp_string(DType dtype) {
 
 void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
                                       std::vector<Tensor> &outputs) {
-
   if (this->fn_ptr == nullptr) {
     // first get the inputs of ast
     std::vector<std::shared_ptr<AstLoadExpr>> inputs_ast = get_leafs(ast);
@@ -101,6 +100,8 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     // assert that ast is a store expr and set its strides and shape
     outputs[0].init_view(std::make_shared<View>(
         outputs[0].shape(), outputs[0].dtype(), device::CUDA));
+
+    // check we can cast to store
     PG_CHECK_RUNTIME(std::dynamic_pointer_cast<AstStoreExpr>(ast) != nullptr,
                      "AST is not a store expression");
     auto store = std::dynamic_pointer_cast<AstStoreExpr>(ast);
@@ -142,12 +143,8 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
       nvrtcGetProgramLogSize(prog, &logSize);
       char *log = new char[logSize];
       nvrtcGetProgramLog(prog, log);
-
-      std::cerr << "NVRTC compilation failed:\n" << log << std::endl;
-      delete[] log;
-
       nvrtcDestroyProgram(&prog);
-      return;
+      throw std::runtime_error("NVRTC compilation failed: " + std::string(log));
     }
 
     size_t ptxSize;
@@ -174,7 +171,7 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     // Clean up
     nvrtcDestroyProgram(&prog);
     delete[] ptx;
-    this->fn_ptr = reinterpret_cast<void *>(cuModule);
+    this->fn_ptr = reinterpret_cast<void *>(cuFunction);
     this->_cuda_code = ker;
     this->_name = kernel_name;
   }
@@ -207,23 +204,11 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
   // Launch the kernel
   // create stream to launch kernel
   // first check if function is valid
-  CUmodule cuModule = (CUmodule)this->fn_ptr;
-  if (cuModule == nullptr) {
-    PG_CHECK_RUNTIME(false, "Module pointer is null");
-  }
-
-  CUfunction cuFunction;
-  CUresult R = cuModuleGetFunction(&cuFunction, cuModule, this->_name.c_str());
-
-  // check if function is valid
-  if (cuFunction == nullptr) {
-    PG_CHECK_RUNTIME(false, "Function pointer is null");
-  }
 
   CUresult launch_result = cuLaunchKernel(
-      cuFunction, blocks_per_grid.x, blocks_per_grid.y, blocks_per_grid.z,
-      threads_per_block.x, threads_per_block.y, threads_per_block.z, 0, NULL,
-      kernel_args_ptrs.data(), NULL);
+      (CUfunction)this->fn_ptr, blocks_per_grid.x, blocks_per_grid.y,
+      blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
+      threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
 
   if (launch_result != CUDA_SUCCESS) {
     const char *error_string;

@@ -54,6 +54,9 @@ enum class AstBinaryOp {
   Add,
   Mul,
   Max,
+  Gt,
+  Lt,
+  Eq,
 };
 
 class AstBinaryExpr : public AstExpr {
@@ -73,6 +76,15 @@ public:
       PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
     } else if (op == AstBinaryOp::Max) {
       return "fmax(" + lhs_str + ", " + rhs_str + ")";
+      PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
+    } else if (op == AstBinaryOp::Gt) {
+      return lhs_str + " > " + rhs_str;
+      PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
+    } else if (op == AstBinaryOp::Lt) {
+      return lhs_str + " < " + rhs_str;
+      PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
+    } else if (op == AstBinaryOp::Eq) {
+      return lhs_str + " == " + rhs_str;
       PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
     }
     PG_CHECK_RUNTIME(false, "Unsupported binary op: " +
@@ -110,7 +122,11 @@ public:
     return name + "[" + st + "]";
   }
   std::string render_idxs() override {
-    // this only calculates the index for each dim!!!!!! !!!
+    // scalar case
+    if (shape.size() == 0) {
+      return "";
+    }
+    // this only calculates the index for each dim
     std::string st = "";
     st += "size_t in_" + name + "_idx" + std::to_string(shape.size() - 1) +
           " = " + "idx" + " % " + std::to_string(shape[shape.size() - 1]) +
@@ -133,7 +149,10 @@ public:
   strides_t strides;
   std::shared_ptr<AstExpr> value;
   std::string render() override {
-
+    // scalar case
+    if (shape.size() == 0) {
+      return name + "[0]" + " = " + value->render() + ";";
+    }
     std::string st = "";
     for (size_t i = 0; i < shape.size(); i++) {
       st += std::to_string(strides[i] / dtype_to_size(dtype)) + " * " + "out_" +
@@ -145,12 +164,16 @@ public:
     if (st == "") {
       st = "0";
     }
-
-    return name + "[" + st + "] = " + value->render() + ";";
+    std::string a = value->render();
+    return name + "[" + st + "] = " + a + ";";
   }
 
   std::string render_idxs() override {
     // same as load expr, expression based on idx
+    // scalar case
+    if (shape.size() == 0) {
+      return "";
+    }
     std::string st = "";
     st += "size_t out_" + name + "_idx" + std::to_string(shape.size() - 1) +
           " = " + "idx" + " % " + std::to_string(shape[shape.size() - 1]) +
@@ -162,8 +185,46 @@ public:
       st += "size_t out_" + name + "_idx" + std::to_string(i) + " = " +
             "(idx / " + divisor + ") % " + std::to_string(shape[i]) + ";\n";
     }
-
     return st + value->render_idxs();
+  }
+};
+
+class AstConstExpr : public AstExpr {
+public:
+  double val = 0;
+  std::string render() override {
+    // cast value to the correct type
+    if (dtype == DType::Float32) {
+      return "(float)" + std::to_string(val);
+    } else if (dtype == DType::Float64) {
+      return "(double)" + std::to_string(val);
+    }
+    PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
+  }
+  std::string render_idxs() override { return ""; }
+};
+
+enum class AstTernaryOp { Where };
+class AstTernaryExpr : public AstExpr {
+public:
+  AstTernaryOp op;
+  std::shared_ptr<AstExpr> first;
+  std::shared_ptr<AstExpr> second;
+  std::shared_ptr<AstExpr> third;
+
+  std::string render() override {
+    std::string first_str = first->render();
+    std::string second_str = second->render();
+    std::string third_str = third->render();
+    if (op == AstTernaryOp::Where) {
+      return "(" + first_str + " ? " + second_str + " : " + third_str + ")";
+    }
+    PG_CHECK_RUNTIME(false, "Unsupported ternary op: " +
+                                std::to_string(static_cast<int>(op)));
+  }
+
+  std::string render_idxs() override {
+    return first->render_idxs() + second->render_idxs() + third->render_idxs();
   }
 };
 

@@ -50,14 +50,16 @@ def train(model, ds, epochs=13, batch_size=4096):
     )
 
     for x, y in loader:
-        print("start step" + str(i))
         if i == 1:
             start = time.time()
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         outs = train_step(x, batch_y_onehot)
         loss = outs[0]
         g = outs[1:]
+        # import pequegrad.viz as viz
+        # viz.viz(outs, name="outs")
         optim.step(g)
+
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break

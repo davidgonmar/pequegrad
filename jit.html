@@ -1,0 +1,127 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 600px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "id": 2564, "label": "2564\n(Mul), shape: [3, 2], evaled: True [[0.33987737 0.14914155]\n [0.36940664 0.13356528]\n [0.81430626 0.03030578]]", "shape": "ellipse", "title": "2564\n(Mul), shape: [3, 2], evaled: True [[0.33987737 0.14914155]\n [0.36940664 0.13356528]\n [0.81430626 0.03030578]]"}, {"color": "#97c2fc", "id": 2417, "label": "2417\n(Broadcast), shape: [3, 2], evaled: True [[-0.33333334 -0.33333334]\n [-0.33333334 -0.33333334]\n [-0.33333334 -0.33333334]]", "shape": "ellipse", "title": "2417\n(Broadcast), shape: [3, 2], evaled: True [[-0.33333334 -0.33333334]\n [-0.33333334 -0.33333334]\n [-0.33333334 -0.33333334]]"}, {"color": "#97c2fc", "id": 2411, "label": "2411\n(Unsqueeze), shape: [3, 1], evaled: True [[-0.33333334]\n [-0.33333334]\n [-0.33333334]]", "shape": "ellipse", "title": "2411\n(Unsqueeze), shape: [3, 1], evaled: True [[-0.33333334]\n [-0.33333334]\n [-0.33333334]]"}, {"color": "#97c2fc", "id": 2405, "label": "2405\n(Div), shape: [3], evaled: True [-0.33333334 -0.33333334 -0.33333334]", "shape": "ellipse", "title": "2405\n(Div), shape: [3], evaled: True [-0.33333334 -0.33333334 -0.33333334]"}, {"color": "#97c2fc", "id": 2392, "label": "2392\n(Broadcast), shape: [3], evaled: True [-1. -1. -1.]", "shape": "ellipse", "title": "2392\n(Broadcast), shape: [3], evaled: True [-1. -1. -1.]"}, {"color": "#97c2fc", "id": 2386, "label": "2386\n(Mul), shape: [], evaled: True -1.0", "shape": "ellipse", "title": "2386\n(Mul), shape: [], evaled: True -1.0"}, {"color": "#97c2fc", "id": 2373, "label": "2373\n(Fill), shape: [], evaled: True 1.0", "shape": "ellipse", "title": "2373\n(Fill), shape: [], evaled: True 1.0"}, {"color": "#97c2fc", "id": 2377, "label": "2377\n(Fill), shape: [], evaled: True -1.0", "shape": "ellipse", "title": "2377\n(Fill), shape: [], evaled: True -1.0"}, {"color": "#97c2fc", "id": 2396, "label": "2396\n(Fill), shape: [3], evaled: True [3. 3. 3.]", "shape": "ellipse", "title": "2396\n(Fill), shape: [3], evaled: True [3. 3. 3.]"}, {"color": "#97c2fc", "id": 2555, "label": "2555\n(Broadcast), shape: [3, 2], evaled: True [[-1.0196321  -0.44742465]\n [-1.1082199  -0.4006958 ]\n [-2.4429188  -0.09091735]]", "shape": "ellipse", "title": "2555\n(Broadcast), shape: [3, 2], evaled: True [[-1.0196321  -0.44742465]\n [-1.1082199  -0.4006958 ]\n [-2.4429188  -0.09091735]]"}, {"color": "#97c2fc", "id": 2307, "label": "2307\n(Sub), shape: [3, 2], evaled: True [[-1.0196321  -0.44742465]\n [-1.1082199  -0.4006958 ]\n [-2.4429188  -0.09091735]]", "shape": "ellipse", "title": "2307\n(Sub), shape: [3, 2], evaled: True [[-1.0196321  -0.44742465]\n [-1.1082199  -0.4006958 ]\n [-2.4429188  -0.09091735]]"}, {"color": "#97c2fc", "id": 2250, "label": "2250\n(CompiledPrimitive(kernel_2250)), shape: [3, 2], evaled: True [[1.228575   1.8007824 ]\n [1.5914955  2.2990196 ]\n [0.27730018 2.6293015 ]]", "shape": "ellipse", "title": "2250\n(CompiledPrimitive(kernel_2250)), shape: [3, 2], evaled: True [[1.228575   1.8007824 ]\n [1.5914955  2.2990196 ]\n [0.27730018 2.6293015 ]]"}, {"color": "#97c2fc", "id": 2244, "label": "2244\n(JitBoundary), shape: [3, 2], evaled: True [[ 0.22857496  0.80078244]\n [ 0.5914956   1.2990196 ]\n [-0.7226998   1.6293015 ]]", "shape": "ellipse", "title": "2244\n(JitBoundary), shape: [3, 2], evaled: True [[ 0.22857496  0.80078244]\n [ 0.5914956   1.2990196 ]\n [-0.7226998   1.6293015 ]]"}, {"color": "#97c2fc", "id": 2298, "label": "2298\n(Broadcast), shape: [3, 2], evaled: True [[2.248207  2.248207 ]\n [2.6997154 2.6997154]\n [2.720219  2.720219 ]]", "shape": "ellipse", "title": "2298\n(Broadcast), shape: [3, 2], evaled: True [[2.248207  2.248207 ]\n [2.6997154 2.6997154]\n [2.720219  2.720219 ]]"}, {"color": "#97c2fc", "id": 2292, "label": "2292\n(CompiledPrimitive(kernel_2292)), shape: [3, 1], evaled: True [[2.248207 ]\n [2.6997154]\n [2.720219 ]]", "shape": "ellipse", "title": "2292\n(CompiledPrimitive(kernel_2292)), shape: [3, 1], evaled: True [[2.248207 ]\n [2.6997154]\n [2.720219 ]]"}, {"color": "#97c2fc", "id": 2283, "label": "2283\n(Sum), shape: [3, 1], evaled: True [[1.5642785]\n [1.4928629]\n [1.0951785]]", "shape": "ellipse", "title": "2283\n(Sum), shape: [3, 1], evaled: True [[1.5642785]\n [1.4928629]\n [1.0951785]]"}, {"color": "#97c2fc", "id": 2277, "label": "2277\n(Exp), shape: [3, 2], evaled: True [[0.5642785  1.        ]\n [0.492863   1.        ]\n [0.09517848 1.        ]]", "shape": "ellipse", "title": "2277\n(Exp), shape: [3, 2], evaled: True [[0.5642785  1.        ]\n [0.492863   1.        ]\n [0.09517848 1.        ]]"}, {"color": "#97c2fc", "id": 2271, "label": "2271\n(Sub), shape: [3, 2], evaled: True [[-0.57220745  0.        ]\n [-0.70752406  0.        ]\n [-2.3520014   0.        ]]", "shape": "ellipse", "title": "2271\n(Sub), shape: [3, 2], evaled: True [[-0.57220745  0.        ]\n [-0.70752406  0.        ]\n [-2.3520014   0.        ]]"}, {"color": "#97c2fc", "id": 2262, "label": "2262\n(Broadcast), shape: [3, 2], evaled: True [[1.8007824 1.8007824]\n [2.2990196 2.2990196]\n [2.6293015 2.6293015]]", "shape": "ellipse", "title": "2262\n(Broadcast), shape: [3, 2], evaled: True [[1.8007824 1.8007824]\n [2.2990196 2.2990196]\n [2.6293015 2.6293015]]"}, {"color": "#97c2fc", "id": 2256, "label": "2256\n(MaxReduce), shape: [3, 1], evaled: True [[1.8007824]\n [2.2990196]\n [2.6293015]]", "shape": "ellipse", "title": "2256\n(MaxReduce), shape: [3, 1], evaled: True [[1.8007824]\n [2.2990196]\n [2.6293015]]"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "from": 2417, "to": 2564}, {"arrows": "to", "from": 2411, "to": 2417}, {"arrows": "to", "from": 2405, "to": 2411}, {"arrows": "to", "from": 2392, "to": 2405}, {"arrows": "to", "from": 2386, "to": 2392}, {"arrows": "to", "from": 2373, "to": 2386}, {"arrows": "to", "from": 2377, "to": 2386}, {"arrows": "to", "from": 2396, "to": 2405}, {"arrows": "to", "from": 2555, "to": 2564}, {"arrows": "to", "from": 2307, "to": 2555}, {"arrows": "to", "from": 2250, "to": 2307}, {"arrows": "to", "from": 2250, "to": 2271}, {"arrows": "to", "from": 2250, "to": 2256}, {"arrows": "to", "from": 2244, "to": 2250}, {"arrows": "to", "from": 2298, "to": 2307}, {"arrows": "to", "from": 2292, "to": 2298}, {"arrows": "to", "from": 2283, "to": 2292}, {"arrows": "to", "from": 2277, "to": 2283}, {"arrows": "to", "from": 2271, "to": 2277}, {"arrows": "to", "from": 2262, "to": 2271}, {"arrows": "to", "from": 2256, "to": 2262}, {"arrows": "to", "from": 2256, "to": 2292}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"layout": {"hierarchical": {"enabled": true, "direction": "UD", "sortMethod": "directed", "nodeSpacing": 300}}, "edges": {"smooth": {"type": "cubicBezier", "forceDirection": "vertical", "roundness": 0.4}}, "physics": {"hierarchicalRepulsion": {"nodeDistance": 300}, "minVelocity": 0.75}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
