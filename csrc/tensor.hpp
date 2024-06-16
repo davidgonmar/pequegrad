@@ -332,7 +332,9 @@ public:
     this->id = other.id;
     return *this;
   }
-  Tensor copy_graph(std::vector<Tensor> &inputs);
+  Tensor copy_graph(
+      std::vector<Tensor> &inputs,
+      std::optional<std::shared_ptr<ADPrimitive>> primitive = std::nullopt);
   Tensor copy_but_lose_grad_info() {
     Tensor copy = *this;
     // print primitive
@@ -512,6 +514,10 @@ public:
     // TODO -- maybe dont copy 2 times
     if (device() != device::DeviceKind::CPU) {
       return to_cpu().to_numpy<T>();
+    }
+    // if is not dense, we need to copy to a dense tensor
+    if (!is_contiguous()) {
+      return contiguous().to_numpy<T>();
     }
     py::array_t<T> np_array(shape(), strides(), get_casted_base_ptr<T>());
     return np_array;

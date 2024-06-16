@@ -19,6 +19,10 @@ def _fn4(x, y):
     return x + y.exp()
 
 
+def _fn5(x, y):
+    return pg.broadcast_to(x, [4, 3, 2]) * y + 5
+
+
 class TestCompile:
     @pytest.mark.parametrize("fn", [_fn4])
     def test_compile2(self, fn):
@@ -30,6 +34,18 @@ class TestCompile:
         y_ = pg.Tensor(arr2).to(pg.device.cuda)
         x2 = fn(x, y)
         x3 = fn(x_, y_)
+        pg.compile(x2)
+        np.testing.assert_allclose(x2.numpy(), x3.numpy(), atol=1e-5)
+
+    def test_compile3(self):
+        arr1 = np.random.randn(2).astype(np.float32)
+        arr2 = np.random.randn(4, 3, 2).astype(np.float32)
+        x = pg.Tensor(arr1).to(pg.device.cuda)
+        y = pg.Tensor(arr2).to(pg.device.cuda)
+        x_ = pg.Tensor(arr1).to(pg.device.cuda)
+        y_ = pg.Tensor(arr2).to(pg.device.cuda)
+        x2 = _fn5(x, y)
+        x3 = _fn5(x_, y_)
         pg.compile(x2)
         np.testing.assert_allclose(x2.numpy(), x3.numpy(), atol=1e-5)
 

@@ -65,6 +65,12 @@ public:
   }
 };
 
+class JitBoundary : public ADPrimitive {
+public:
+  DEFINE_STR_NAME(JitBoundary)
+  explicit JitBoundary() {}
+};
+
 class UnaryPrimitive : public ADPrimitive {};
 
 class FromNumpy : public ADPrimitive {

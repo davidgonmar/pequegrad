@@ -50,7 +50,6 @@ void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs) {
   std::memcpy(_ptr.get(), _data_ptr, _buffer_size * dtype_to_size(_dtype));
   Tensor arr(_buffer_size * dtype_to_size(_dtype), _shape, _strides, _ptr,
              _dtype, device::DeviceKind::CPU);
-
   outputs[0].init_view(std::make_shared<View>(arr.view()));
 }
 

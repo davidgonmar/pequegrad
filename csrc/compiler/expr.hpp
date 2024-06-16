@@ -110,14 +110,19 @@ public:
     return name + "[" + st + "]";
   }
   std::string render_idxs() override {
-    // idx = blockIdx.x * blockDim.x + threadIdx.x;
-    // basically does in_idx.... = somefn(idx)
+    // this only calculates the index for each dim!!!!!! !!!
     std::string st = "";
-    for (size_t i = 0; i < shape.size(); i++) {
+    st += "size_t in_" + name + "_idx" + std::to_string(shape.size() - 1) +
+          " = " + "idx" + " % " + std::to_string(shape[shape.size() - 1]) +
+          ";\n";
+    std::string divisor = "";
+    for (int i = shape.size() - 2; i >= 0; i--) {
+      divisor += (divisor == "" ? std::to_string(shape[i + 1])
+                                : " / " + std::to_string(shape[i + 1]));
       st += "size_t in_" + name + "_idx" + std::to_string(i) + " = " +
-            "idx / " + std::to_string(strides[i] / dtype_to_size(dtype)) +
-            " % " + std::to_string(shape[i]) + ";\n";
+            "(idx / " + divisor + ") % " + std::to_string(shape[i]) + ";\n";
     }
+
     return st;
   }
 };
@@ -147,10 +152,15 @@ public:
   std::string render_idxs() override {
     // same as load expr, expression based on idx
     std::string st = "";
-    for (size_t i = 0; i < shape.size(); i++) {
+    st += "size_t out_" + name + "_idx" + std::to_string(shape.size() - 1) +
+          " = " + "idx" + " % " + std::to_string(shape[shape.size() - 1]) +
+          ";\n";
+    std::string divisor = "";
+    for (int i = shape.size() - 2; i >= 0; i--) {
+      divisor += (divisor == "" ? std::to_string(shape[i + 1])
+                                : " / " + std::to_string(shape[i + 1]));
       st += "size_t out_" + name + "_idx" + std::to_string(i) + " = " +
-            "idx / " + std::to_string(strides[i] / dtype_to_size(dtype)) +
-            " % " + std::to_string(shape[i]) + ";\n";
+            "(idx / " + divisor + ") % " + std::to_string(shape[i]) + ";\n";
     }
 
     return st + value->render_idxs();
@@ -190,5 +200,5 @@ std::shared_ptr<AstExpr> get_ast_expr(Tensor &curr);
 std::vector<std::shared_ptr<AstLoadExpr>>
 get_leafs(std::shared_ptr<AstExpr> node);
 
-void fuse(Tensor &out);
+bool fuse(Tensor &out);
 } // namespace pg

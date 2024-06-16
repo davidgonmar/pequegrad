@@ -5,7 +5,7 @@ from pequegrad.context import no_grad
 import argparse
 import time
 from pequegrad.backend.c import device, grads
-from pequegrad.optim import Adam
+from pequegrad.optim import Adam, SGD  # noqa
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.compile import jit
 from pequegrad.tensor import Tensor
@@ -25,14 +25,13 @@ class MLP(StatefulModule):
         self.fc2 = Linear(284, 10)
 
     def forward(self, input):
-        input = self.fc1.forward(input).relu()
-        input = self.fc2.forward(input)
-        return input
+        x = self.fc1(input).relu()
+        x = self.fc2(x)
+        return x
 
 
 def train(model, ds, epochs=13, batch_size=4096):
     start = None
-    epochs = 13
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.021)
 
@@ -45,22 +44,20 @@ def train(model, ds, epochs=13, batch_size=4096):
         return [loss] + g
 
     i = 0
-    use_jit = False
+    use_jit = True and device == device.cuda
     train_step = (
         jit(train_step, externals=model.parameters()) if use_jit else train_step
     )
+
     for x, y in loader:
+        print("start step" + str(i))
         if i == 1:
             start = time.time()
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         outs = train_step(x, batch_y_onehot)
         loss = outs[0]
         g = outs[1:]
-
-        # viz.viz(loss, "loss")
-
         optim.step(g)
-
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break

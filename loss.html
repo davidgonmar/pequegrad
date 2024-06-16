@@ -1,0 +1,127 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 600px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "id": 115977, "label": "115977\n(Mul), shape: [], evaled: True 0.51540607213974", "shape": "ellipse", "title": "115977\n(Mul), shape: [], evaled: True 0.51540607213974"}, {"color": "#97c2fc", "id": 115964, "label": "115964\n(Broadcast), shape: [], evaled: True -0.51540607213974", "shape": "ellipse", "title": "115964\n(Broadcast), shape: [], evaled: True -0.51540607213974"}, {"color": "#97c2fc", "id": 115957, "label": "115957\n(Mean), shape: [], evaled: True -0.51540607213974", "shape": "ellipse", "title": "115957\n(Mean), shape: [], evaled: True -0.51540607213974"}, {"color": "#97c2fc", "id": 115951, "label": "115951\n(Sum), shape: [50], evaled: True -25.770305633544922", "shape": "ellipse", "title": "115951\n(Sum), shape: [50], evaled: True -25.770305633544922"}, {"color": "#97c2fc", "id": 115944, "label": "115944\n(Mul), shape: [50, 10], evaled: True -25.770301818847656", "shape": "ellipse", "title": "115944\n(Mul), shape: [50, 10], evaled: True -25.770301818847656"}, {"color": "#97c2fc", "id": 115931, "label": "115931\n(Broadcast), shape: [50, 10], evaled: True 50.0", "shape": "ellipse", "title": "115931\n(Broadcast), shape: [50, 10], evaled: True 50.0"}, {"color": "#97c2fc", "id": 115698, "label": "115698\n(FromNumpy), shape: [50, 10], evaled: True 50.0", "shape": "ellipse", "title": "115698\n(FromNumpy), shape: [50, 10], evaled: True 50.0"}, {"color": "#97c2fc", "id": 115936, "label": "115936\n(Broadcast), shape: [50, 10], evaled: True -3710.6279296875", "shape": "ellipse", "title": "115936\n(Broadcast), shape: [50, 10], evaled: True -3710.6279296875"}, {"color": "#97c2fc", "id": 115924, "label": "115924\n(Sub), shape: [50, 10], evaled: True -3710.6279296875", "shape": "ellipse", "title": "115924\n(Sub), shape: [50, 10], evaled: True -3710.6279296875"}, {"color": "#97c2fc", "id": 115911, "label": "115911\n(Broadcast), shape: [50, 10], evaled: True -954.15185546875", "shape": "ellipse", "title": "115911\n(Broadcast), shape: [50, 10], evaled: True -954.15185546875"}, {"color": "#97c2fc", "id": 115840, "label": "115840\n(Add), shape: [50, 10], evaled: True -954.15185546875", "shape": "ellipse", "title": "115840\n(Add), shape: [50, 10], evaled: True -954.15185546875"}, {"color": "#97c2fc", "id": 115827, "label": "115827\n(Broadcast), shape: [50, 10], evaled: True -953.830078125", "shape": "ellipse", "title": "115827\n(Broadcast), shape: [50, 10], evaled: True -953.830078125"}, {"color": "#97c2fc", "id": 115803, "label": "115803\n(MatMul), shape: [50, 10], evaled: True -953.830078125", "shape": "ellipse", "title": "115803\n(MatMul), shape: [50, 10], evaled: True -953.830078125"}, {"color": "#97c2fc", "id": 115788, "label": "115788\n(Broadcast), shape: [50, 284], evaled: True 4521.0927734375", "shape": "ellipse", "title": "115788\n(Broadcast), shape: [50, 284], evaled: True 4521.0927734375"}, {"color": "#97c2fc", "id": 115781, "label": "115781\n(Max), shape: [50, 284], evaled: True 4521.0927734375", "shape": "ellipse", "title": "115781\n(Max), shape: [50, 284], evaled: True 4521.0927734375"}, {"color": "#97c2fc", "id": 115768, "label": "115768\n(Broadcast), shape: [50, 284], evaled: True -50616.33984375", "shape": "ellipse", "title": "115768\n(Broadcast), shape: [50, 284], evaled: True -50616.33984375"}, {"color": "#97c2fc", "id": 115760, "label": "115760\n(Add), shape: [50, 284], evaled: True -50616.33984375", "shape": "ellipse", "title": "115760\n(Add), shape: [50, 284], evaled: True -50616.33984375"}, {"color": "#97c2fc", "id": 115747, "label": "115747\n(Broadcast), shape: [50, 284], evaled: True -50052.1953125", "shape": "ellipse", "title": "115747\n(Broadcast), shape: [50, 284], evaled: True -50052.1953125"}, {"color": "#97c2fc", "id": 115723, "label": "115723\n(MatMul), shape: [50, 284], evaled: True -50052.1953125", "shape": "ellipse", "title": "115723\n(MatMul), shape: [50, 284], evaled: True -50052.1953125"}, {"color": "#97c2fc", "id": 115708, "label": "115708\n(Broadcast), shape: [50, 784], evaled: True 5524.1884765625", "shape": "ellipse", "title": "115708\n(Broadcast), shape: [50, 784], evaled: True 5524.1884765625"}, {"color": "#97c2fc", "id": 115657, "label": "115657\n(Select), shape: [50, 784], evaled: True 5524.1884765625", "shape": "ellipse", "title": "115657\n(Select), shape: [50, 784], evaled: True 5524.1884765625"}, {"color": "#97c2fc", "id": 32, "label": "32\n(FromNumpy), shape: [60000, 784], evaled: True 6146275.5", "shape": "ellipse", "title": "32\n(FromNumpy), shape: [60000, 784], evaled: True 6146275.5"}, {"color": "#97c2fc", "id": 115638, "label": "115638\n(FromNumpy), shape: [50], evaled: True 1517038", "shape": "ellipse", "title": "115638\n(FromNumpy), shape: [50], evaled: True 1517038"}, {"color": "#97c2fc", "id": 115713, "label": "115713\n(Broadcast), shape: [784, 284], evaled: True -3376.206298828125", "shape": "ellipse", "title": "115713\n(Broadcast), shape: [784, 284], evaled: True -3376.206298828125"}, {"color": "#97c2fc", "id": 0, "label": "0\n(ADPrimitive), shape: [784, 284], evaled: True -3376.206298828125", "shape": "ellipse", "title": "0\n(ADPrimitive), shape: [784, 284], evaled: True -3376.206298828125"}, {"color": "#97c2fc", "id": 115752, "label": "115752\n(Broadcast), shape: [50, 284], evaled: True -564.14453125", "shape": "ellipse", "title": "115752\n(Broadcast), shape: [50, 284], evaled: True -564.14453125"}, {"color": "#97c2fc", "id": 6, "label": "6\n(ADPrimitive), shape: [284], evaled: True -11.282890319824219", "shape": "ellipse", "title": "6\n(ADPrimitive), shape: [284], evaled: True -11.282890319824219"}, {"color": "#97c2fc", "id": 115773, "label": "115773\n(Broadcast), shape: [50, 284], evaled: True 0.0", "shape": "ellipse", "title": "115773\n(Broadcast), shape: [50, 284], evaled: True 0.0"}, {"color": "#97c2fc", "id": 115764, "label": "115764\n(Fill), shape: [50, 284], evaled: True 0.0", "shape": "ellipse", "title": "115764\n(Fill), shape: [50, 284], evaled: True 0.0"}, {"color": "#97c2fc", "id": 115793, "label": "115793\n(Broadcast), shape: [284, 10], evaled: True -50.81755065917969", "shape": "ellipse", "title": "115793\n(Broadcast), shape: [284, 10], evaled: True -50.81755065917969"}, {"color": "#97c2fc", "id": 12, "label": "12\n(ADPrimitive), shape: [284, 10], evaled: True -50.81755065917969", "shape": "ellipse", "title": "12\n(ADPrimitive), shape: [284, 10], evaled: True -50.81755065917969"}, {"color": "#97c2fc", "id": 115832, "label": "115832\n(Broadcast), shape: [50, 10], evaled: True -0.32176512479782104", "shape": "ellipse", "title": "115832\n(Broadcast), shape: [50, 10], evaled: True -0.32176512479782104"}, {"color": "#97c2fc", "id": 18, "label": "18\n(ADPrimitive), shape: [10], evaled: True -0.006435304880142212", "shape": "ellipse", "title": "18\n(ADPrimitive), shape: [10], evaled: True -0.006435304880142212"}, {"color": "#97c2fc", "id": 115916, "label": "115916\n(Broadcast), shape: [50, 10], evaled: True 2756.47607421875", "shape": "ellipse", "title": "115916\n(Broadcast), shape: [50, 10], evaled: True 2756.47607421875"}, {"color": "#97c2fc", "id": 115904, "label": "115904\n(Add), shape: [50, 1], evaled: True 275.6475830078125", "shape": "ellipse", "title": "115904\n(Add), shape: [50, 1], evaled: True 275.6475830078125"}, {"color": "#97c2fc", "id": 115891, "label": "115891\n(Broadcast), shape: [50, 1], evaled: True 11.766507148742676", "shape": "ellipse", "title": "115891\n(Broadcast), shape: [50, 1], evaled: True 11.766507148742676"}, {"color": "#97c2fc", "id": 115885, "label": "115885\n(Log), shape: [50, 1], evaled: True 11.766507148742676", "shape": "ellipse", "title": "115885\n(Log), shape: [50, 1], evaled: True 11.766507148742676"}, {"color": "#97c2fc", "id": 115879, "label": "115879\n(Sum), shape: [50, 1], evaled: True 66.77301025390625", "shape": "ellipse", "title": "115879\n(Sum), shape: [50, 1], evaled: True 66.77301025390625"}, {"color": "#97c2fc", "id": 115873, "label": "115873\n(Exp), shape: [50, 10], evaled: True 66.77301025390625", "shape": "ellipse", "title": "115873\n(Exp), shape: [50, 10], evaled: True 66.77301025390625"}, {"color": "#97c2fc", "id": 115866, "label": "115866\n(Sub), shape: [50, 10], evaled: True -3592.962890625", "shape": "ellipse", "title": "115866\n(Sub), shape: [50, 10], evaled: True -3592.962890625"}, {"color": "#97c2fc", "id": 115853, "label": "115853\n(Broadcast), shape: [50, 10], evaled: True -954.15185546875", "shape": "ellipse", "title": "115853\n(Broadcast), shape: [50, 10], evaled: True -954.15185546875"}, {"color": "#97c2fc", "id": 115858, "label": "115858\n(Broadcast), shape: [50, 10], evaled: True 2638.81103515625", "shape": "ellipse", "title": "115858\n(Broadcast), shape: [50, 10], evaled: True 2638.81103515625"}, {"color": "#97c2fc", "id": 115847, "label": "115847\n(MaxReduce), shape: [50, 1], evaled: True 263.881103515625", "shape": "ellipse", "title": "115847\n(MaxReduce), shape: [50, 1], evaled: True 263.881103515625"}, {"color": "#97c2fc", "id": 115896, "label": "115896\n(Broadcast), shape: [50, 1], evaled: True 263.881103515625", "shape": "ellipse", "title": "115896\n(Broadcast), shape: [50, 1], evaled: True 263.881103515625"}, {"color": "#97c2fc", "id": 115969, "label": "115969\n(Broadcast), shape: [], evaled: True -1.0", "shape": "ellipse", "title": "115969\n(Broadcast), shape: [], evaled: True -1.0"}, {"color": "#97c2fc", "id": 115960, "label": "115960\n(Fill), shape: [], evaled: True -1.0", "shape": "ellipse", "title": "115960\n(Fill), shape: [], evaled: True -1.0"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "from": 115964, "to": 115977}, {"arrows": "to", "from": 115957, "to": 115964}, {"arrows": "to", "from": 115951, "to": 115957}, {"arrows": "to", "from": 115944, "to": 115951}, {"arrows": "to", "from": 115931, "to": 115944}, {"arrows": "to", "from": 115698, "to": 115931}, {"arrows": "to", "from": 115936, "to": 115944}, {"arrows": "to", "from": 115924, "to": 115936}, {"arrows": "to", "from": 115911, "to": 115924}, {"arrows": "to", "from": 115840, "to": 115911}, {"arrows": "to", "from": 115840, "to": 115853}, {"arrows": "to", "from": 115840, "to": 115847}, {"arrows": "to", "from": 115827, "to": 115840}, {"arrows": "to", "from": 115803, "to": 115827}, {"arrows": "to", "from": 115788, "to": 115803}, {"arrows": "to", "from": 115781, "to": 115788}, {"arrows": "to", "from": 115768, "to": 115781}, {"arrows": "to", "from": 115760, "to": 115768}, {"arrows": "to", "from": 115747, "to": 115760}, {"arrows": "to", "from": 115723, "to": 115747}, {"arrows": "to", "from": 115708, "to": 115723}, {"arrows": "to", "from": 115657, "to": 115708}, {"arrows": "to", "from": 32, "to": 115657}, {"arrows": "to", "from": 115638, "to": 115657}, {"arrows": "to", "from": 115713, "to": 115723}, {"arrows": "to", "from": 0, "to": 115713}, {"arrows": "to", "from": 115752, "to": 115760}, {"arrows": "to", "from": 6, "to": 115752}, {"arrows": "to", "from": 115773, "to": 115781}, {"arrows": "to", "from": 115764, "to": 115773}, {"arrows": "to", "from": 115793, "to": 115803}, {"arrows": "to", "from": 12, "to": 115793}, {"arrows": "to", "from": 115832, "to": 115840}, {"arrows": "to", "from": 18, "to": 115832}, {"arrows": "to", "from": 115916, "to": 115924}, {"arrows": "to", "from": 115904, "to": 115916}, {"arrows": "to", "from": 115891, "to": 115904}, {"arrows": "to", "from": 115885, "to": 115891}, {"arrows": "to", "from": 115879, "to": 115885}, {"arrows": "to", "from": 115873, "to": 115879}, {"arrows": "to", "from": 115866, "to": 115873}, {"arrows": "to", "from": 115853, "to": 115866}, {"arrows": "to", "from": 115858, "to": 115866}, {"arrows": "to", "from": 115847, "to": 115858}, {"arrows": "to", "from": 115847, "to": 115896}, {"arrows": "to", "from": 115896, "to": 115904}, {"arrows": "to", "from": 115969, "to": 115977}, {"arrows": "to", "from": 115960, "to": 115969}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"layout": {"hierarchical": {"enabled": true, "direction": "UD", "sortMethod": "directed", "nodeSpacing": 300}}, "edges": {"smooth": {"type": "cubicBezier", "forceDirection": "vertical", "roundness": 0.4}}, "physics": {"hierarchicalRepulsion": {"nodeDistance": 300}, "minVelocity": 0.75}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>

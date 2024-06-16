@@ -51,7 +51,7 @@ bind_method(
 
 
 def relu(self):
-    return pg.max(self, Tensor(0, device=self.device))
+    return pg.max(self, 0)
 
 
 bind_method(Tensor, "relu", relu)

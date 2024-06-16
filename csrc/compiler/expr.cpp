@@ -103,18 +103,18 @@ int get_depth(std::shared_ptr<AstExpr> node) {
   return recurse(node);
 }
 
-void fuse(Tensor &out) {
+bool fuse(Tensor &out) {
   std::map<std::shared_ptr<AstLoadExpr>, std::shared_ptr<Tensor>> memo;
   std::shared_ptr<AstExpr> ast = get_ast_expr(out, memo);
   // if ast is a load, it means we did not really do anything
   if (std::dynamic_pointer_cast<AstLoadExpr>(ast)) {
-    return;
+    return false;
   }
   // if depth of the ast is 1, we can't really fuse anything
 
   // so check for depth
   if (get_depth(ast) < 3) { // 2 since we dont take load into account
-    return;
+    return false;
   }
   //
 
@@ -142,5 +142,7 @@ void fuse(Tensor &out) {
   CompiledPrimitive compiled("kernel", store);
   out.ad_node().set_primitive(std::make_shared<CompiledPrimitive>(compiled));
   out.ad_node().set_children(inputs);
+
+  return true;
 }
 } // namespace pg

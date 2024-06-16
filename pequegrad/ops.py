@@ -57,6 +57,9 @@ def tensordot(a: "Tensor", b: "Tensor", dims: Union[int, Tuple[List[int], List[i
     return result.reshape(final_shape)
 
 
+broadcast_to = pg.broadcast_to
+
+
 def gelu(self, approximate: str = None):
     if not approximate:
         raise NotImplementedError("gelu not implemented yet without approximation")

@@ -1,3 +1,4 @@
+#include "ad_primitives.hpp"
 #include "tensor.hpp"
 
 namespace pg {
@@ -38,9 +39,10 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
       return;
     }
 
-    if (isinput) {
-      // if it's an input, we just copy it
-      Tensor &new_t = t.copy_graph(std::vector<Tensor>());
+    if (!notin(inputs, t)) {
+      // if it's an input, we just copy it but set a 'breakpoint'
+      Tensor &new_t =
+          t.copy_graph(std::vector<Tensor>(), std::make_shared<JitBoundary>());
       old_to_new[t] = new_t;
       return;
     }
@@ -67,7 +69,6 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
   }
 
   for (Tensor &t : inputs) {
-    copy(t, true);
     new_inputs.push_back(old_to_new.at(t));
   }
 
