@@ -361,6 +361,8 @@ public:
 
   size_t numel() const {
     shape_t s = shape();
+    if (s.size() == 0)
+      return 1;
     return std::accumulate(s.begin(), s.end(), 1, std::multiplies<size_t>());
   }
 

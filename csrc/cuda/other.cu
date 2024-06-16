@@ -136,7 +136,8 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     if (std::getenv("PG_KERNEL_DB") != nullptr) {
       std::cout << "file: " << file << std::endl;
     }
-    nvrtcResult compileResult = nvrtcCompileProgram(prog, 0, nullptr);
+    const char *opts[] = {"--use_fast_math"};
+    nvrtcResult compileResult = nvrtcCompileProgram(prog, 1, opts);
 
     // Check for compilation errors
     if (compileResult != NVRTC_SUCCESS) {
@@ -176,8 +177,6 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     this->_cuda_code = ker;
     this->_name = kernel_name;
   }
-  // Prepare grid and block dimensions
-
   // Prepare grid and block dimensions
   dim3 threads_per_block(128, 1, 1);
   size_t num_elements = inputs[0].numel();
