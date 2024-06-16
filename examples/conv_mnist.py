@@ -79,7 +79,8 @@ def train(model, ds, epochs=13, batch_size=512):
         if i == 1:
             start = time.time()
         # Forward pass
-        outs = training_step(x, Tensor.one_hot(10, y, device=dev))
+        y = Tensor.one_hot(10, y, device=dev)
+        outs = training_step(x, y)
         loss = outs[0]
         g = outs[1:]
         loss.eval(False)

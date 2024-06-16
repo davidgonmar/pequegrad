@@ -274,7 +274,7 @@ public:
 
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
-  std::vector<Tensor> _children = {};
+  std::vector<Tensor> _children = std::vector<Tensor>();
   shape_t _inferred_shape;
 };
 

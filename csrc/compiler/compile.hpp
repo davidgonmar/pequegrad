@@ -24,10 +24,13 @@ void remove_useless_broadcast(Tensor &out) {
         Tensor &child = node.ad_node().children()[0];
         // connect out with the child
         out.ad_node().replace_child(node, child);
-        remove_useless_broadcast(child);
         continue;
       }
     }
+  }
+
+  // now, recursively call remove_useless_broadcast for each children
+  for (Tensor &node : out.ad_node().children()) {
     remove_useless_broadcast(node);
   }
 }

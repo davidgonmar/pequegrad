@@ -234,13 +234,15 @@ void ADNode::set_children(const std::vector<Tensor> &children) {
 
 void ADNode::replace_child(const Tensor &old_child, const Tensor &new_child) {
   // we need to specifically find the one with the same id
-  auto it = std::find_if(_children.begin(), _children.end(),
-                         [&](const Tensor &t) { return t.id == old_child.id; });
-  if (it != _children.end()) {
-    *it = new_child;
-  } else {
-    throw std::runtime_error("Child to replace not found");
+  // print children
+  for (size_t i = 0; i < _children.size(); i++) {
+    if (_children[i].id == old_child.id) {
+      _children[i] = new_child;
+      return;
+    }
   }
+
+  PG_CHECK_RUNTIME(false, "Child not found in ADNode::replace_child");
 }
 
 void ADNode::set_primitive(const ADPrimitive &primitive) {
