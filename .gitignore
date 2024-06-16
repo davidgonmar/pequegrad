@@ -108,6 +108,7 @@ datasets/
 
 !pequegrad/data/
 graph.html
+.html
 # editor, os cache directory
 .vscode/
 .idea/
