@@ -1,4 +1,4 @@
-from pequegrad.extra.mnist import get_mnist_dataset
+from pequegrad.extra.mnist import MNISTDataset
 import numpy as np
 from pequegrad.optim import Adam
 from pequegrad.modules import (
@@ -14,6 +14,7 @@ from pequegrad.context import no_grad
 import argparse
 import time
 from pequegrad.backend.c import device, Tensor, grads
+from pequegrad.data.dataloader import DataLoader
 
 np.random.seed(0)
 
@@ -44,40 +45,52 @@ class ConvNet(StatefulModule):
         return self.fc1(self.convstack(input))
 
 
-def test_model(model, X_test, Y_test):
+def test_model(model, ds):
     with no_grad():
         batch_size = 512
         # Evaluate the model
         correct = 0
-        for i in range(0, X_test.shape[0], batch_size):
-            end_idx = min(i + batch_size, X_test.shape[0])
-            batch_X = X_test[i:end_idx]
-            batch_Y = Y_test[i:end_idx]
-            prediction = model.forward(batch_X)
-            correct += (np.argmax(prediction.numpy(), axis=1) == batch_Y.numpy()).sum()
-        return correct, X_test.shape[0]
+        total = 0
+        dl = DataLoader(ds, batch_size=batch_size, shuffle=False)
+        for x, y in dl:
+            y_pred = model.forward(x).numpy()
+            y_pred = np.argmax(y_pred, axis=1)
+            correct += np.sum(y_pred == y.numpy())
+        return correct, total
 
 
-def train(model, X_train, Y_train, epochs=13, batch_size=512):
+def train(model, ds, epochs=13, batch_size=512):
     # weights of the network printed
     optim = Adam(model.parameters(), lr=0.033)
-    for epoch in range(epochs):
-        indices = np.random.choice(X_train.shape[0], batch_size)
-        batch_X = X_train[
-            Tensor(indices, device=dev), :
-        ]  # todo - : should not be needed
-        batch_Y = Y_train[Tensor(indices, device=dev)]
-        # Forward pass
-        prediction = model.forward(batch_X)
-        # Compute loss and backpropagate
-        loss = prediction.cross_entropy_loss_indices(batch_Y)
 
+    def training_step(batch_X, batch_Y):
+        prediction = model.forward(batch_X)
+        loss = prediction.cross_entropy_loss_probs(batch_Y)
         g = grads(model.parameters(), loss)
+        return [loss] + g
+
+    loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
+    start = None
+    i = 0
+    for x, y in loader:
+        if i == 1:
+            start = time.time()
+        # Forward pass
+        outs = training_step(x, Tensor.one_hot(10, y, device=dev))
+        loss = outs[0]
+        g = outs[1:]
+        loss.eval(False)
         optim.step(g)
         print(
-            f"Epoch {epoch} | Loss {loss.numpy()}",
-            end="\r" if epoch < epochs - 1 else "\n",
+            f"Epoch {i} | Loss {loss.numpy()}",
+            end="\r" if i < epochs - 1 else "\n",
         )
+        i += 1
+        if i >= epochs:
+            break
+
+    end = time.time()
+    print(f"Training time: {end - start:.2f}s")
 
 
 if __name__ == "__main__":
@@ -106,21 +119,17 @@ if __name__ == "__main__":
     if MODE == "eval":
         model.load("conv_mnist_model.pkl")
         print("Model loaded from conv_mnist_model.pkl")
-        X_train, y_train, X_test, y_test = get_mnist_dataset()
-        correct, total = test_model(model, X_test, y_test)
+        ds = MNISTDataset(device=dev, train=False)
+        correct, total = test_model(model, ds)
         print(f"Test accuracy: {correct / total}")
 
     else:
-        X_train, y_train, X_test, y_test = get_mnist_dataset(tensor_device=dev)
-
-        start = time.time()
-        train(model, X_train, y_train, epochs=13, batch_size=512)
-        print(f"Time taken to train: {(time.time() - start):.2f}s")
-
+        ds = MNISTDataset(device=dev, train=True)
         print("Evaluating model...", end="\r")
-        correct, total = test_model(model, X_test, y_test)
-        print(f"Test accuracy: {correct / total}")
+        train(model, ds, epochs=13)
 
+        correct, total = test_model(model, ds)
+        print(f"Train accuracy: {correct / total}")
         print("Saving model...")
         model.save("conv_mnist_model.pkl")
         print("Model saved to conv_mnist_model.pkl")

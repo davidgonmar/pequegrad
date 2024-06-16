@@ -2,6 +2,7 @@
 
 #include "tensor.hpp"
 #include "ad_primitives.hpp"
+#include "cuda/cuda_utils.cuh"
 #include "ops.hpp"
 #include <algorithm>
 #include <vector>

@@ -107,6 +107,7 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     auto store = std::dynamic_pointer_cast<AstStoreExpr>(ast);
     store->shape = outputs[0].shape();
     store->strides = outputs[0].strides();
+    store->propagate_movement_ops();
     std::string x = store->render_idxs() + store->render();
     std::string ker_inner =
         "size_t idx = blockDim.x * blockIdx.x + threadIdx.x;\n";
@@ -222,6 +223,20 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
                    vec_to_string(kernel_args_ptrs) +
                    "\n and fn_ptr: " + std::to_string((size_t)this->fn_ptr));
   }
+
+  // for each input, print strides and the input itself
+  for (size_t i = 0; i < inputs.size(); i++) {
+    std::cout << "Input " << i
+              << " strides: " << vec_to_string(inputs[i].strides())
+              << std::endl;
+    std::cout << "Input " << i << " data: " << inputs[i].str() << std::endl;
+    std::cout << "Input dataptr: " << inputs[i].get_base_ptr() << std::endl;
+  }
+  // also output
+  std::cout << "Output strides: " << vec_to_string(outputs[0].strides())
+            << std::endl;
+  std::cout << "Output data: " << outputs[0].str() << std::endl;
+  std::cout << "Output dataptr: " << outputs[0].get_base_ptr() << std::endl;
 
   // Synchronize to ensure kernel execution is complete
   PG_CUDA_KERNEL_END;

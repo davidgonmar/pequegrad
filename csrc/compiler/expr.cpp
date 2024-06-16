@@ -84,6 +84,32 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->val = dynamic_cast<Fill *>(prim.get())->value();
     return expr;
   }
+  /*if (is<Permute>(prim)) {
+    auto expr = std::make_shared<AstPermuteOp>();
+    // with permute, we must use a load as input
+    auto load = std::make_shared<AstLoadExpr>();
+    expr->child = load;
+    // now since permute has only one child get from curr
+    auto child_t = curr.ad_node().children()[0];
+    // and stpre in load
+    load->name = "in" + std::to_string(child_t.id);
+    load->dtype = child_t.dtype();
+    load->shape = child_t.shape();
+    memo[load] = std::make_shared<Tensor>(child_t);
+  }*/
+  /*if (is<BroadcastTo>(prim)) {
+    auto expr = std::make_shared<AstBroadcastOp>();
+    // with broadcast, we must use a load as input
+    auto load = std::make_shared<AstLoadExpr>();
+    expr->child = load;
+    // now since broadcast has only one child get from curr
+    auto child_t = curr.ad_node().children()[0];
+    // and stpre in load
+    load->name = "in" + std::to_string(child_t.id);
+    load->dtype = child_t.dtype();
+    load->shape = child_t.shape();
+    memo[load] = std::make_shared<Tensor>(child_t);
+  }*/
   // print primitive
   // else, it's a load
   auto expr = std::make_shared<AstLoadExpr>();
@@ -121,6 +147,17 @@ get_leafs(std::shared_ptr<AstExpr> node) {
       recurse(ternary->second);
       recurse(ternary->third);
     }
+    if (std::dynamic_pointer_cast<AstPermuteOp>(node)) {
+      auto permute = std::dynamic_pointer_cast<AstPermuteOp>(node);
+      return recurse(permute->child);
+    }
+    if (std::dynamic_pointer_cast<AstConstExpr>(node)) {
+      return;
+    }
+    if (std::dynamic_pointer_cast<AstBroadcastOp>(node)) {
+      auto broadcast = std::dynamic_pointer_cast<AstBroadcastOp>(node);
+      return recurse(broadcast->child);
+    }
   };
   recurse(node);
   return leafs;
@@ -148,6 +185,17 @@ int get_depth(std::shared_ptr<AstExpr> node) {
       auto ternary = std::dynamic_pointer_cast<AstTernaryExpr>(node);
       return 1 + std::max({recurse(ternary->first), recurse(ternary->second),
                            recurse(ternary->third)});
+    }
+    if (std::dynamic_pointer_cast<AstPermuteOp>(node)) {
+      auto permute = std::dynamic_pointer_cast<AstPermuteOp>(node);
+      return 1 + recurse(permute->child);
+    }
+    if (std::dynamic_pointer_cast<AstConstExpr>(node)) {
+      return 1;
+    }
+    if (std::dynamic_pointer_cast<AstBroadcastOp>(node)) {
+      auto broadcast = std::dynamic_pointer_cast<AstBroadcastOp>(node);
+      return 1 + recurse(broadcast->child);
     }
   };
   return recurse(node);

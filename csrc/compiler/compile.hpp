@@ -34,8 +34,20 @@ void remove_useless_broadcast(Tensor &out) {
 void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   remove_useless_broadcast(out);
-  fuse(out);
+  bool success = fuse(out);
 
+  while (success) {
+    success = fuse(out);
+  }
+LOOP:
+  int n_children = out.ad_node().children().size();
+  for (int i = 0; i < n_children; i++) {
+    bool _success = fuse(out.ad_node().children()[i]);
+    if (_success) {
+      goto LOOP;
+    }
+  }
+  // now, for each children, compile
   for (Tensor &node : out.ad_node().children()) {
     compile(node);
   }

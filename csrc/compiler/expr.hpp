@@ -14,6 +14,9 @@ public:
   virtual std::string render_idxs() {
     throw std::runtime_error("Not implemented");
   }
+  virtual void propagate_movement_ops() {
+    throw std::runtime_error("Not implemented");
+  }
 };
 
 enum class AstUnaryOp {
@@ -48,6 +51,7 @@ public:
   }
 
   std::string render_idxs() override { return child->render_idxs(); }
+  void propagate_movement_ops() override { child->propagate_movement_ops(); }
 };
 
 enum class AstBinaryOp {
@@ -93,6 +97,10 @@ public:
 
   std::string render_idxs() override {
     return lhs->render_idxs() + rhs->render_idxs();
+  }
+  void propagate_movement_ops() override {
+    lhs->propagate_movement_ops();
+    rhs->propagate_movement_ops();
   }
 };
 
@@ -141,6 +149,7 @@ public:
 
     return st;
   }
+  void propagate_movement_ops() override {}
 };
 
 class AstStoreExpr : public AstExpr {
@@ -187,6 +196,7 @@ public:
     }
     return st + value->render_idxs();
   }
+  void propagate_movement_ops() override { value->propagate_movement_ops(); }
 };
 
 class AstConstExpr : public AstExpr {
@@ -202,6 +212,7 @@ public:
     PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
   }
   std::string render_idxs() override { return ""; }
+  void propagate_movement_ops() override {}
 };
 
 enum class AstTernaryOp { Where };
@@ -225,6 +236,60 @@ public:
 
   std::string render_idxs() override {
     return first->render_idxs() + second->render_idxs() + third->render_idxs();
+  }
+  void propagate_movement_ops() override {
+    first->propagate_movement_ops();
+    second->propagate_movement_ops();
+    third->propagate_movement_ops();
+  }
+};
+
+class AstPermuteOp : public AstExpr {
+public:
+  std::shared_ptr<AstLoadExpr> child;
+  std::vector<size_t> permute;
+  std::string render() override { return child->render(); }
+  std::string render_idxs() override { return child->render_idxs(); }
+
+  void propagate_movement_ops() override {
+    // so here we will shuffle the axes of our child
+    strides_t strides = child->strides;
+    shape_t shape = child->shape;
+
+    // we need to permute the strides and shape
+    shape_t new_shape;
+    strides_t new_strides;
+    for (size_t i = 0; i < permute.size(); i++) {
+      new_shape.push_back(shape[permute[i]]);
+      new_strides.push_back(strides[permute[i]]);
+    }
+    child->shape = new_shape;
+    child->strides = new_strides;
+  }
+};
+
+class AstBroadcastOp : public AstExpr {
+public:
+  std::shared_ptr<AstLoadExpr> child;
+  shape_t shape;
+  std::string render() override { return child->render(); }
+  std::string render_idxs() override { return child->render_idxs(); }
+  void propagate_movement_ops() override {
+    // we need to broadcast the child to the new shape
+    // we need to calculate the new strides
+    shape_t new_shape = shape;
+    strides_t new_strides(new_shape.size());
+    strides_t child_strides = child->strides;
+    shape_t child_shape = child->shape;
+    for (int i = new_shape.size() - 1; i >= 0; i--) {
+      if (new_shape[i] == 1) {
+        new_strides[i] = 0;
+      } else {
+        new_strides[i] = child_strides[i];
+      }
+    }
+    child->shape = new_shape;
+    child->strides = new_strides;
   }
 };
 

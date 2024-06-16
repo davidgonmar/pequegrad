@@ -20,6 +20,7 @@ void Where::dispatch_cuda(const std::vector<Tensor> &inputs,
   const Tensor &condition = inputs[0];
   const Tensor &a = inputs[1];
   const Tensor &b = inputs[2];
+
   CHECK_SAME_SHAPE(a, b);
   CHECK_SAME_SHAPE(condition, a);
   outputs[0].init_view(
