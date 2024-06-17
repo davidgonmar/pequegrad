@@ -44,7 +44,7 @@ def train(model, ds, epochs=13, batch_size=4096):
         return [loss] + g
 
     i = 0
-    use_jit = True and device == device.cuda
+    use_jit = True
     train_step = (
         jit(train_step, externals=model.parameters()) if use_jit else train_step
     )

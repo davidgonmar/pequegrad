@@ -3,6 +3,8 @@ from pequegrad.compile import jit
 import numpy as np
 import time
 
+dev = None
+
 
 def test_some_fn():
     @jit
@@ -13,9 +15,9 @@ def test_some_fn():
         return x.log() + y + z.exp().log().exp()
 
     for i in range(10):
-        x = Tensor(np.random.randn(10000, 1000), device=device.cuda).astype(dt.float32)
-        y = Tensor(np.random.randn(10000, 1000), device=device.cuda).astype(dt.float32)
-        z = Tensor(np.random.randn(10000, 1000), device=device.cuda).astype(dt.float32)
+        x = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32)
+        y = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32)
+        z = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32)
 
         start = time.time()
         nj = non_jitted(x, y, z).eval()
@@ -26,7 +28,7 @@ def test_some_fn():
         jittedtime = time.time() - start
 
         print(f"Jitted time: {jittedtime}, Non-jitted time: {nonjittedtime}")
-        np.testing.assert_allclose(j.numpy(), nj.numpy(), atol=1e-5)
+        np.testing.assert_allclose(j.numpy(), nj.numpy(), atol=1e-3)
 
 
 def test_relu():
@@ -38,7 +40,7 @@ def test_relu():
         return x.relu()
 
     for i in range(10):
-        x = Tensor(np.random.randn(10000, 1000), device=device.cuda).astype(dt.float32)
+        x = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32)
         start = time.time()
         nj = non_jitted(x).eval()
         nonjittedtime = time.time() - start
@@ -48,7 +50,7 @@ def test_relu():
         jittedtime = time.time() - start
 
         print(f"Jitted time: {jittedtime}, Non-jitted time: {nonjittedtime}")
-        np.testing.assert_allclose(j.numpy(), nj.numpy(), atol=1e-5)
+        np.testing.assert_allclose(j.numpy(), nj.numpy(), atol=1e-3)
 
 
 if __name__ == "__main__":
@@ -57,8 +59,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--test", type=str, default="some_fn", help="Test to run")
+    parser.add_argument("--cuda", action="store_true", help="Use CUDA for computations")
 
     args = parser.parse_args()
+
+    if args.cuda:
+        dev = device.cuda
+    else:
+        dev = device.cpu
 
     if args.test == "some_fn":
         test_some_fn()

@@ -76,7 +76,7 @@ void AsType::dispatch_cuda(const std::vector<Tensor> &inputs,
       std::make_shared<View>(cuda::view::astype(a.view(), _dtype_to)));
 }
 
-std::string dtype_to_cpp_string(DType dtype) {
+static std::string dtype_to_cpp_string(DType dtype) {
   return dtype == DType::Float32   ? "float"
          : dtype == DType::Float64 ? "double"
                                    : "int";
