@@ -2,7 +2,6 @@
 
 #include "ops.hpp"
 #include "ad_primitives.hpp"
-#include "init_primitives.hpp"
 #include "tensor.hpp"
 
 namespace pg {
@@ -444,5 +443,11 @@ Tensor add_inplace(Tensor &dst, const Tensor &other) {
   Tensor added = add(dst, other);
   dst.inplace_update(added);
   return dst;
+}
+
+Tensor binomial(const double p, const shape_t &shape, const DType dtype,
+                const device::DeviceKind device) {
+  return Tensor::from_primitive(std::make_shared<Binomial>(p, shape, dtype), {},
+                                device);
 }
 } // namespace pg

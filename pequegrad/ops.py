@@ -82,10 +82,7 @@ def silu(self):
 def dropout(self, p: float, training: bool = True) -> "Tensor":
     """Returns the dropout of the tensor"""
     if training:
-        mask = Tensor(
-            np.random.binomial(1, 1 - p, self.shape).astype(dtypetonp[self.dtype]),
-            device=self.device,
-        )
+        mask = pg.binomial(1 - p, self.shape, device=self.device, dtype=self.dtype)
         return self * mask / (1 - p)
     return self
 

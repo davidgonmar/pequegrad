@@ -81,4 +81,7 @@ Tensor assign_at(const Tensor &dst, const Tensor &src,
                  const std::vector<hl_select_t> &items);
 
 Tensor astype(const Tensor &a, DType dtype);
+
+Tensor binomial(const double p, const shape_t &shape, const DType dtype,
+                const device::DeviceKind device);
 } // namespace pg

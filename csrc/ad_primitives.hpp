@@ -533,4 +533,31 @@ public:
   double value() { return _value; }
 };
 
+class Binomial : public ADPrimitive {
+protected:
+  double _p;
+  shape_t _shape;
+  DType _dtype;
+
+public:
+  explicit Binomial(double p, shape_t shape, DType dtype)
+      : _p(p), _shape(shape), _dtype(dtype) {}
+  // DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Binomial)
+  std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs) {
+    return {_shape};
+  }
+  std::vector<DType> infer_output_dtypes(const std::vector<Tensor> &inputs) {
+    return {_dtype};
+  }
+  std::vector<Tensor> backward(const std::vector<Tensor> &primals,
+                               const std::vector<Tensor> &tangents,
+                               const std::vector<Tensor> &outputs) {
+    return {};
+  }
+
+  double p() { return _p; }
+};
+
 } // namespace pg

@@ -153,6 +153,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
     return true;
   });
 
+  m.def("binomial", &binomial, py::arg("p"), py::arg("shape"), py::arg("dtype"),
+        py::arg("device") = device::DeviceKind::CPU);
+
 #define BIND_BINOP_WITH_OVERLOAD_CLASS(pyname, op)                             \
   def(#pyname, py::overload_cast<const Tensor &, const Tensor &>(&pg::op))     \
       .def(#pyname, py::overload_cast<const Tensor &, double>(&pg::op))        \

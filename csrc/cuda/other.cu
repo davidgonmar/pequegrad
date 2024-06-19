@@ -3,6 +3,7 @@
 #include "ad_primitives.hpp"
 #include "compiler/expr.hpp"
 #include "cuda_utils.cuh"
+#include "random.cuh"
 #include "tensor.hpp"
 #include "view_helpers.cuh"
 #include <cuda.h>
