@@ -289,9 +289,4 @@ PYBIND11_MODULE(pequegrad_c, m) {
             return pg::select(arr, parsed);
           },
           py::arg("item").noconvert());
-
-  py::class_<ComputeGraph>(m, "ComputeGraph")
-      .def("from_outputs", &ComputeGraph::from_outputs)
-      .def("get_outputs", &ComputeGraph::get_outputs)
-      .def("feed_data", &ComputeGraph::feed_data);
 };

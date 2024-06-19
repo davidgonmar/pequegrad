@@ -20,7 +20,6 @@ class SGD:
         assert len(g) == len(self.params)
         for i, p in enumerate(self.params):
             gt = g[i]
-            print(gt.sum().numpy())
             if self.weight_decay != 0:
                 gt += self.weight_decay * p
             vt = self.momentum * self.vt_last[i] + gt

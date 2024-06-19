@@ -8,26 +8,16 @@ def viz(tensor_or_tensors, viz=True, name="graph"):
     def add_node(tensor):
         if tensor not in seen:
             node_name = tensor.id
-            additional = (
-                tensor.eval(False).detach().numpy()
-                if tensor.numel() < 10
-                else tensor.eval(False).detach().numpy().sum()
-            )
             G.add_node(
                 node_name,
-                label=f"{node_name}\n({tensor.ad_context()}), shape: {tensor.shape}, evaled: {tensor.is_evaled()} {additional}",
+                label=f"{node_name}\n({tensor.ad_context()}), shape: {tensor.shape}, evaled: {tensor.is_evaled()}",
             )
             seen.add(tensor)
             for child in tensor.children():
-                additional = (
-                    child.eval(False).detach().numpy()
-                    if child.numel() < 10
-                    else child.eval(False).detach().numpy().sum()
-                )
                 child_name = child.id
                 G.add_node(
                     child_name,
-                    label=f"{child_name}\n({child.ad_context()}), shape: {child.shape}, evaled: {child.is_evaled()} {additional}",
+                    label=f"{child_name}\n({child.ad_context()}), shape: {child.shape}, evaled: {child.is_evaled()}",
                 )
                 G.add_edge(child_name, node_name)
                 add_node(child)

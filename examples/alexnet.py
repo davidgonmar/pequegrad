@@ -6,6 +6,7 @@ import numpy as np
 import pequegrad.transforms as transforms
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.extra.cifar_100 import CIFAR100Dataset
+from pequegrad.compile import jit
 
 
 class AlexNet(nn.StatefulModule):
@@ -66,9 +67,6 @@ class AlexNet(nn.StatefulModule):
         return x
 
 
-# download cifar from torch
-
-
 transform = transforms.Compose(
     [
         transforms.ToTensor(),
@@ -76,16 +74,6 @@ transform = transforms.Compose(
         transforms.Resize((224, 224)),
     ]
 )
-
-trainset = CIFAR100Dataset(train=True, transform=transform)
-
-trainloader = DataLoader(trainset, batch_size=32, shuffle=True)
-
-testset = CIFAR100Dataset(train=False, transform=transform)
-
-testloader = DataLoader(testset, batch_size=40, shuffle=False)
-
-
 # allow to continue training from a checkpoint
 parser = argparse.ArgumentParser(description="Train AlexNet on CIFAR-100")
 
@@ -115,11 +103,30 @@ parser.add_argument(
     default=0.01,
     help="Learning rate for the optimizer",
 )
+
+parser.add_argument(
+    "--jit",
+    action="store_true",
+    default=False,
+    help="Use CUDA for computations",
+)
+
+args = parser.parse_args()
+
+trainset = CIFAR100Dataset(train=True, transform=transform)
+
+trainloader = DataLoader(trainset, batch_size=28 if not args.jit else 28, shuffle=True)
+
+testset = CIFAR100Dataset(train=False, transform=transform)
+
+testloader = DataLoader(testset, batch_size=40, shuffle=False)
+
+
 DEVICE = device.cuda
 model = AlexNet(num_classes=100).to(DEVICE)
 print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
 print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1024)
-args = parser.parse_args()
+
 
 if args.checkpoint is not None:
     model.load(args.checkpoint)
@@ -127,20 +134,36 @@ if args.checkpoint is not None:
 if not args.test:
     optim = SGD(model.parameters(), lr=args.lr)
 
+    def train_step(x, y):
+        outs = model(x)
+        loss = outs.cross_entropy_loss_probs(y)
+        g = grads(model.parameters(), loss)
+        return [loss] + g
+
+    use_jit = args.jit  # does not work yet
+    train_step = (
+        jit(train_step, externals=model.parameters()) if use_jit else train_step
+    )
+    import time
+
     for epoch in range(args.epochs):
         for i, data in enumerate(trainloader, 0):
+            st = time.time()
             inputs, labels = data
 
             inputs = Tensor(inputs.numpy().astype("float32"), device=DEVICE)
             labels = Tensor(labels.astype("float32"), device=DEVICE)
-            # check image
-            # print(inputs.numpy())
 
-            outputs = model(inputs)
-            loss = outputs.cross_entropy_loss_indices(labels)
-            g = grads(model.parameters(), loss)
+            batch_y_onehot = Tensor.one_hot(100, labels, device=DEVICE)
+            outs = train_step(inputs, batch_y_onehot)
+            # import pequegrad.viz as viz
+            # viz.viz(outs, name="outs")
+            loss = outs[0]
+            g = outs[1:]
             optim.step(g)
-            print(f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}")
+            print(
+                f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
+            )
             if i % 100 == 0:
                 model.save("alexnet_checkpoint.pkl")
 

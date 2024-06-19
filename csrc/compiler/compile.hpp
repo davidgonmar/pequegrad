@@ -34,25 +34,20 @@ void remove_useless_broadcast(Tensor &out) {
     remove_useless_broadcast(node);
   }
 }
+
+void rec_fuse(Tensor &out) {
+  fuse(out);
+
+  for (int i = 0; i < out.ad_node().children().size(); i++) {
+    if (i < out.ad_node().children().size()) {
+      rec_fuse(out.ad_node().children()[i]);
+    }
+  }
+}
 void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   remove_useless_broadcast(out);
-  bool success = fuse(out);
-
-  while (success) {
-    success = fuse(out);
-  }
-LOOP:
-  int n_children = out.ad_node().children().size();
-  for (int i = 0; i < n_children; i++) {
-    bool _success = fuse(out.ad_node().children()[i]);
-    if (_success) {
-      goto LOOP;
-    }
-  }
-  // now, for each children, compile
-  for (Tensor &node : out.ad_node().children()) {
-    compile(node);
-  }
+  // Second pass -> fuse
+  rec_fuse(out);
 }
 } // namespace pg

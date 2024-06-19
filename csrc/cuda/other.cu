@@ -87,14 +87,21 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
   if (this->fn_ptr == nullptr) {
     // first get the inputs of ast
     std::vector<std::shared_ptr<AstLoadExpr>> inputs_ast = get_leafs(ast);
-    // for each input, set its strides to the strides of the corresponding
-    // tensor
-    PG_CHECK_RUNTIME(
-        inputs.size() == inputs_ast.size(),
-        "Number of inputs does not match number of AST inputs, got ",
-        inputs.size(), " and ", inputs_ast.size());
-    for (size_t i = 0; i < inputs_ast.size(); i++) {
-      inputs_ast[i]->strides = inputs[i].strides();
+    // for each ast load expr, set its strides to the ones of the input tensor
+    // they come in the same order as inputs, but they might be repeated. That
+    // means it can be like inputs_ast = [a, b, a, c] and inputs = [a, b, c].
+    // ALWAYS AST IS BIGGER OR EQUAL THAN INPUTS so we need to keep a map of the
+    // tensors. we advance the index if it is not repeated
+    std::map<std::string, size_t> already_seen;
+
+    int i = 0;
+    for (size_t j = 0; j < inputs_ast.size(); j++) {
+      if (already_seen.find(inputs_ast[j]->name) == already_seen.end()) {
+        already_seen[inputs_ast[j]->name] = i;
+        i++;
+      }
+      inputs_ast[j]->strides =
+          inputs[already_seen[inputs_ast[j]->name]].strides();
     }
 
     // assert that ast is a store expr and set its strides and shape
@@ -107,8 +114,9 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
     auto store = std::dynamic_pointer_cast<AstStoreExpr>(ast);
     store->shape = outputs[0].shape();
     store->strides = outputs[0].strides();
-    store->propagate_movement_ops();
-    std::string x = store->render_idxs() + store->render();
+    // store->propagate_movement_ops();
+    std::vector<long long> rendered_idxs = std::vector<long long>();
+    std::string x = store->render_idxs(rendered_idxs) + store->render();
     std::string ker_inner =
         "size_t idx = blockDim.x * blockIdx.x + threadIdx.x;\n";
     ker_inner +=
@@ -120,9 +128,12 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
         "__global__ void kernel_" + std::to_string(outputs[0].id) + "(";
     std::string kernel_name = "kernel_" + std::to_string(outputs[0].id);
     // for each input, render dtype and name
+    std::set<std::string> unique_inputs;
     for (size_t i = 0; i < inputs.size(); i++) {
-      ker += dtype_to_cpp_string(inputs[i].dtype()) + " *" +
-             inputs_ast[i]->name + ",\n";
+      if (unique_inputs.insert(inputs_ast[i]->name).second) {
+        ker += dtype_to_cpp_string(inputs[i].dtype()) + " *" +
+               inputs_ast[i]->name + ",\n";
+      }
     }
 
     ker += dtype_to_cpp_string(outputs[0].dtype()) + " *out) {\n" + ker_inner +
@@ -185,7 +196,6 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
 
   outputs[0].init_view(std::make_shared<View>(
       outputs[0].shape(), outputs[0].dtype(), device::CUDA));
-
   // Prepare kernel arguments
   std::vector<void *> kernel_args;
   for (const auto &input : inputs) {
@@ -204,7 +214,6 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
   // Launch the kernel
   // create stream to launch kernel
   // first check if function is valid
-
   CUresult launch_result = cuLaunchKernel(
       (CUfunction)this->fn_ptr, blocks_per_grid.x, blocks_per_grid.y,
       blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
@@ -224,8 +233,14 @@ void CompiledPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
   }
 
   // Synchronize to ensure kernel execution is complete
-  PG_CUDA_KERNEL_END;
-
+  cudaDeviceSynchronize();
+  // check error again
+  cudaError_t error = cudaGetLastError();
+  if (error != cudaSuccess) {
+    PG_CHECK_RUNTIME(false, "cuda error with kernel source " +
+                                this->_cuda_code + " and error " +
+                                cudaGetErrorString(error));
+  }
   // cache
 }
 

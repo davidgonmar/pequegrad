@@ -91,12 +91,16 @@ void CompiledPrimitive::dispatch_cpu(const std::vector<Tensor> &inputs,
                                               outputs[0].dtype(), device::CPU));
   if (this->fn_ptr == nullptr) {
     std::vector<std::shared_ptr<AstLoadExpr>> inputs_ast = get_leafs(ast);
-    PG_CHECK_RUNTIME(
-        inputs.size() == inputs_ast.size(),
-        "Number of inputs does not match number of AST inputs, got ",
-        inputs.size(), " and ", inputs_ast.size());
+    // for each ast load expr, set its strides to the ones of the input tensor
+    // (find by id)
     for (size_t i = 0; i < inputs_ast.size(); i++) {
-      inputs_ast[i]->strides = inputs[i].strides();
+      for (size_t j = 0; j < inputs.size(); j++) {
+        if (inputs[j].id == inputs_ast[i]->id) {
+          inputs_ast[i]->strides = inputs[j].strides();
+          inputs_ast[i]->shape = inputs[j].shape();
+          break;
+        }
+      }
     }
 
     // Check we can cast to store
@@ -106,7 +110,8 @@ void CompiledPrimitive::dispatch_cpu(const std::vector<Tensor> &inputs,
     store->shape = outputs[0].shape();
     store->strides = outputs[0].strides();
     store->propagate_movement_ops();
-    std::string x = store->render_idxs() + store->render();
+    std::vector<long long> rendered_idx = {};
+    std::string x = store->render_idxs(rendered_idx) + store->render();
     std::string loop_inner = "size_t idx = i;\n" + x;
     std::string kernel_name =
         "kernel_" + std::to_string(reinterpret_cast<size_t>(this));

@@ -12,6 +12,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->op = AstUnaryOp::Log;
     expr->child = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Exp>(prim)) {
@@ -19,6 +20,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->op = AstUnaryOp::Exp;
     expr->child = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Add>(prim)) {
@@ -27,6 +29,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Mul>(prim)) {
@@ -35,6 +38,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Max>(prim)) {
@@ -43,6 +47,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Gt>(prim)) {
@@ -51,6 +56,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Lt>(prim)) {
@@ -59,6 +65,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Eq>(prim)) {
@@ -67,6 +74,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->lhs = get_ast_expr(curr.ad_node().children()[0], memo);
     expr->rhs = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Where>(prim)) {
@@ -76,16 +84,19 @@ std::shared_ptr<AstExpr> get_ast_expr(
     expr->second = get_ast_expr(curr.ad_node().children()[1], memo);
     expr->third = get_ast_expr(curr.ad_node().children()[2], memo);
     expr->dtype = curr.dtype();
+    expr->id = curr.id;
     return expr;
   }
   if (is<Fill>(prim)) {
     auto expr = std::make_shared<AstConstExpr>();
     expr->dtype = curr.dtype();
     expr->val = dynamic_cast<Fill *>(prim.get())->value();
+    expr->id = curr.id;
     return expr;
   }
-  if (is<Permute>(prim)) {
+  /*if (is<Permute>(prim)) {
     auto expr = std::make_shared<AstPermuteOp>();
+    expr->id = curr.id;
     // with permute, we must use a load as input
     auto load = std::make_shared<AstLoadExpr>();
     expr->child = load;
@@ -95,10 +106,12 @@ std::shared_ptr<AstExpr> get_ast_expr(
     load->name = "in" + std::to_string(child_t.id);
     load->dtype = child_t.dtype();
     load->shape = child_t.shape();
+    load->id = child_t.id;
     memo[load] = std::make_shared<Tensor>(child_t);
   }
   if (is<BroadcastTo>(prim)) {
     auto expr = std::make_shared<AstBroadcastOp>();
+    expr->id = curr.id;
     // with broadcast, we must use a load as input
     auto load = std::make_shared<AstLoadExpr>();
     expr->child = load;
@@ -108,8 +121,9 @@ std::shared_ptr<AstExpr> get_ast_expr(
     load->name = "in" + std::to_string(child_t.id);
     load->dtype = child_t.dtype();
     load->shape = child_t.shape();
+    load->id = child_t.id;
     memo[load] = std::make_shared<Tensor>(child_t);
-  }
+  }*/
   // print primitive
   // else, it's a load
   auto expr = std::make_shared<AstLoadExpr>();
@@ -117,6 +131,7 @@ std::shared_ptr<AstExpr> get_ast_expr(
   expr->dtype = curr.dtype();
   expr->shape = curr.shape();
   memo[expr] = std::make_shared<Tensor>(curr);
+  expr->id = curr.id;
   return expr;
 }
 
@@ -223,15 +238,23 @@ bool fuse(Tensor &out) {
   if (n_inputs == 0) {
     return false;
   }
-  std::string signature_str;
-  for (size_t i = 0; i < n_inputs; i++) {
-    AstLoadExpr inp = *leafs[i].get();
-    signature_str +=
-        "const" + dtype_to_string(inp.dtype) + " *in" + std::to_string(i);
-  }
   std::vector<Tensor> inputs;
+  std::vector<int> already;
   for (size_t i = 0; i < n_inputs; i++) {
+    // dont insert if repeated
+    // so check and continue if already inserted in inputs
+    bool inserted = false;
+    for (size_t j = 0; j < already.size(); j++) {
+      if (already[j] == leafs[i]->id) {
+        inserted = true;
+        break;
+      }
+    }
+    if (inserted) {
+      continue;
+    }
     inputs.push_back(std::move(*memo[leafs[i]].get()));
+    already.push_back(leafs[i]->id);
   }
   CompiledPrimitive compiled("kernel", store);
   out.ad_node().set_primitive(std::make_shared<CompiledPrimitive>(compiled));

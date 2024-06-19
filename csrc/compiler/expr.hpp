@@ -10,8 +10,9 @@ class AstExpr {
 public:
   DType dtype;
   std::string name;
+  long long id;
   virtual std::string render() { throw std::runtime_error("Not implemented"); }
-  virtual std::string render_idxs() {
+  virtual std::string render_idxs(std::vector<long long> &rendered_ids) {
     throw std::runtime_error("Not implemented");
   }
   virtual void propagate_movement_ops() {
@@ -50,10 +51,11 @@ public:
                                 std::to_string(static_cast<int>(op)));
   }
 
-  std::string render_idxs() override { return child->render_idxs(); }
+  std::string render_idxs(std::vector<long long> &rendered_ids) override {
+    return child->render_idxs(rendered_ids);
+  }
   void propagate_movement_ops() override { child->propagate_movement_ops(); }
 };
-
 enum class AstBinaryOp {
   Add,
   Mul,
@@ -95,8 +97,8 @@ public:
                                 std::to_string(static_cast<int>(op)));
   }
 
-  std::string render_idxs() override {
-    return lhs->render_idxs() + rhs->render_idxs();
+  std::string render_idxs(std::vector<long long> &rendered_ids) override {
+    return lhs->render_idxs(rendered_ids) + rhs->render_idxs(rendered_ids);
   }
   void propagate_movement_ops() override {
     lhs->propagate_movement_ops();
@@ -112,8 +114,6 @@ public:
   std ::string render() override {
     // We need to calculate the index from the strides
     // idx = blockIdx.x * blockDim.x + threadIdx.x; -> assumed
-
-    // we just render a constant expression into the rendered code
     std::string st = "";
     for (size_t i = 0; i < shape.size(); i++) {
       st += std::to_string(strides[i] / dtype_to_size(dtype)) + " * " + "in_" +
@@ -126,10 +126,16 @@ public:
     if (st == "") {
       st = "0";
     }
-
     return name + "[" + st + "]";
   }
-  std::string render_idxs() override {
+  std::string render_idxs(std::vector<long long> &rendered_ids) override {
+    // if our id is already rendered, we don't need to render it again
+    if (std::find(rendered_ids.begin(), rendered_ids.end(), id) !=
+        rendered_ids.end()) {
+      return "";
+    }
+    // add our id to the rendered ids
+    rendered_ids.push_back(id);
     // scalar case
     if (shape.size() == 0) {
       return "";
@@ -177,7 +183,14 @@ public:
     return name + "[" + st + "] = " + a + ";";
   }
 
-  std::string render_idxs() override {
+  std::string render_idxs(std::vector<long long> &rendered_ids) override {
+    // if our id is already rendered, we don't need to render it again
+    if (std::find(rendered_ids.begin(), rendered_ids.end(), id) !=
+        rendered_ids.end()) {
+      return "";
+    }
+    // add our id to the rendered ids
+    rendered_ids.push_back(id);
     // same as load expr, expression based on idx
     // scalar case
     if (shape.size() == 0) {
@@ -194,7 +207,7 @@ public:
       st += "size_t out_" + name + "_idx" + std::to_string(i) + " = " +
             "(idx / " + divisor + ") % " + std::to_string(shape[i]) + ";\n";
     }
-    return st + value->render_idxs();
+    return st + value->render_idxs(rendered_ids);
   }
   void propagate_movement_ops() override { value->propagate_movement_ops(); }
 };
@@ -211,7 +224,9 @@ public:
     }
     PG_CHECK_RUNTIME(false, "Unsupported dtype: " + dtype_to_string(dtype));
   }
-  std::string render_idxs() override { return ""; }
+  std::string render_idxs(std::vector<long long> &rendered_ids) override {
+    return "";
+  }
   void propagate_movement_ops() override {}
 };
 
@@ -234,8 +249,9 @@ public:
                                 std::to_string(static_cast<int>(op)));
   }
 
-  std::string render_idxs() override {
-    return first->render_idxs() + second->render_idxs() + third->render_idxs();
+  std::string render_idxs(std::vector<long long> &rendered_ids) override {
+    return first->render_idxs(rendered_ids) +
+           second->render_idxs(rendered_ids) + third->render_idxs(rendered_ids);
   }
   void propagate_movement_ops() override {
     first->propagate_movement_ops();
@@ -249,7 +265,9 @@ public:
   std::shared_ptr<AstLoadExpr> child;
   std::vector<size_t> permute;
   std::string render() override { return child->render(); }
-  std::string render_idxs() override { return child->render_idxs(); }
+  std::string render_idxs(std::vector<long long> &rendered_idxs) override {
+    return child->render_idxs(rendered_idxs);
+  }
 
   void propagate_movement_ops() override {
     // so here we will shuffle the axes of our child
@@ -273,7 +291,9 @@ public:
   std::shared_ptr<AstLoadExpr> child;
   shape_t shape;
   std::string render() override { return child->render(); }
-  std::string render_idxs() override { return child->render_idxs(); }
+  std::string render_idxs(std::vector<long long> &rendered_idxs) override {
+    return child->render_idxs(rendered_idxs);
+  }
   void propagate_movement_ops() override {
     // we need to broadcast the child to the new shape
     // we need to calculate the new strides
