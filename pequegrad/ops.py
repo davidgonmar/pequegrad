@@ -460,6 +460,9 @@ def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
     return out
 
 
+fill = pg.fill
+
+
 def local_response_norm(
     self, size: int, alpha: float, beta: float, k: float
 ) -> "Tensor":

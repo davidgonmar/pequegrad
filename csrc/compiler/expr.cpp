@@ -1,4 +1,5 @@
 #include "expr.hpp"
+#include "ir.hpp"
 
 namespace pg {
 // returns a list with the inputs (leafs with LOAD operation)
@@ -256,6 +257,10 @@ bool fuse(Tensor &out) {
     inputs.push_back(std::move(*memo[leafs[i]].get()));
     already.push_back(leafs[i]->id);
   }
+
+  // new ir test wip
+  // std::vector<std::shared_ptr<ir::BaseExpr>> ir = ir::graph_to_ir(out,
+  // inputs); std::cout << ir::ir_to_cuda(ir) << std::endl;
   CompiledPrimitive compiled("kernel", store);
   out.ad_node().set_primitive(std::make_shared<CompiledPrimitive>(compiled));
   out.ad_node().set_children(inputs);
