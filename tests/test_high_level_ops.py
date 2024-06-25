@@ -208,48 +208,50 @@ class TestNew:
 
     @pytest.mark.parametrize(
         "data",
-        # shape_input, shape_kernel, bias, strides
+        # shape_input, shape_kernel, bias, strides, dilation, groups
         [
             # for input: batch_size, input_channels, input_height, input_width, dilation
             # for kernel: output_channels, input_channels, kernel_height, kernel_width, dilation
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 1],  # 0
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 2],
-            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2, 1],
-            [(1, 1, 10, 5), (1, 1, 1, 1), True, 1, 1],
-            [(1, 1, 10, 5), (1, 1, 1, 1), False, 2, 1],
-            [(5, 1, 10, 5), (3, 1, 3, 3), True, 1, 1],  # 5
-            [(5, 1, 10, 5), (3, 1, 3, 3), False, 2, 1],
-            [(5, 1, 10, 5), (3, 1, 1, 1), True, 1, 1],
-            [(5, 1, 10, 5), (3, 1, 1, 1), False, 2, 1],
-            [(5, 1, 10, 5), (3, 1, 5, 5), True, 1, 1],  # 9
-            [(5, 1, 10, 5), (3, 1, 5, 5), False, 2, 1],
-            [(5, 3, 20, 10), (5, 3, 3, 3), True, 4, 1],
-            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50, 1],  # large stride
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 1, 1],  # 0
+            [(1, 1, 10, 5), (1, 1, 3, 3), True, 1, 2, 1],
+            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2, 1, 1],
+            [(1, 1, 10, 5), (1, 1, 1, 1), True, 1, 1, 1],
+            [(1, 1, 10, 5), (1, 1, 1, 1), False, 2, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 3, 3), True, 1, 1, 1],  # 5
+            [(5, 1, 10, 5), (3, 1, 3, 3), False, 2, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 1, 1), True, 1, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 1, 1), False, 2, 1, 1],
+            [(5, 1, 10, 5), (3, 1, 5, 5), True, 1, 1, 1],  # 9
+            [(5, 1, 10, 5), (3, 1, 5, 5), False, 2, 1, 1],
+            [(5, 3, 20, 10), (5, 3, 3, 3), True, 4, 1, 1],
+            [(5, 3, 20, 10), (5, 3, 3, 3), False, 50, 1, 1],  # large stride
             # now with stride as tuple
-            [(5, 3, 20, 10), (5, 3, 3, 3), True, (4, 2), 1],  # 12
-            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1],  # 13
-            [(1, 3, 20, 10), (1, 3, 3, 3), False, (3, 1), 1],
-            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1],
-            [(1, 3, 20, 10), (1, 3, 3, 3), False, (2, 5), 1],
+            [(5, 3, 20, 10), (5, 3, 3, 3), True, (4, 2), 1, 1],  # 12
+            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1, 1],  # 13
+            [(1, 3, 20, 10), (1, 3, 3, 3), False, (3, 1), 1, 1],
+            [(1, 3, 20, 10), (1, 3, 3, 3), True, (3, 3), 1, 1],
+            [(1, 3, 20, 10), (1, 3, 3, 3), False, (2, 5), 1, 1],
+            # 5 = 10 / groups
+            [(2, 10, 20, 10), (8, 5, 3, 3), True, (1, 1), 1, 2],  # 17
         ],
     )
     @pytest.mark.parametrize("device", [device.cpu, device.cuda])
     def test_conv2d(self, data, device):
-        shape_input, shape_kernel, use_bias, stride, dilation = data
+        shape_input, shape_kernel, use_bias, stride, dilation, groups = data
 
         def torch_fn(x, y, b=None):
             if b is None:
                 return torch.nn.functional.conv2d(
-                    x, y, stride=stride, dilation=dilation
+                    x, y, stride=stride, dilation=dilation, groups=groups
                 )
             return torch.nn.functional.conv2d(
-                x, y, bias=b, stride=stride, dilation=dilation
+                x, y, bias=b, stride=stride, dilation=dilation, groups=groups
             )
 
         def peq_fn(x, y, b=None):
             if b is None:
-                return x.conv2d(y, stride=stride, dilation=dilation)
-            return x.conv2d(y, bias=b, stride=stride, dilation=dilation)
+                return x.conv2d(y, stride=stride, dilation=dilation, groups=groups)
+            return x.conv2d(y, bias=b, stride=stride, dilation=dilation, groups=groups)
 
         if use_bias:
             bias_shape = (shape_kernel[0],)

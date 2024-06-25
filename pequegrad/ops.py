@@ -199,6 +199,18 @@ def softmax(self, dim=-1) -> "Tensor":
     return softmax
 
 
+def _prepare_filter_for_conv_gemm(filter: "Tensor", groups: int) -> "Tensor":
+    # filter of shape {out_channels, in_channels // groups, k_h, k_w}
+    if groups == 1:
+        return filter.reshape((filter.shape[0], -1)).permute(
+            1, 0
+        )  # shape {in_channels * k_h * k_w, out_channels}
+    else:
+        return filter.reshape((groups, filter.shape[0] // groups, -1)).permute(
+            0, 2, 1
+        )  # shape {groups, in_channels // groups * k_h * k_w, out_channels // groups}
+
+
 def conv2d(
     self,
     filter: "Tensor",
@@ -206,6 +218,7 @@ def conv2d(
     stride: Union[int, Tuple[int, int]] = 1,
     dilation: Union[int, Tuple[int, int]] = 1,
     padding: Union[int, Tuple[int, int]] = 0,
+    groups: int = 1,
 ) -> "Tensor":
     """Returns the 2d convolution of the tensor with the given filter"""
     s_y, s_x = (stride, stride) if isinstance(stride, int) else stride
@@ -213,22 +226,43 @@ def conv2d(
     p_y, p_x = (padding, padding) if isinstance(padding, int) else padding
 
     # tensor is always of shape (batch, channels, height, width)
-    # filter is always of shape (out_channels, in_channels, height, width)
+    # filter is always of shape (out_channels, in_channels // groups, k_h, k_w)
     assert self.dim == 4, "conv2d is only supported for tensors with 4 dimensions"
     assert filter.dim == 4, "conv2d is only supported for filters with 4 dimensions"
 
     if p_y > 0 or p_x > 0:
         self = self.pad_constant((p_y, p_x, p_y, p_x))
 
-    inp_unf = self.unfold(filter.shape[-2:], stride=(s_y, s_x), dilation=(d_y, d_x))
+    inp_unf = self.unfold(
+        filter.shape[-2:], stride=(s_y, s_x), dilation=(d_y, d_x)
+    )  # shape {batch_size, in_channels * k_h * k_w, out_h * out_w}
+    # now reshape for groups
+    inp_unf = (
+        inp_unf.reshape((inp_unf.shape[0], groups, -1, inp_unf.shape[-1]))
+        if groups != 1
+        else inp_unf
+    )  # shape {batch_size, groups, in_channels // groups * k_h * k_w, out_h * out_w}
+
+    # filter is of shape {out_channels, in_channels // groups, k_h, k_w}
+
+    # {groups, out_channels // groups, k_h * k_w * in_channels // groups}) @ ({batch_size, groups, in_channels // groups * k_h * k_w, out_h * out_w})
     out_unf = (
-        inp_unf.transpose(1, 2) @ filter.reshape((filter.shape[0], -1)).T
-    ).transpose(1, 2)
+        _prepare_filter_for_conv_gemm(filter, groups).transpose(-2, -1) @ inp_unf
+    )  # shape {batch_size, groups, out_channels // groups, out_h * out_w}
+
+    # merge groups
+    out_unf = (
+        out_unf.reshape((out_unf.shape[0], -1, out_unf.shape[-1]))
+        if groups != 1
+        else out_unf
+    )  # shape {batch_size, out_channels, out_h * out_w}
+
     after_conv_size = (
         (self.shape[-2] - (filter.shape[-2] - 1) * d_y - 1) // s_y + 1,
         (self.shape[-1] - (filter.shape[-1] - 1) * d_x - 1) // s_x + 1,
     )
 
+    # fold again
     out = out_unf.fold(
         kernel_shape=(1, 1), output_shape=after_conv_size
     )  # dilation and strides are implicitly 1
