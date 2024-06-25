@@ -25,6 +25,7 @@ std::shared_ptr<Casted> as(std::shared_ptr<ADPrimitive> primitive) {
 class BaseExpr {
 public:
   std::string name;
+  bool force_render = false;
   virtual ~BaseExpr() = default;
   virtual std::string expr_str() { return "BaseExpr"; }
 };
@@ -274,6 +275,7 @@ private:
   int tmp_counter_ = 0;
   int const_counter_ = 0;
   int arg_counter_ = 0;
+  std::map<std::string, int> prefix_counter_;
 
 public:
   std::string get_unique_name_tmp() {
@@ -331,6 +333,13 @@ public:
     }
 
     PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
+  }
+
+  std::string get_with_prefix(std::string prefix) {
+    if (prefix_counter_.find(prefix) == prefix_counter_.end()) {
+      prefix_counter_[prefix] = 0;
+    }
+    return prefix + std::to_string(prefix_counter_[prefix]++);
   }
 };
 

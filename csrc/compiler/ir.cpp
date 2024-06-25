@@ -208,6 +208,7 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
 
   // fill the ctx and ir with the input tensors
   int i = 0;
+  int impidx = 0;
   for (auto &input : inputs) {
     auto arg = std::make_shared<ArgExpr>();
     ir.push_back(arg);
@@ -228,7 +229,7 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
       // then we must create a local idx based from the global idx for each dim
       std::vector<std::shared_ptr<BaseExpr>> shapes_to_div =
           std::vector<std::shared_ptr<BaseExpr>>();
-      for (int j = 0; j < input.ndim(); j++) {
+      for (int j = input.ndim() - 1; j >= 0; j--) {
         auto stride = std::make_shared<ImmExpr>();
         stride->value = strides[j];
         ir.push_back(stride);
@@ -238,11 +239,8 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
         shape->value = input.shape()[j];
         ir.push_back(shape);
         arg_ctx.shape_exprs_idxs.push_back(ir.size() - 1);
-        auto local_idx = std::make_shared<BinaryExpr>();
-
         // now, the expression is expr = global_idx / (shapes_to_div_0 *
         // shapes_to_div_1 * ... * shapes_to_div_n) % shape
-        local_idx->op = BinaryOpKind::Div;
         std::shared_ptr<BaseExpr> mod_lhs;
         if (shapes_to_div.size() == 0) {
           auto shapes_mul_accum = std::make_shared<BinaryExpr>();
@@ -269,16 +267,26 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
           }
         }
 
-        // now local_idx = global_idx / shapes_mul_accum % shape
-        local_idx->lhs = global_idx;
-        auto rhs = std::make_shared<BinaryExpr>();
-        rhs->op = BinaryOpKind::Mod;
-        rhs->lhs = mod_lhs;
-        rhs->rhs = shape;
-        ir.push_back(rhs);
-        local_idx->rhs = rhs;
+        // now local_idx = (global_idx / shapes_mul_accum) % shape
+        auto local_idx = std::make_shared<BinaryExpr>();
 
+        auto div = std::make_shared<BinaryExpr>();
+        div->op = BinaryOpKind::Div;
+        div->lhs = global_idx;
+        div->rhs = mod_lhs;
+
+        ir.push_back(div);
+
+        local_idx->lhs = div;
+        local_idx->rhs = shape;
+        local_idx->op = BinaryOpKind::Mod;
         ir.push_back(local_idx);
+
+        // force local_idx to render
+        local_idx->name =
+            "arg_" + std::to_string(impidx) + "_idx_" + std::to_string(j);
+        local_idx->force_render = true;
+
         arg_ctx.load_idx_exprs_idxs.push_back(ir.size() - 1);
         shapes_to_div.push_back(shape);
       }
@@ -289,6 +297,7 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
     }
     ctx.arg_to_ctx[arg] = arg_ctx;
     i++;
+    impidx++;
   }
 
   // same, but for the output tensor
@@ -350,6 +359,10 @@ std::string get_dtype_cpp_str(DType dtype) {
 void assign_names_to_ir(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   NameDatabase name_db;
   for (auto &expr : ir) {
+    // if already has a name, skip
+    if (expr->name != "") {
+      continue;
+    }
     auto n = name_db.get_name(expr);
     expr->name = n;
   }
@@ -422,38 +435,73 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   std::string res = render_fn_header("", ir) + "\n";
   res = "__global__ kernel_name(" + res + ")\n";
   res += "{\t\n";
+  std::map<std::shared_ptr<BaseExpr>, std::string> r;
+  std::map<std::string, bool> rendered; // used for example not to render block
+                                        // dim twice
+  NameDatabase nmdb;
   for (auto &expr : ir) {
     if (is<BinaryExpr>(expr)) {
       auto binop = as<BinaryExpr>(expr);
-      res += get_dtype_cpp_str(binop->dtype) + " " + binop->name + " = " +
+      /*res += get_dtype_cpp_str(binop->dtype) + " " + binop->name + " = " +
              binop->lhs->name + " " + binop_kind_to_str(binop->op) + " " +
-             binop->rhs->name + ";\n";
+             binop->rhs->name + ";\n";*/
+      if (!binop->force_render) {
+        r[expr] = "(" + r[binop->lhs] + " " + binop_kind_to_str(binop->op) +
+                  " " + r[binop->rhs] + ")";
+      } else {
+        r[expr] = binop->name;
+        res += get_dtype_cpp_str(binop->dtype) + " " + binop->name + " = " +
+               r[binop->lhs] + " " + binop_kind_to_str(binop->op) + " " +
+               r[binop->rhs] + ";\n";
+      }
     } else if (is<ImmExpr>(expr)) {
       auto imm = as<ImmExpr>(expr);
-      res += get_dtype_cpp_str(imm->dtype) + " " + imm->name + " = " +
-             std::to_string(imm->value) + ";\n";
+      // switch type
+      if (imm->dtype == DType::Int32) {
+        r[expr] = std::to_string((int)imm->value);
+      } else if (imm->dtype == DType::Float32) {
+        r[expr] = std::to_string((float)imm->value);
+      } else {
+        PG_CHECK_RUNTIME(false, "Unsupported dtype");
+      }
     } else if (is<ArgExpr>(expr)) {
       continue; // already rendered in the header
     } else if (is<BlockIdxExpr>(expr)) {
       auto block_idx = as<BlockIdxExpr>(expr);
-      res += get_dtype_cpp_str(DType::Int32) + " " + block_idx->name + " = " +
-             "blockIdx.x" + ";\n";
+      if (!rendered["bidx"]) {
+        res += get_dtype_cpp_str(DType::Int32) + " " + "bidx" + " = " +
+               "blockIdx.x" + ";\n";
+        rendered["bidx"] = true;
+      }
+      r[expr] = "bidx";
     } else if (is<BlockDimExpr>(expr)) {
       auto block_dim = as<BlockDimExpr>(expr);
-      res += get_dtype_cpp_str(DType::Int32) + " " + block_dim->name + " = " +
-             "blockDim.x" + ";\n";
+      if (!rendered["bdim"]) {
+        res += get_dtype_cpp_str(DType::Int32) + " " + "bdim" + " = " +
+               "blockDim.x" + ";\n";
+        rendered["bdim"] = true;
+      }
+      r[expr] = "bdim";
     } else if (is<ThreadIdxExpr>(expr)) {
       auto thread_idx = as<ThreadIdxExpr>(expr);
-      res += get_dtype_cpp_str(DType::Int32) + " " + thread_idx->name + " = " +
-             "threadIdx.x" + ";\n";
+      if (!rendered["tidx"]) {
+        res += get_dtype_cpp_str(DType::Int32) + " " + "tidx" + " = " +
+               "threadIdx.x" + ";\n";
+        rendered["tidx"] = true;
+      }
+      r[expr] = "tidx";
     } else if (is<LoadExpr>(expr)) {
       auto load = as<LoadExpr>(expr);
-      res += get_dtype_cpp_str(load->dtype) + " " + expr->name + " = " +
-             load->child->name + "[" + load->idx->name + "];\n";
+      /*res += get_dtype_cpp_str(load->dtype) + " " + expr->name + " = " +
+             load->child->name + "[" + load->idx->name + "];\n";*/
+      auto x = nmdb.get_with_prefix("load");
+      r[expr] = x;
+      res += get_dtype_cpp_str(load->dtype) + " " + x + " = " +
+             load->child->name + "[" + r[load->idx] + "]" + ";\n";
     } else if (is<StoreExpr>(expr)) {
       auto store = as<StoreExpr>(expr);
-      res += store->ptr->name + "[" + store->idx->name +
-             "] = " + store->value->name + ";\n";
+      res += store->ptr->name + "[" + r[store->idx] + "] = " + r[store->value] +
+             ";\n";
     } else {
       PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
     }
