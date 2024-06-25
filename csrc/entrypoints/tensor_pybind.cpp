@@ -163,6 +163,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   // module classes
   py::class_<Tensor>(m, "Tensor")
+      .def_property_readonly("ndim", &Tensor::ndim)
       .def("to_", &Tensor::to_)
       .def("assign", &Tensor::assign)
       .def("detach", &Tensor::detach)

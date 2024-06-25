@@ -27,14 +27,14 @@ def test_resize(sample_image, size, expected_size):
 def test_to_tensor(sample_image):
     to_tensor = ToTensor()
     tensor = to_tensor(sample_image)
-    assert isinstance(tensor, np.ndarray), "Output should be a numpy array"
-    assert tensor.shape == (
+    assert isinstance(tensor, Tensor), "Output should be a Tensor"
+    assert tuple(tensor.shape) == (
         3,
         100,
         100,
-    ), f"Expected shape (100, 100, 3), got {tensor.shape}"
-    assert np.all(tensor <= 1) and np.all(
-        tensor >= 0
+    ), f"Expected shape (3, 100, 100), got {tensor.shape}"
+    assert np.all(tensor.numpy() <= 1) and np.all(
+        tensor.numpy() >= 0
     ), "Tensor values should be in range [0, 1]"
 
 
@@ -52,7 +52,7 @@ def test_normalize(sample_image, mean, std):
     assert isinstance(
         normalized_tensor, Tensor
     ), "Output should be a Tensor, got {}".format(type(normalized_tensor))
-    expected_tensor = (tensor - np.array(mean)) / np.array(std)
+    expected_tensor = (tensor.numpy() - np.array(mean)) / np.array(std)
     assert np.allclose(
         normalized_tensor.numpy(), expected_tensor
     ), "Normalized tensor values are incorrect"

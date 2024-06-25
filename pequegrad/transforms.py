@@ -39,7 +39,7 @@ class Resize(Mod):
                 x, Image.Image
             ), "Input must be a PIL image, got {}".format(type(x))
 
-            return np.array(x.resize(self.size)).transpose(2, 0, 1)
+            return x.resize(self.size)
 
 
 class ToTensor(Mod):
@@ -54,32 +54,61 @@ class ToTensor(Mod):
             type(x)
         )
 
-        return (np.array(x) / 255.0).transpose(2, 0, 1)
+        return Tensor((np.array(x) / 255.0).transpose(2, 0, 1))
 
 
 class Normalize(Mod):
     def __init__(self, mean, std):
+        # stats per channel
         self.mean = mean
         self.std = std
 
     def forward(self, x: Image.Image or np.ndarray or Tensor):
+        # mean -> np array or tensor depending on the input
+
+        self.mean = (
+            np.array(self.mean)
+            if isinstance(x, np.ndarray)
+            else Tensor(self.mean).astype(x.dtype)
+            if isinstance(x, Tensor)
+            else self.mean
+        )
+
+        self.std = (
+            np.array(self.std)
+            if isinstance(x, np.ndarray)
+            else Tensor(self.std).astype(x.dtype)
+            if isinstance(x, Tensor)
+            else self.std
+        )
+
         if isinstance(x, Image.Image):
-            x = np.array(x)
-            x = Tensor(x)
-        elif isinstance(x, np.ndarray):
-            x = Tensor(x)
+            # perform the normalization in numpy
+            x = np.array(x).transpose(2, 0, 1)
+            norm = (x - self.mean.reshape(3, 1, 1)) / self.std.reshape(3, 1, 1)
+            # return image
+            return Image.fromarray(norm.transpose(1, 2, 0))
 
-        ndim = x.ndim if hasattr(x, "ndim") else x.dim
-        if ndim == 3:
-            x = x - Tensor(self.mean).reshape((3, 1, 1)).astype(x.dtype)
-            x = x / Tensor(self.std).reshape((3, 1, 1)).astype(x.dtype)
+        if isinstance(x, np.ndarray):
+            if x.ndim == 4:
+                x = x.transpose(0, 2, 3, 1)
+                return np.array(
+                    [
+                        (img - self.mean.reshape(3, 1, 1)) / self.std.reshape(3, 1, 1)
+                        for img in x
+                    ]
+                ).transpose(0, 3, 1, 2)
 
-            return x / 255.0
-        elif ndim == 4:
-            x = x - Tensor(self.mean).reshape((1, 3, 1, 1)).astype(x.dtype)
-            x = x / Tensor(self.std).reshape((1, 3, 1, 1)).astype(x.dtype)
+            return np.array(
+                (x - self.mean.reshape(3, 1, 1)) / self.std.reshape(3, 1, 1)
+            ).transpose(2, 0, 1)
 
-            return x / 255.0
+        if isinstance(x, Tensor):
+            if x.ndim == 4:
+                x = x.permute(0, 2, 3, 1)
+                return (x - self.mean.reshape((3, 1, 1))) / self.std.reshape((3, 1, 1))
+
+            return (x - self.mean.reshape((3, 1, 1))) / self.std.reshape((3, 1, 1))
 
 
 class EvalAndDetach(Mod):

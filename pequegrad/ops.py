@@ -151,9 +151,10 @@ def cross_entropy_loss_indices(self, target: Tensor) -> Tensor:
     # it is faster to take the indices of the target and use them to index the output of the softmax
     # than to one-hot encode the target and then multiply the one-hot encoding with the output of the softmax
 
-    # we use the logsumexp trick to avoid numerical instability
+    # we need to take the log of the softmax of the input
     log_softmax = self.log_softmax(dim=1)
-    return -log_softmax[:, target].mean()
+    # we need to take the negative of the log softmax of the target
+    return -(log_softmax[:, target].mean())
 
 
 def log_softmax(self, dim=-1) -> "Tensor":
@@ -190,7 +191,7 @@ def logsumexp(self, dim: Optional[int] = None, keepdim: bool = False) -> "Tensor
 
 def softmax(self, dim=-1) -> "Tensor":
     """Returns the softmax of the tensor"""
-    self_max = self.max(dim=dim, keepdim=True)
+    self_max = self.max_reduce(dim=dim, keepdim=True)
 
     softmax = (self - self_max).exp() / (self - self_max).exp().sum(
         dim=dim, keepdim=True
