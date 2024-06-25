@@ -542,7 +542,7 @@ protected:
 public:
   explicit Binomial(double p, shape_t shape, DType dtype)
       : _p(p), _shape(shape), _dtype(dtype) {}
-  // DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Binomial)
   std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs) {
