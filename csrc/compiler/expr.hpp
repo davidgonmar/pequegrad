@@ -340,6 +340,8 @@ public:
   DEFINE_INFER_OUTPUT_DTYPES
 };
 
+class Compiled : public ADPrimitive {};
+
 // returns a list with the inputs (leafs with LOAD operation)
 std::shared_ptr<AstExpr> get_ast_expr(Tensor &curr);
 

@@ -2,20 +2,19 @@
 #include "expr.hpp"
 
 namespace pg {
-
-bool is_broadcast(ADPrimitive &primitive) {
+static bool is_broadcast(ADPrimitive &primitive) {
   return dynamic_cast<BroadcastTo *>(&primitive) != nullptr;
 }
 
-bool is_broadcast(Tensor &tensor) {
+static bool is_broadcast(Tensor &tensor) {
   return is_broadcast(*tensor.ad_node().primitive().get());
 }
 
-BroadcastTo &get_broadcast(Tensor &tensor) {
+static BroadcastTo &get_broadcast(Tensor &tensor) {
   return dynamic_cast<BroadcastTo &>(*tensor.ad_node().primitive().get());
 }
 
-void remove_useless_broadcast(Tensor &out) {
+static void remove_useless_broadcast(Tensor &out) {
   for (Tensor &node : out.ad_node().children()) {
     if (is_broadcast(node)) {
       auto &broadcast = get_broadcast(node);
@@ -35,7 +34,7 @@ void remove_useless_broadcast(Tensor &out) {
   }
 }
 
-void rec_fuse(Tensor &out) {
+static void rec_fuse(Tensor &out) {
   fuse(out);
 
   for (int i = 0; i < out.ad_node().children().size(); i++) {
@@ -44,7 +43,7 @@ void rec_fuse(Tensor &out) {
     }
   }
 }
-void compile(Tensor &out) {
+static void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   remove_useless_broadcast(out);
   // Second pass -> fuse
