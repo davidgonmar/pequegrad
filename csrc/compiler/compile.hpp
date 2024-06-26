@@ -1,5 +1,6 @@
 #pragma once
 #include "expr.hpp"
+#include "scheduler.hpp"
 
 namespace pg {
 static bool is_broadcast(ADPrimitive &primitive) {
@@ -47,6 +48,7 @@ static void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   remove_useless_broadcast(out);
   // Second pass -> fuse
-  rec_fuse(out);
+  // rec_fuse(out);
+  schedule(out);
 }
 } // namespace pg

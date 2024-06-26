@@ -1,4 +1,9 @@
 #include "ir.hpp"
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <iostream>
+#include <map>
+#include <nvrtc.h>
 
 namespace pg {
 namespace ir {
@@ -38,29 +43,14 @@ static bool is_binary_op(std::shared_ptr<ADPrimitive> prim) {
   return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim);
 }
 
-class ContextForDoingALoadExpr {
-public:
-  bool is_contiguous;
-  std::vector<int> stride_exprs_idxs;
-  std::vector<int> shape_exprs_idxs;
-  std::vector<int> load_idx_exprs_idxs;
-};
-
-class IrBuilderContext {
-public:
-  std::map<std::shared_ptr<ArgExpr>, ContextForDoingALoadExpr> arg_to_ctx;
-  std::vector<std::shared_ptr<ArgExpr>> args;
-  // tensor id -> ir expr idx
-  std::map<int, int> tensor_id_to_ir_idx;
-};
-
 std::shared_ptr<BaseExpr>
 graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
-                  IrBuilderContext &ctx) {
+                  IrBuilderContext &ctx,
+                  const std::vector<Tensor> &orig_inputs) {
   // first render the input tensors
   std::vector<std::shared_ptr<BaseExpr>> inputs;
   for (auto &input : out.children()) {
-    auto ir_ = graph_to_ir_inner(input, ir, ctx);
+    auto ir_ = graph_to_ir_inner(input, ir, ctx, orig_inputs);
     inputs.push_back(ir_);
   }
   // then render the current tensor, based on the inputs
@@ -79,15 +69,24 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     ir.push_back(fill);
     return fill;
   }
+  auto is_in_orig_inputs = std::find_if(orig_inputs.begin(), orig_inputs.end(),
+                                        [&out](const Tensor &t) {
+                                          return t.id == out.id;
+                                        }) != orig_inputs.end();
 
-  if (is<JitBoundary>(prim)) {
+  if (is_in_orig_inputs) {
     // these are the args to the kernel
     // we need to do a load expression
     // first, get the arg expr
+    std::cout << "out.id: " << out.id << std::endl;
     auto arg_idx = ctx.tensor_id_to_ir_idx.at(out.id);
+    std::cout << "im here" << std::endl;
     auto arg = ctx.args[arg_idx];
+    std::cout << "im here2" << std::endl;
     auto arg_ctx = ctx.arg_to_ctx.at(arg);
+    std::cout << "im here3" << std::endl;
     auto load_idxs = arg_ctx.load_idx_exprs_idxs;
+    std::cout << "load_idxs: " << load_idxs.size() << std::endl;
     if (arg_ctx.is_contiguous) {
       // if contiguous, we can simply load from the global idx
       auto load = std::make_shared<LoadExpr>();
@@ -176,10 +175,16 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
       return load;
     }
   }
+  throw std::runtime_error(
+      "Bad schedule. Not an input and not a supported op: out: " + out.str());
 }
 
-std::vector<std::shared_ptr<BaseExpr>>
-graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
+std::pair<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext>
+graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
+  std::cout << "inputs: " << std::endl;
+  for (auto &input : inputs) {
+    std::cout << input.str() << std::endl;
+  }
   // the result will be a linear IR
   std::vector<std::shared_ptr<BaseExpr>> ir;
   IrBuilderContext ctx;
@@ -197,6 +202,8 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
   global_idx->op = BinaryOpKind::Add;
   global_idx->lhs = lhs;
   global_idx->rhs = rhs;
+  global_idx->force_render = true;
+  global_idx->name = "global_idx";
 
   ir.push_back(lhs->lhs);
   ir.push_back(lhs->rhs);
@@ -206,11 +213,40 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
 
   int gidx_idx = ir.size() - 1;
 
+  std::cout << "here2" << std::endl;
+
+  // add 'if (global_idx < numel) { return; }' to the ir
+
+  auto numel = std::make_shared<ImmExpr>();
+  numel->value = out.numel();
+  ir.push_back(numel);
+
+  auto cmp = std::make_shared<BinaryExpr>();
+  cmp->op = BinaryOpKind::Lt;
+  cmp->lhs = numel;
+  cmp->rhs = global_idx;
+  ir.push_back(cmp);
+
+  auto if_expr = std::make_shared<IfStartExpr>();
+  if_expr->cond = cmp;
+  ir.push_back(if_expr);
+
+  // if the condition is false, we must return
+  auto ret = std::make_shared<ReturnExpr>();
+  ir.push_back(ret);
+
+  // end of the if
+  auto if_end = std::make_shared<IfEndExpr>();
+  ir.push_back(if_end);
+  // no else
+
   // fill the ctx and ir with the input tensors
   int i = 0;
   int impidx = 0;
   for (auto &input : inputs) {
+    std::cout << "here3" << std::endl;
     auto arg = std::make_shared<ArgExpr>();
+    arg->dtype = input.dtype();
     ir.push_back(arg);
     ctx.args.push_back(arg);
     ctx.tensor_id_to_ir_idx[input.id] = i;
@@ -233,6 +269,8 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
         auto stride = std::make_shared<ImmExpr>();
         stride->value = strides[j];
         ir.push_back(stride);
+        ctx.tensor_idx_to_strides[impidx].push_back(
+            stride); // we will update this later
         arg_ctx.stride_exprs_idxs.push_back(ir.size() - 1);
         auto shape = std::make_shared<ImmExpr>();
         // shape is already inferred
@@ -289,6 +327,7 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
 
         arg_ctx.load_idx_exprs_idxs.push_back(ir.size() - 1);
         shapes_to_div.push_back(shape);
+        std::cout << "here4" << std::endl;
       }
     } else {
       // second case
@@ -299,6 +338,8 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
     i++;
     impidx++;
   }
+
+  std::cout << "here5" << std::endl;
 
   // same, but for the output tensor
   auto arg = std::make_shared<ArgExpr>();
@@ -312,8 +353,11 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
   arg_ctx.load_idx_exprs_idxs.push_back(gidx_idx);
   ctx.arg_to_ctx[arg] = arg_ctx;
   i++;
+  std::cout << "here6" << std::endl;
 
-  graph_to_ir_inner(out, ir, ctx);
+  graph_to_ir_inner(out, ir, ctx, inputs);
+
+  std::cout << "here7" << std::endl;
 
   // now, at the end, add a store operation
   auto store = std::make_shared<StoreExpr>();
@@ -321,7 +365,8 @@ graph_to_ir(Tensor &out, std::vector<Tensor> &inputs) {
   store->value = ir.back();
   store->idx = ir[gidx_idx];
   ir.push_back(store);
-  return ir;
+  std::cout << "here8" << std::endl;
+  return {ir, ctx};
 }
 
 static std::string binop_kind_to_str(BinaryOpKind op) {
@@ -390,42 +435,7 @@ std::string render_fn_header(std::string fn_name,
 }
 
 std::string ir_to_string(std::vector<std::shared_ptr<BaseExpr>> &ir) {
-  assign_names_to_ir(ir);
-  std::string res = render_fn_header("kernel_name", ir) + "\n";
-  res += "{\t\n";
-  for (auto &expr : ir) {
-    if (is<BinaryExpr>(expr)) {
-      auto binop = as<BinaryExpr>(expr);
-      res += binop->name + " = " + binop->lhs->name + " " +
-             binop_kind_to_str(binop->op) + " " + binop->rhs->name + ";\n";
-    } else if (is<ImmExpr>(expr)) {
-      auto imm = as<ImmExpr>(expr);
-      res += imm->name + " = " + std::to_string(imm->value) + ";\n";
-    } else if (is<ArgExpr>(expr)) {
-      continue; // already rendered in the header
-    } else if (is<BlockIdxExpr>(expr)) {
-      auto block_idx = as<BlockIdxExpr>(expr);
-      res += block_idx->name + " = " + "blockIdx.x" + ";\n";
-    } else if (is<BlockDimExpr>(expr)) {
-      auto block_dim = as<BlockDimExpr>(expr);
-      res += block_dim->name + " = " + "blockDim.x" + ";\n";
-    } else if (is<ThreadIdxExpr>(expr)) {
-      auto thread_idx = as<ThreadIdxExpr>(expr);
-      res += thread_idx->name + " = " + "threadIdx.x" + ";\n";
-    } else if (is<LoadExpr>(expr)) {
-      auto load = as<LoadExpr>(expr);
-      res += expr->name + " = " + load->child->name + "[" + load->idx->name +
-             "];\n";
-    } else if (is<StoreExpr>(expr)) {
-      auto store = as<StoreExpr>(expr);
-      res += store->ptr->name + "[" + store->idx->name +
-             "] = " + store->value->name + ";\n";
-    } else {
-      PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
-    }
-  }
-  res += "}\n";
-  return res;
+  return "not implemented";
 }
 
 // THE PREVIOUJS ONE IS FOR VISUALIZATION
@@ -433,7 +443,7 @@ std::string ir_to_string(std::vector<std::shared_ptr<BaseExpr>> &ir) {
 std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   assign_names_to_ir(ir);
   std::string res = render_fn_header("", ir) + "\n";
-  res = "__global__ kernel_name(" + res + ")\n";
+  res = "__global__ void kernel_name(" + res + ")\n";
   res += "{\t\n";
   std::map<std::shared_ptr<BaseExpr>, std::string> r;
   std::map<std::string, bool> rendered; // used for example not to render block
@@ -502,6 +512,13 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       auto store = as<StoreExpr>(expr);
       res += store->ptr->name + "[" + r[store->idx] + "] = " + r[store->value] +
              ";\n";
+    } else if (is<IfStartExpr>(expr)) {
+      auto if_start = as<IfStartExpr>(expr);
+      res += "if (" + r[if_start->cond] + ") {\n";
+    } else if (is<IfEndExpr>(expr)) {
+      res += "}\n";
+    } else if (is<ReturnExpr>(expr)) {
+      res += "return;\n";
     } else {
       PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
     }
@@ -510,4 +527,136 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   return res;
 }
 } // namespace ir
+
+void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
+                             std::vector<Tensor> &outputs) {
+  // first, we need to gather ir
+  using namespace ir;
+
+  auto out = outputs[0];
+
+  if (this->cached_fn == nullptr) {
+    // now update the strides of the exprs of the IR based on the strides of the
+    // input
+    auto ir = this->ir;
+    auto ctx = this->tensor_idx_to_strides;
+
+    // for each input, update the strides
+    for (int i = 0; i < inputs.size(); i++) {
+      auto input = inputs[i];
+      auto stride_exprs = ctx[i];
+      for (int j = 0; j < stride_exprs.size(); j++) {
+        // inverted order
+        auto real_stride = input.strides()[stride_exprs.size() - 1 - j] /
+                           dtype_to_size(input.dtype());
+        // assert that it is an immediate
+        auto imm = std::dynamic_pointer_cast<ImmExpr>(stride_exprs[j]);
+        PG_CHECK_RUNTIME(imm, "Expected immediate expression");
+        imm->value = real_stride;
+      }
+    }
+
+    // first
+    std::string ker = ir_to_cuda(this->ir);
+    nvrtcProgram prog;
+    // apend extern C
+    std::string file = "extern \"C\" {\n" + ker + "\n}";
+    nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
+
+    if (std::getenv("PG_KERNEL_DB") != nullptr) {
+      std::cout << "file: " << file << std::endl;
+    }
+    const char *opts[] = {"--use_fast_math"};
+    nvrtcResult compileResult = nvrtcCompileProgram(prog, 1, opts);
+
+    // Check for compilation errors
+    if (compileResult != NVRTC_SUCCESS) {
+      size_t logSize;
+      nvrtcGetProgramLogSize(prog, &logSize);
+      char *log = new char[logSize];
+      nvrtcGetProgramLog(prog, log);
+      nvrtcDestroyProgram(&prog);
+      throw std::runtime_error("NVRTC compilation failed: " + std::string(log));
+    }
+
+    size_t ptxSize;
+    nvrtcGetPTXSize(prog, &ptxSize);
+    char *ptx = new char[ptxSize];
+    nvrtcGetPTX(prog, ptx);
+
+    CUmodule cuModule;
+    CUfunction cuFunction;
+    CUcontext cuContext;
+    CUresult R1 = cuModuleLoadData(&cuModule, ptx);
+    PG_CHECK_RUNTIME(R1 == CUDA_SUCCESS,
+                     "Failed to load data: got " + std::to_string(R1));
+    std::string kernel_name = "kernel_name";
+    CUresult R =
+        cuModuleGetFunction(&cuFunction, cuModule, kernel_name.c_str());
+    PG_CHECK_RUNTIME(R == CUDA_SUCCESS, "Failed to get function: got " +
+                                            std::to_string(R) + " for kernel " +
+                                            kernel_name);
+
+    PG_CHECK_RUNTIME(cuFunction != nullptr, "Failed to get function");
+    // Store the function pointer in a void*
+    void *function_ptr = reinterpret_cast<void *>(cuFunction);
+    PG_CHECK_RUNTIME(function_ptr != nullptr, "Failed to get function pointer");
+    // Clean up
+    nvrtcDestroyProgram(&prog);
+    delete[] ptx;
+    this->cached_fn = function_ptr;
+  }
+
+  outputs[0].init_view(std::make_shared<View>(
+      outputs[0].shape(), outputs[0].dtype(), device::CUDA));
+  // Prepare kernel arguments
+  // Prepare grid and block dimensions
+  dim3 threads_per_block(128, 1, 1);
+  size_t num_elements = inputs[0].numel();
+  dim3 blocks_per_grid(
+      (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);
+  std::vector<void *> kernel_args;
+  for (const auto &input : inputs) {
+    void *in_data = input.get_base_ptr();
+    kernel_args.push_back(in_data);
+  }
+  void *out_data = outputs[0].get_base_ptr();
+  kernel_args.push_back(out_data);
+
+  // Convert to array of pointers
+  std::vector<void *> kernel_args_ptrs;
+  for (auto &arg : kernel_args) {
+    kernel_args_ptrs.push_back(&arg);
+  }
+
+  // Launch the kernel
+  // create stream to launch kernel
+  // first check if function is valid
+  CUresult launch_result = cuLaunchKernel(
+      (CUfunction)this->cached_fn, blocks_per_grid.x, blocks_per_grid.y,
+      blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
+      threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
+
+  if (launch_result != CUDA_SUCCESS) {
+    const char *error_string;
+    cuGetErrorString(launch_result, &error_string);
+    PG_CHECK_RUNTIME(
+        false, "Error launching kernel: " + std::string(error_string) +
+                   " "
+                   "for kernel " +
+                   std::to_string(outputs[0].id) +
+                   " with args: " + vec_to_string(kernel_args_ptrs) +
+                   "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
+  }
+
+  // Synchronize to ensure kernel execution is complete
+  cudaDeviceSynchronize();
+  // check error again
+  cudaError_t error = cudaGetLastError();
+  if (error != cudaSuccess) {
+    PG_CHECK_RUNTIME(false,
+                     "cuda error: " + std::string(cudaGetErrorString(error)));
+  }
+}
+
 } // namespace pg

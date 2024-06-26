@@ -147,6 +147,24 @@ CODE:
     }
 */
 
+class IfStartExpr : public BaseExpr {
+public:
+  std::shared_ptr<BaseExpr> cond;
+  std::string expr_str() override { return "IfExpr"; }
+};
+
+class IfEndExpr : public BaseExpr {
+public:
+  std::shared_ptr<BaseExpr> if_start;
+  std::string expr_str() override { return "IfEndExpr"; }
+};
+
+class ReturnExpr : public BaseExpr {
+public:
+  std::shared_ptr<BaseExpr> value;
+  std::string expr_str() override { return "ReturnExpr"; }
+};
+
 class ForEndExpr : public BaseExpr {
 public:
   std::shared_ptr<BaseExpr> for_start;
@@ -249,9 +267,28 @@ public:
   std::string expr_str() override { return "StoreExpr"; }
 };
 
+class ContextForDoingALoadExpr {
+public:
+  bool is_contiguous;
+  std::vector<int> stride_exprs_idxs;
+  std::vector<int> shape_exprs_idxs;
+  std::vector<int> load_idx_exprs_idxs;
+};
+
+class IrBuilderContext {
+public:
+  std::map<std::shared_ptr<ArgExpr>, ContextForDoingALoadExpr> arg_to_ctx;
+  std::vector<std::shared_ptr<ArgExpr>> args;
+  // tensor id -> ir expr idx
+  std::map<int, int> tensor_id_to_ir_idx;
+
+  // we dont know strides at the moment of gathering the IR
+  // so we will update them later
+  std::map<int, std::vector<std::shared_ptr<BaseExpr>>> tensor_idx_to_strides;
+};
 using ir_t = std::vector<std::shared_ptr<BaseExpr>>;
-std::vector<std::shared_ptr<BaseExpr>> graph_to_ir(Tensor &out,
-                                                   std::vector<Tensor> &inputs);
+std::pair<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext>
+graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs);
 
 std::string ir_to_string(ir_t &ir);
 std::string ir_to_cuda(ir_t &ir);
@@ -331,6 +368,15 @@ public:
     if (is<StoreExpr>(expr)) {
       return get_unique_name_tmp();
     }
+    if (is<IfStartExpr>(expr)) {
+      return get_unique_name_tmp();
+    }
+    if (is<IfEndExpr>(expr)) {
+      return get_unique_name_tmp();
+    }
+    if (is<ReturnExpr>(expr)) {
+      return get_unique_name_tmp();
+    }
 
     PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
   }
@@ -344,5 +390,13 @@ public:
 };
 
 } // namespace ir
-
+class Compiled : public ADPrimitive {
+public:
+  std::string str() { return "Compiled"; }
+  DEFINE_DISPATCH_CUDA
+  ir::ir_t ir;
+  std::map<int, std::vector<std::shared_ptr<ir::BaseExpr>>>
+      tensor_idx_to_strides;
+  void *cached_fn = nullptr;
+};
 } // namespace pg
