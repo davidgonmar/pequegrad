@@ -1,6 +1,6 @@
 from pequegrad import Tensor, device, grads
 import pequegrad.modules as nn
-from pequegrad.optim import SGD
+from pequegrad.optim import Adam, JittedAdam
 import argparse
 import numpy as np
 import pequegrad.transforms as transforms
@@ -101,7 +101,7 @@ parser.add_argument(
 parser.add_argument(
     "--lr",
     type=float,
-    default=0.01,
+    default=0.001,
     help="Learning rate for the optimizer",
 )
 
@@ -133,7 +133,11 @@ if args.checkpoint is not None:
     model.load(args.checkpoint)
 
 if not args.test:
-    optim = SGD(model.parameters(), lr=args.lr)
+    optim = (
+        Adam(model.parameters(), lr=args.lr)
+        if not args.jit
+        else JittedAdam(model.parameters(), lr=args.lr)
+    )
 
     def train_step(x, y):
         outs = model(x)

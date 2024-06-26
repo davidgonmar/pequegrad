@@ -1,6 +1,6 @@
 from pequegrad.extra.mnist import MNISTDataset
 import numpy as np
-from pequegrad.optim import Adam
+from pequegrad.optim import Adam, JittedAdam
 from pequegrad.modules import (
     Linear,
     Conv2d,
@@ -63,7 +63,9 @@ def test_model(model, ds):
 
 def train(model, ds, epochs=13, batch_size=512):
     # weights of the network printed
-    optim = Adam(model.parameters(), lr=0.033)
+    use_jit = True
+    optimcls = JittedAdam if use_jit else Adam
+    optim = optimcls(model.parameters(), lr=0.033)
 
     def training_step(batch_X, batch_Y):
         prediction = model.forward(batch_X)
@@ -71,12 +73,14 @@ def train(model, ds, epochs=13, batch_size=512):
         g = grads(model.parameters(), loss)
         return [loss] + g
 
-    training_step = jit(training_step, externals=model.parameters())
+    training_step = (
+        jit(training_step, externals=model.parameters()) if use_jit else training_step
+    )
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
     start = None
     i = 0
     for x, y in loader:
-        if i == 1:
+        if i == 2:
             start = time.time()
         # Forward pass
         y = Tensor.one_hot(10, y, device=dev)

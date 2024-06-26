@@ -5,7 +5,7 @@ from pequegrad.context import no_grad
 import argparse
 import time
 from pequegrad.backend.c import device, grads
-from pequegrad.optim import Adam, SGD  # noqa
+from pequegrad.optim import Adam, SGD, JittedAdam  # noqa
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.compile import jit
 from pequegrad.tensor import Tensor
@@ -33,7 +33,9 @@ class MLP(StatefulModule):
 def train(model, ds, epochs=13, batch_size=4096):
     start = None
     # weights of the network printed
-    optim = Adam(model.parameters(), lr=0.021)
+    use_jit = True
+    optcls = Adam if not use_jit else JittedAdam
+    optim = optcls(model.parameters(), lr=0.021)
 
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
@@ -44,7 +46,7 @@ def train(model, ds, epochs=13, batch_size=4096):
         return [loss] + g
 
     i = 0
-    use_jit = Tensor
+
     train_step = (
         jit(train_step, externals=model.parameters()) if use_jit else train_step
     )
