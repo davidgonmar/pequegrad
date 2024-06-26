@@ -82,7 +82,7 @@ public:
   std::string expr_str() override { return "UnaryExpr"; }
 };
 
-enum class BinaryOpKind { Add, Mul, Max, Sub, Div, Gt, Lt, Mod, Eq };
+enum class BinaryOpKind { Add, Mul, Max, Sub, Div, Gt, Lt, Mod, Eq, Pow };
 
 /*Represents binary operations like
 {

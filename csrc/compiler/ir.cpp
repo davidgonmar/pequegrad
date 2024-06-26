@@ -24,6 +24,9 @@ static BinaryOpKind op_to_binop_kind(ADPrimitive &prim) {
     return BinaryOpKind::Max;
   } else if (is<Eq>(prim)) {
     return BinaryOpKind::Eq;
+  } else if (is<Pow>(prim)) {
+    return BinaryOpKind::Pow;
+
   } else {
     throw std::runtime_error("Unsupported binary operation");
   }
@@ -46,6 +49,8 @@ static BinaryOpKind op_to_binop_kind(std::shared_ptr<ADPrimitive> prim) {
     return BinaryOpKind::Max;
   } else if (is<Eq>(prim)) {
     return BinaryOpKind::Eq;
+  } else if (is<Pow>(prim)) {
+    return BinaryOpKind::Pow;
 
   } else {
     throw std::runtime_error("Unsupported binary operation");
@@ -82,12 +87,14 @@ static UnaryOpKind op_to_unaryop_kind(std::shared_ptr<ADPrimitive> prim) {
 
 static bool is_binary_op(ADPrimitive &prim) {
   return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim) ||
-         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim);
+         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim) ||
+         is<Pow>(prim);
 }
 
 static bool is_binary_op(std::shared_ptr<ADPrimitive> prim) {
   return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim) ||
-         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim);
+         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim) ||
+         is<Pow>(prim);
 }
 
 std::shared_ptr<BaseExpr>
@@ -418,6 +425,8 @@ static std::string binop_kind_to_str(BinaryOpKind op, std::string lhs,
     return lhs + " % " + rhs;
   case BinaryOpKind::Eq:
     return lhs + " == " + rhs;
+  case BinaryOpKind::Pow: // todo - differentiate between int and float pow
+    return "powf(" + lhs + ", " + rhs + ")";
   default:
     throw std::runtime_error("Unsupported binary operation: " +
                              std::to_string((int)op));

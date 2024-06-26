@@ -73,6 +73,12 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs) {
     schedule_inner(node.ad_node().children()[1], leafs);
     return;
   }
+  if (is<Pow>(node.ad_node().primitive())) {
+    auto &pow = dynamic_cast<Pow &>(*node.ad_node().primitive());
+    schedule_inner(node.ad_node().children()[0], leafs);
+    schedule_inner(node.ad_node().children()[1], leafs);
+    return;
+  }
   // ...
   // else, we have a leaf
   leafs.push_back(node);
