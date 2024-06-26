@@ -69,7 +69,7 @@ class CIFAR100Dataset:
         return len(self.X)
 
     def __getitem__(self, idx):
-        x = self.X[idx].transpose(0, 3, 1, 2)
+        x = self.X[idx]
         y = self.y[idx]
 
         if self.transforms:

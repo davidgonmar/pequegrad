@@ -70,6 +70,7 @@ class AlexNet(nn.StatefulModule):
 transform = transforms.Compose(
     [
         transforms.ToTensor(),
+        transforms.PermuteFromTo((0, 1, 2, 3), (0, 3, 1, 2)),  # NHWC -> NCHW
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         transforms.Resize((224, 224)),
     ]

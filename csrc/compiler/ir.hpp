@@ -78,10 +78,11 @@ class UnaryExpr : public BaseExpr {
 public:
   UnaryOpKind op;
   std::shared_ptr<BaseExpr> child;
+  DType dtype;
   std::string expr_str() override { return "UnaryExpr"; }
 };
 
-enum class BinaryOpKind { Add, Mul, Max, Sub, Div, Gt, Lt, Mod };
+enum class BinaryOpKind { Add, Mul, Max, Sub, Div, Gt, Lt, Mod, Eq };
 
 /*Represents binary operations like
 {
@@ -106,6 +107,38 @@ public:
   std::shared_ptr<BaseExpr> rhs;
   DType dtype;
   std::string expr_str() override { return "BinaryExpr"; }
+};
+
+enum class TernaryOpKind { Where };
+
+/*Represents ternary operations like
+{
+    op: Where,
+    cond: {
+        ...,
+        name: y
+    },
+    lhs: {
+        ...,
+        name: z
+    },
+    rhs: {
+        ...,
+        name: w
+    }
+}
+CODE:
+    x = y ? z : w;
+*/
+
+class TernaryExpr : public BaseExpr {
+public:
+  TernaryOpKind op;
+  std::shared_ptr<BaseExpr> first;
+  std::shared_ptr<BaseExpr> second;
+  std::shared_ptr<BaseExpr> third;
+  DType dtype;
+  std::string expr_str() override { return "TernaryExpr"; }
 };
 
 /*Represents a for loop start
@@ -375,6 +408,9 @@ public:
       return get_unique_name_tmp();
     }
     if (is<ReturnExpr>(expr)) {
+      return get_unique_name_tmp();
+    }
+    if (is<TernaryExpr>(expr)) {
       return get_unique_name_tmp();
     }
 

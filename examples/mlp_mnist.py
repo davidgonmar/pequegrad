@@ -44,7 +44,7 @@ def train(model, ds, epochs=13, batch_size=4096):
         return [loss] + g
 
     i = 0
-    use_jit = True
+    use_jit = Tensor
     train_step = (
         jit(train_step, externals=model.parameters()) if use_jit else train_step
     )
@@ -77,16 +77,22 @@ def test_model(model, ds):
     correct = 0
     total = 0
     loader = DataLoader(ds, batch_size=4096)
-    start = time.time()
     step = model.forward
-    for x, y in loader:
-        with no_grad():
-            outputs = step(x)
-            correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
-            total += y.shape[0]
+    step = jit(step, externals=model.parameters())
+    start = None
+    i = 0
+    for i in range(10):
+        for x, y in loader:
+            with no_grad():
+                if i == 1:  # start time after first batch
+                    start = time.time()
+                outputs = step(x)
+                correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
+                total += y.shape[0]
+                i += 1
     end = time.time()
     print(
-        f"Correct: {correct}, Total: {total}, Accuracy: {correct / total:.3f}, Time: {end - start:.2f}s"
+        f"Correct: {correct}, Total: {total}, Accuracy: {correct / total:.3f}, Time: {end - start:.5f}"
     )
     return correct, total
 

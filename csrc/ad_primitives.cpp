@@ -1,5 +1,4 @@
 #include "ad_primitives.hpp"
-#include "compiler/expr.hpp"
 #include "ops.hpp"
 #include "tensor.hpp"
 #include "utils.hpp"
@@ -767,23 +766,6 @@ std::vector<Tensor> AsType::backward(const std::vector<Tensor> &primals,
 std::vector<DType>
 AsType::infer_output_dtypes(const std::vector<Tensor> &inputs) {
   return {_dtype_to};
-}
-
-std::vector<shape_t>
-CompiledPrimitive::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  throw std::runtime_error("output_shapes not implemented for " + str());
-}
-
-std::vector<DType>
-CompiledPrimitive::infer_output_dtypes(const std::vector<Tensor> &inputs) {
-  throw std::runtime_error("output_dtypes not implemented for " + str());
-}
-
-std::vector<Tensor>
-CompiledPrimitive::backward(const std::vector<Tensor> &primals,
-                            const std::vector<Tensor> &tangents,
-                            const std::vector<Tensor> &outputs) {
-  throw std::runtime_error("backward not implemented for " + str());
 }
 
 std::vector<shape_t>

@@ -1,5 +1,4 @@
 #pragma once
-#include "expr.hpp"
 #include "scheduler.hpp"
 
 namespace pg {
@@ -35,20 +34,20 @@ static void remove_useless_broadcast(Tensor &out) {
   }
 }
 
-static void rec_fuse(Tensor &out) {
-  fuse(out);
+static void rec_schedule(Tensor &out) {
+  schedule(out);
 
   for (int i = 0; i < out.ad_node().children().size(); i++) {
     if (i < out.ad_node().children().size()) {
-      rec_fuse(out.ad_node().children()[i]);
+      rec_schedule(out.ad_node().children()[i]);
     }
   }
 }
+
 static void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   remove_useless_broadcast(out);
-  // Second pass -> fuse
-  // rec_fuse(out);
-  schedule(out);
+  // Second -> schedule (fuse)
+  rec_schedule(out);
 }
 } // namespace pg

@@ -83,7 +83,6 @@ def train(model, ds, epochs=13, batch_size=512):
         outs = training_step(x, y)
         loss = outs[0]
         g = outs[1:]
-        loss.eval(False)
         optim.step(g)
         print(
             f"Epoch {i} | Loss {loss.numpy()}",

@@ -16,6 +16,14 @@ static BinaryOpKind op_to_binop_kind(ADPrimitive &prim) {
     return BinaryOpKind::Mul;
   } else if (is<Div>(prim)) {
     return BinaryOpKind::Div;
+  } else if (is<Gt>(prim)) {
+    return BinaryOpKind::Gt;
+  } else if (is<Lt>(prim)) {
+    return BinaryOpKind::Lt;
+  } else if (is<Max>(prim)) {
+    return BinaryOpKind::Max;
+  } else if (is<Eq>(prim)) {
+    return BinaryOpKind::Eq;
   } else {
     throw std::runtime_error("Unsupported binary operation");
   }
@@ -30,45 +38,72 @@ static BinaryOpKind op_to_binop_kind(std::shared_ptr<ADPrimitive> prim) {
     return BinaryOpKind::Mul;
   } else if (is<Div>(prim)) {
     return BinaryOpKind::Div;
+  } else if (is<Gt>(prim)) {
+    return BinaryOpKind::Gt;
+  } else if (is<Lt>(prim)) {
+    return BinaryOpKind::Lt;
+  } else if (is<Max>(prim)) {
+    return BinaryOpKind::Max;
+  } else if (is<Eq>(prim)) {
+    return BinaryOpKind::Eq;
+
   } else {
     throw std::runtime_error("Unsupported binary operation");
   }
 }
 
+static UnaryOpKind op_to_unaryop_kind(ADPrimitive &prim) {
+  if (is<Log>(prim)) {
+    return UnaryOpKind::Log;
+  } else if (is<Exp>(prim)) {
+    return UnaryOpKind::Exp;
+  } else {
+    throw std::runtime_error("Unsupported unary operation");
+  }
+}
+
+static TernaryOpKind op_to_ternaryop_kind(ADPrimitive &prim) {
+  if (is<Where>(prim)) {
+    return TernaryOpKind::Where;
+  } else {
+    throw std::runtime_error("Unsupported ternary operation");
+  }
+}
+
+static UnaryOpKind op_to_unaryop_kind(std::shared_ptr<ADPrimitive> prim) {
+  if (is<Log>(prim)) {
+    return UnaryOpKind::Log;
+  } else if (is<Exp>(prim)) {
+    return UnaryOpKind::Exp;
+  } else {
+    throw std::runtime_error("Unsupported unary operation");
+  }
+}
+
 static bool is_binary_op(ADPrimitive &prim) {
-  return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim);
+  return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim) ||
+         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim);
 }
 
 static bool is_binary_op(std::shared_ptr<ADPrimitive> prim) {
-  return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim);
+  return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim) ||
+         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim);
 }
 
 std::shared_ptr<BaseExpr>
 graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
                   IrBuilderContext &ctx,
                   const std::vector<Tensor> &orig_inputs) {
-  // first render the input tensors
-  std::vector<std::shared_ptr<BaseExpr>> inputs;
-  for (auto &input : out.children()) {
-    auto ir_ = graph_to_ir_inner(input, ir, ctx, orig_inputs);
-    inputs.push_back(ir_);
-  }
-  // then render the current tensor, based on the inputs
   auto prim = out.ad_node().primitive();
-  if (is_binary_op(prim)) {
-    auto binop = std::make_shared<BinaryExpr>();
-    binop->op = op_to_binop_kind(prim);
-    binop->lhs = inputs[0];
-    binop->rhs = inputs[1];
-    ir.push_back(binop);
-    return binop;
-  }
+  // first detect constants, then args, then binary ops, then unary ops
   if (is<Fill>(prim)) {
     auto fill = std::make_shared<ImmExpr>();
     fill->value = as<Fill>(prim)->value();
+    fill->dtype = out.dtype();
     ir.push_back(fill);
     return fill;
   }
+
   auto is_in_orig_inputs = std::find_if(orig_inputs.begin(), orig_inputs.end(),
                                         [&out](const Tensor &t) {
                                           return t.id == out.id;
@@ -78,15 +113,10 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     // these are the args to the kernel
     // we need to do a load expression
     // first, get the arg expr
-    std::cout << "out.id: " << out.id << std::endl;
     auto arg_idx = ctx.tensor_id_to_ir_idx.at(out.id);
-    std::cout << "im here" << std::endl;
     auto arg = ctx.args[arg_idx];
-    std::cout << "im here2" << std::endl;
     auto arg_ctx = ctx.arg_to_ctx.at(arg);
-    std::cout << "im here3" << std::endl;
     auto load_idxs = arg_ctx.load_idx_exprs_idxs;
-    std::cout << "load_idxs: " << load_idxs.size() << std::endl;
     if (arg_ctx.is_contiguous) {
       // if contiguous, we can simply load from the global idx
       auto load = std::make_shared<LoadExpr>();
@@ -96,40 +126,19 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
       ir.push_back(load);
       return load;
     } else {
-      // LOGIC IS HERE
-      /*std::string render_idxs(std::vector<long long> &rendered_ids) override {
-      // if our id is already rendered, we don't need to render it again
-      if (std::find(rendered_ids.begin(), rendered_ids.end(), id) !=
-          rendered_ids.end()) {
-      return "";
-      }
-      // add our id to the rendered ids
-      rendered_ids.push_back(id);
-      // scalar case
-      if (shape.size() == 0) {
-      return "";
-      }
-      // this only calculates the index for each dim
-      std::string st = "";
-      st += "size_t in_" + name + "_idx" + std::to_string(shape.size() - 1) +
-          " = " + "idx" + " % " + std::to_string(shape[shape.size() - 1]) +
-          ";\n";
-      std::string divisor = "";
-      for (int i = shape.size() - 2; i >= 0; i--) {
-      divisor += (divisor == "" ? std::to_string(shape[i + 1])
-                                  : " / " + std::to_string(shape[i + 1]));
-      st += "size_t in_" + name + "_idx" + std::to_string(i) + " = " +
-              "(idx / " + divisor + ") % " + std::to_string(shape[i]) + ";\n";
+      // if stride size (load_idxs) is 0, then we load from [0]
+      if (load_idxs.size() == 0) {
+        auto load = std::make_shared<LoadExpr>();
+        load->child = arg;
+        auto zero = std::make_shared<ImmExpr>();
+        zero->value = 0;
+        ir.push_back(zero);
+        load->idx = zero;
+        load->dtype = arg->dtype;
+        ir.push_back(load);
+        return load;
       }
 
-      return st;
-  }*/
-      // EACH IDX IS A DIMENSION, AND IS STORED AT load_idxs
-      // so we need to do
-      // x = load_from[stride_0 * idx_0 + stride_1 * idx_1 + ... + stride_n *
-      // idx_n]
-
-      // first, calculate the idx
       std::vector<std::shared_ptr<BaseExpr>> muls;
 
       for (int i = 0; i < load_idxs.size(); i++) {
@@ -175,16 +184,45 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
       return load;
     }
   }
+
+  // first render the input tensors
+  std::vector<std::shared_ptr<BaseExpr>> inputs;
+  for (auto &input : out.children()) {
+    auto ir_ = graph_to_ir_inner(input, ir, ctx, orig_inputs);
+    inputs.push_back(ir_);
+  }
+  // then render the current tensor, based on the inputs
+
+  if (is_binary_op(prim)) {
+    auto binop = std::make_shared<BinaryExpr>();
+    binop->op = op_to_binop_kind(prim);
+    binop->lhs = inputs[0];
+    binop->rhs = inputs[1];
+    ir.push_back(binop);
+    return binop;
+  }
+  if (is<Log>(prim) || is<Exp>(prim)) {
+    auto unop = std::make_shared<UnaryExpr>();
+    unop->op = op_to_unaryop_kind(prim);
+    unop->child = inputs[0];
+    ir.push_back(unop);
+    return unop;
+  }
+  if (is<Where>(prim)) {
+    auto ternop = std::make_shared<TernaryExpr>();
+    ternop->op = TernaryOpKind::Where;
+    ternop->first = inputs[0];
+    ternop->second = inputs[1];
+    ternop->third = inputs[2];
+    ir.push_back(ternop);
+    return ternop;
+  }
   throw std::runtime_error(
       "Bad schedule. Not an input and not a supported op: out: " + out.str());
 }
 
 std::pair<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext>
 graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
-  std::cout << "inputs: " << std::endl;
-  for (auto &input : inputs) {
-    std::cout << input.str() << std::endl;
-  }
   // the result will be a linear IR
   std::vector<std::shared_ptr<BaseExpr>> ir;
   IrBuilderContext ctx;
@@ -212,8 +250,6 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   ir.push_back(global_idx);
 
   int gidx_idx = ir.size() - 1;
-
-  std::cout << "here2" << std::endl;
 
   // add 'if (global_idx < numel) { return; }' to the ir
 
@@ -244,7 +280,6 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   int i = 0;
   int impidx = 0;
   for (auto &input : inputs) {
-    std::cout << "here3" << std::endl;
     auto arg = std::make_shared<ArgExpr>();
     arg->dtype = input.dtype();
     ir.push_back(arg);
@@ -252,8 +287,8 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
     ctx.tensor_id_to_ir_idx[input.id] = i;
     // fill the context for doing a load expression
     ContextForDoingALoadExpr arg_ctx;
-    bool cont = false;
-    arg_ctx.is_contiguous = cont;
+    arg_ctx.is_contiguous = false;
+    auto cont = false;
     if (!cont) {
       // placeholder strides, we will fill them later
       strides_t strides = strides_t();
@@ -327,7 +362,6 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
 
         arg_ctx.load_idx_exprs_idxs.push_back(ir.size() - 1);
         shapes_to_div.push_back(shape);
-        std::cout << "here4" << std::endl;
       }
     } else {
       // second case
@@ -339,11 +373,10 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
     impidx++;
   }
 
-  std::cout << "here5" << std::endl;
-
   // same, but for the output tensor
   auto arg = std::make_shared<ArgExpr>();
   ir.push_back(arg);
+  arg->dtype = out.dtype();
   ctx.args.push_back(arg);
   ctx.tensor_id_to_ir_idx[out.id] = i;
   // fill the context for doing a load expression
@@ -353,11 +386,7 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   arg_ctx.load_idx_exprs_idxs.push_back(gidx_idx);
   ctx.arg_to_ctx[arg] = arg_ctx;
   i++;
-  std::cout << "here6" << std::endl;
-
   graph_to_ir_inner(out, ir, ctx, inputs);
-
-  std::cout << "here7" << std::endl;
 
   // now, at the end, add a store operation
   auto store = std::make_shared<StoreExpr>();
@@ -365,28 +394,54 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   store->value = ir.back();
   store->idx = ir[gidx_idx];
   ir.push_back(store);
-  std::cout << "here8" << std::endl;
   return {ir, ctx};
 }
 
-static std::string binop_kind_to_str(BinaryOpKind op) {
+static std::string binop_kind_to_str(BinaryOpKind op, std::string lhs,
+                                     std::string rhs) {
   switch (op) {
   case BinaryOpKind::Add:
-    return "+";
+    return lhs + " + " + rhs;
   case BinaryOpKind::Sub:
-    return "-";
+    return lhs + " - " + rhs;
   case BinaryOpKind::Mul:
-    return "*";
+    return lhs + " * " + rhs;
   case BinaryOpKind::Div:
-    return "/";
+    return lhs + " / " + rhs;
   case BinaryOpKind::Gt:
-    return ">";
+    return lhs + " > " + rhs;
   case BinaryOpKind::Lt:
-    return "<";
+    return lhs + " < " + rhs;
+  case BinaryOpKind::Max:
+    return "max(" + lhs + ", " + rhs + ")";
   case BinaryOpKind::Mod:
-    return "%";
+    return lhs + " % " + rhs;
+  case BinaryOpKind::Eq:
+    return lhs + " == " + rhs;
   default:
-    throw std::runtime_error("Unsupported binary operation");
+    throw std::runtime_error("Unsupported binary operation: " +
+                             std::to_string((int)op));
+  }
+}
+
+static std::string unop_kind_to_str(UnaryOpKind op) {
+  switch (op) {
+  case UnaryOpKind::Log:
+    return "log";
+  case UnaryOpKind::Exp:
+    return "exp";
+  default:
+    throw std::runtime_error("Unsupported unary operation");
+  }
+}
+
+static std::string ternop_kind_to_str(TernaryOpKind op, std::string first,
+                                      std::string second, std::string third) {
+  switch (op) {
+  case TernaryOpKind::Where:
+    return first + " ? " + second + " : " + third;
+  default:
+    throw std::runtime_error("Unsupported ternary operation");
   }
 }
 
@@ -456,13 +511,25 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
              binop->lhs->name + " " + binop_kind_to_str(binop->op) + " " +
              binop->rhs->name + ";\n";*/
       if (!binop->force_render) {
-        r[expr] = "(" + r[binop->lhs] + " " + binop_kind_to_str(binop->op) +
-                  " " + r[binop->rhs] + ")";
+        r[expr] = "(" +
+                  binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs]) +
+                  ")";
       } else {
         r[expr] = binop->name;
         res += get_dtype_cpp_str(binop->dtype) + " " + binop->name + " = " +
-               r[binop->lhs] + " " + binop_kind_to_str(binop->op) + " " +
-               r[binop->rhs] + ";\n";
+               binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs]) +
+               ";\n";
+      }
+    } else if (is<UnaryExpr>(expr)) {
+      auto unop = as<UnaryExpr>(expr);
+      /*res += get_dtype_cpp_str(unop->dtype) + " " + unop->name + " = " +
+             unop_kind_to_str(unop->op) + "(" + unop->child->name + ");\n";*/
+      if (!unop->force_render) {
+        r[expr] = unop_kind_to_str(unop->op) + "(" + r[unop->child] + ")";
+      } else {
+        r[expr] = unop->name;
+        res += get_dtype_cpp_str(unop->dtype) + " " + unop->name + " = " +
+               unop_kind_to_str(unop->op) + "(" + r[unop->child] + ");\n";
       }
     } else if (is<ImmExpr>(expr)) {
       auto imm = as<ImmExpr>(expr);
@@ -519,6 +586,12 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       res += "}\n";
     } else if (is<ReturnExpr>(expr)) {
       res += "return;\n";
+    } else if (is<TernaryExpr>(expr)) {
+      auto ternop = as<TernaryExpr>(expr);
+      r[expr] = "(" +
+                ternop_kind_to_str(ternop->op, r[ternop->first],
+                                   r[ternop->second], r[ternop->third]) +
+                ")";
     } else {
       PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
     }

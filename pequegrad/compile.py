@@ -1,6 +1,5 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, grads  # noqa
-
-_compile = True
+import pequegrad.viz as viz  # noqa
 
 
 class jit:
@@ -36,7 +35,6 @@ class jit:
 
             for out in outs:
                 compile(out)
-
         # now clone c and feed data
         outs, inps, _ = clone_graph(
             self.cache["outs"], self.cache["inps"], []

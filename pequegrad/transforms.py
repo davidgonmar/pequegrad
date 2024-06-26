@@ -54,7 +54,16 @@ class ToTensor(Mod):
             type(x)
         )
 
-        return Tensor((np.array(x) / 255.0).transpose(2, 0, 1))
+        return Tensor((np.array(x) / 255.0))
+
+
+class PermuteFromTo(Mod):
+    def __init__(self, from_, to):
+        self.from_ = from_
+        self.to = to
+
+    def forward(self, x: Tensor):
+        return x.permute(*self.to)
 
 
 class Normalize(Mod):
@@ -65,20 +74,19 @@ class Normalize(Mod):
 
     def forward(self, x: Image.Image or np.ndarray or Tensor):
         # mean -> np array or tensor depending on the input
-
         self.mean = (
             np.array(self.mean)
             if isinstance(x, np.ndarray)
-            else Tensor(self.mean).astype(x.dtype)
-            if isinstance(x, Tensor)
+            else Tensor(self.mean).astype(x.dtype).eval().detach()
+            if isinstance(x, Tensor) and not isinstance(self.mean, Tensor)
             else self.mean
         )
 
         self.std = (
             np.array(self.std)
             if isinstance(x, np.ndarray)
-            else Tensor(self.std).astype(x.dtype)
-            if isinstance(x, Tensor)
+            else Tensor(self.std).astype(x.dtype).eval().detach()
+            if isinstance(x, Tensor) and not isinstance(self.std, Tensor)
             else self.std
         )
 
@@ -105,9 +113,10 @@ class Normalize(Mod):
 
         if isinstance(x, Tensor):
             if x.ndim == 4:
-                x = x.permute(0, 2, 3, 1)
-                return (x - self.mean.reshape((3, 1, 1))) / self.std.reshape((3, 1, 1))
-
+                a = (x - self.mean.reshape((1, 3, 1, 1))) / self.std.reshape(
+                    (1, 3, 1, 1)
+                )
+                return a
             return (x - self.mean.reshape((3, 1, 1))) / self.std.reshape((3, 1, 1))
 
 

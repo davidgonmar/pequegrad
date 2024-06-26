@@ -5,6 +5,7 @@
 #include "ops.hpp"
 #include "shape.hpp"
 #include "tensor.hpp"
+#include <cuda.h>
 #include <iostream>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
