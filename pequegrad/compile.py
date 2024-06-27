@@ -1,5 +1,4 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, grads  # noqa
-import pequegrad.viz as viz  # noqa
 
 
 class jit:

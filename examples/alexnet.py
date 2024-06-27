@@ -67,14 +67,6 @@ class AlexNet(nn.StatefulModule):
         return x
 
 
-transform = transforms.Compose(
-    [
-        transforms.ToTensor(),
-        transforms.PermuteFromTo((0, 1, 2, 3), (0, 3, 1, 2)),  # NHWC -> NCHW
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        transforms.Resize((224, 224)),
-    ]
-)
 # allow to continue training from a checkpoint
 parser = argparse.ArgumentParser(description="Train AlexNet on CIFAR-100")
 
@@ -101,7 +93,7 @@ parser.add_argument(
 parser.add_argument(
     "--lr",
     type=float,
-    default=0.001,
+    default=0.005,
     help="Learning rate for the optimizer",
 )
 
@@ -113,10 +105,25 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-
+transform = transforms.Compose(
+    [
+        transforms.ToTensor(device=device.cuda),
+        transforms.JitCompose(
+            [
+                transforms.PermuteFromTo((0, 1, 2, 3), (0, 3, 1, 2)),  # NHWC -> NCHW
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ],
+            enabled=args.jit,
+        ),
+        transforms.Resize((224, 224)),
+        transforms.EvalAndDetach(),
+    ],
+)
 trainset = CIFAR100Dataset(train=True, transform=transform)
 
-trainloader = DataLoader(trainset, batch_size=28 if not args.jit else 28, shuffle=True)
+trainloader = DataLoader(
+    trainset, batch_size=30, shuffle=True
+)  # jit allows about 30, no jit 45
 
 testset = CIFAR100Dataset(train=False, transform=transform)
 
@@ -156,8 +163,8 @@ if not args.test:
             st = time.time()
             inputs, labels = data
 
-            inputs = Tensor(inputs.numpy().astype("float32"), device=DEVICE)
-            labels = Tensor(labels.astype("float32"), device=DEVICE)
+            inputs = inputs.to(DEVICE)
+            labels = Tensor(labels, device=DEVICE)
 
             batch_y_onehot = Tensor.one_hot(100, labels, device=DEVICE)
             outs = train_step(inputs, batch_y_onehot)

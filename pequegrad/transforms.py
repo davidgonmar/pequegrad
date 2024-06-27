@@ -2,6 +2,8 @@ from pequegrad.modules import NonStatefulModule
 import numpy as np
 from pequegrad.tensor import Tensor
 from PIL import Image
+from pequegrad.compile import jit
+import pequegrad.backend.c as pgb
 
 Mod = NonStatefulModule
 
@@ -43,18 +45,21 @@ class Resize(Mod):
 
 
 class ToTensor(Mod):
+    def __init__(self, device=None):
+        self.device = device or pgb.cpu
+
     def forward(self, x: Image):
         if isinstance(x, Tensor):
             return x
 
         if isinstance(x, np.ndarray):
-            return Tensor(x)
+            return Tensor(x, device=self.device)
 
         assert isinstance(x, Image.Image), "Input must be a PIL image, got {}".format(
             type(x)
         )
 
-        return Tensor((np.array(x) / 255.0))
+        return Tensor((np.array(x) / 255.0), device=self.device)
 
 
 class PermuteFromTo(Mod):
@@ -69,27 +74,10 @@ class PermuteFromTo(Mod):
 class Normalize(Mod):
     def __init__(self, mean, std):
         # stats per channel
-        self.mean = mean
-        self.std = std
+        self.mean = Tensor(mean)
+        self.std = Tensor(std)
 
     def forward(self, x: Image.Image or np.ndarray or Tensor):
-        # mean -> np array or tensor depending on the input
-        self.mean = (
-            np.array(self.mean)
-            if isinstance(x, np.ndarray)
-            else Tensor(self.mean).astype(x.dtype).eval().detach()
-            if isinstance(x, Tensor) and not isinstance(self.mean, Tensor)
-            else self.mean
-        )
-
-        self.std = (
-            np.array(self.std)
-            if isinstance(x, np.ndarray)
-            else Tensor(self.std).astype(x.dtype).eval().detach()
-            if isinstance(x, Tensor) and not isinstance(self.std, Tensor)
-            else self.std
-        )
-
         if isinstance(x, Image.Image):
             # perform the normalization in numpy
             x = np.array(x).transpose(2, 0, 1)
@@ -112,6 +100,9 @@ class Normalize(Mod):
             ).transpose(2, 0, 1)
 
         if isinstance(x, Tensor):
+            # update self.mean and std to device
+            self.mean.to_(x.device)
+            self.std.to_(x.device)
             if x.ndim == 4:
                 a = (x - self.mean.reshape((1, 3, 1, 1))) / self.std.reshape(
                     (1, 3, 1, 1)
@@ -130,6 +121,29 @@ class Compose(Mod):
         self.transforms = transforms
 
     def forward(self, x):
+        for t in self.transforms:
+            x = t(x)
+        return x
+
+
+class JitCompose(Mod):
+    def __init__(self, transforms, enabled=True):
+        self.transforms = transforms
+        # find externals
+        externals_map = {
+            Normalize: ["mean", "std"],
+        }
+        externals = []
+        for t in self.transforms:
+            if t.__class__ in externals_map:
+                for attr in externals_map[t.__class__]:
+                    externals.append(getattr(t, attr))
+
+        self.forward = (
+            jit(self._forward, externals=externals) if enabled else self._forward
+        )
+
+    def _forward(self, x):
         for t in self.transforms:
             x = t(x)
         return x
