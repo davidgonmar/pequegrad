@@ -45,6 +45,28 @@ std::shared_ptr<ADPrimitive> ADNode::primitive() const {
   return _primitive;
 }
 
+ViewOptions &ViewOptions::like(const Tensor &t) {
+  _dtype = t.dtype();
+  _device = t.device();
+  _shape = t.shape();
+  _strides = t.strides();
+  _offset = t.offset();
+  _nbytes = t.nbytes();
+  _strides_set = true;
+  return *this;
+}
+
+ViewOptions &ViewOptions::like_natural(const Tensor &t) {
+  _dtype = t.dtype();
+  _device = t.device();
+  _shape = t.shape();
+  _strides = _compute_natural_strides(t.shape(), t.dtype());
+  _offset = t.offset();
+  _nbytes = compute_nbytes(t.shape(), t.dtype());
+  _strides_set = true;
+  return *this;
+}
+
 std::vector<Tensor> &ADNode::children() { return _children; }
 Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
                               std::vector<Tensor> inputs,
@@ -55,7 +77,6 @@ Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
   }
 
   Tensor t = Tensor(primitive, inputs, device);
-
   // check if primitive is marked as eager
   if (primitive->eager()) {
     t.eval(false);
@@ -181,6 +202,7 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
 std::string Tensor::str() const {
   std::stringstream ss;
   ss << "Tensor(shape=" << vec_to_string(shape())
+     << ", strides=" << vec_to_string(strides())
      << ", dtype=" << dtype_to_string(dtype()) << ", device=" << device()
      << ", evaled=" << is_evaled()
      << ", primitive=" << _ad_node->primitive()->str() << ", id=" << this->id
@@ -201,8 +223,8 @@ Tensor::copy_graph(std::vector<Tensor> &inputs,
       primitive.has_value() ? primitive.value() : this->_ad_node->primitive(),
       inputs);
   // reset view
-  copy._view = std::make_shared<View>(this->shape(), this->dtype(),
-                                      this->device(), false);
+  copy._view = std::make_shared<View>(*_view);
+  copy._view->deallocate();
   copy.id = Tensor::get_next_id();
   return copy;
 }
@@ -221,10 +243,11 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
   }
   this->_view->set_device(device);
   ADPrimitive *primitive_ptr = primitive.get();
-  std::vector<shape_t> shape = primitive_ptr->infer_output_shapes(inputs);
-  PG_CHECK_RUNTIME(shape.size() == 1, "Primitive must return a single shape");
-  this->_view->set_shape(shape[0]);
-  this->_view->set_dtype(primitive_ptr->infer_output_dtypes(inputs)[0]);
+  View v = primitive_ptr->precompute(inputs)[0];
+  this->_view = std::make_shared<View>(v);
+  this->_view->set_device(device);
+  // this->_view->set_shape(shape[0]);
+  // this->_view->set_dtype(primitive_ptr->infer_output_dtypes(inputs)[0]);
 }
 
 ADNode &Tensor::ad_node() const { return *_ad_node; }

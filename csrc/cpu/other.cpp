@@ -51,8 +51,7 @@ void Reshape::dispatch_cpu(const std::vector<Tensor> &inputs,
   total_new = total_old;
 
   if (a.is_contiguous()) {
-    outputs[0].init_view(std::make_shared<View>(
-        view::nocopy_reshape_nocheck(a.view(), new_shape)));
+    outputs[0].view_ptr()->set_ptr(a.view().shared_ptr(), a.nbytes());
     return;
   } else {
     View cont_view = cpu::view::as_contiguous(a.view());

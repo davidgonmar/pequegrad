@@ -1,6 +1,10 @@
 #pragma once
 #include "ad_primitives.hpp"
 #include "cuda_utils.cuh"
+
+// allow printing in kernel
+#include <stdio.h>
+
 namespace pg {
 
 enum class CudaSelectKind {
@@ -67,7 +71,6 @@ __global__ void _slice_and_assign_with_array_kernel(
   if (out_idx >= max_idx_out || src_idx >= max_idx_src) {
     return;
   }
-
   if (!is_assign) {
     sliced[out_idx] = non_sliced[src_idx];
   } else {

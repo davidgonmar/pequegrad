@@ -36,7 +36,6 @@ static void remove_useless_broadcast(Tensor &out) {
 
 static void rec_schedule(Tensor &out) {
   schedule(out);
-
   for (int i = 0; i < out.ad_node().children().size(); i++) {
     if (i < out.ad_node().children().size()) {
       rec_schedule(out.ad_node().children()[i]);

@@ -17,18 +17,11 @@
   std::vector<Tensor> backward(const std::vector<Tensor> &primals,             \
                                const std::vector<Tensor> &tangents,            \
                                const std::vector<Tensor> &outputs) override;
-
-#define DEFINE_INFER_OUTPUT_SHAPES                                             \
-  std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs)  \
-      override;
-
-#define DEFINE_INFER_OUTPUT_DTYPES                                             \
-  std::vector<DType> infer_output_dtypes(const std::vector<Tensor> &inputs)    \
-      override;
-
 #define DEFINE_STR_NAME(NAME)                                                  \
   std::string str() { return #NAME; }
 
+#define DEFINE_PRECOMPUTE                                                      \
+  std::vector<View> precompute(const std::vector<Tensor> &inputs) override;
 namespace pg {
 class ADPrimitive {
 public:
@@ -52,17 +45,11 @@ public:
                                        const std::vector<Tensor> &tangents,
                                        const std::vector<Tensor> &outputs);
 
-  /** Get the output shapes of the primitive.
-   * Strides are backend specific, so we don't need to worry about them here.
-   */
-  virtual std::vector<shape_t>
-  infer_output_shapes(const std::vector<Tensor> &inputs);
+  virtual std::vector<View> precompute(const std::vector<Tensor> &inputs) {
+    throw std::runtime_error("precompute not implemented for " + str());
+  }
 
   virtual std::string str() { return "ADPrimitive"; }
-  virtual std::vector<DType>
-  infer_output_dtypes(const std::vector<Tensor> &inputs) {
-    return {inputs[0].dtype()};
-  }
 };
 
 class JitBoundary : public ADPrimitive {
@@ -76,23 +63,25 @@ class UnaryPrimitive : public ADPrimitive {};
 class FromNumpy : public ADPrimitive {
 protected:
   shape_t _shape;
+  device::DeviceKind _device;
   DType _dtype;
   strides_t _strides;
   void *_data_ptr;
   size_t _buffer_size;
-  void _dispatch_general(std::vector<Tensor> &outputs);
+  void _dispatch_general(std::vector<Tensor> &outputs,
+                         device::DeviceKind device);
 
 public:
   bool eager() { return true; }
   explicit FromNumpy(shape_t shape, DType dtype, strides_t strides,
-                     void *data_ptr, size_t buffer_size)
+                     void *data_ptr, size_t buffer_size,
+                     device::DeviceKind device)
       : _shape(shape), _dtype(dtype), _strides(strides), _data_ptr(data_ptr),
-        _buffer_size(buffer_size) {}
+        _buffer_size(buffer_size), _device(device) {}
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(FromNumpy)
-  DEFINE_INFER_OUTPUT_SHAPES
-  DEFINE_INFER_OUTPUT_DTYPES
+  DEFINE_PRECOMPUTE
 };
 class Log : public UnaryPrimitive {
 public:
@@ -100,7 +89,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Log)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Exp : public UnaryPrimitive {
@@ -109,7 +98,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Exp)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class BinaryPrimitive : public ADPrimitive {};
@@ -120,7 +109,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Add)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Mul : public BinaryPrimitive {
@@ -129,7 +118,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Mul)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Sub : public BinaryPrimitive {
@@ -138,7 +127,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Sub)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Div : public BinaryPrimitive {
@@ -147,7 +136,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Div)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Gt : public ADPrimitive {
@@ -155,7 +144,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Gt)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Lt : public ADPrimitive {
@@ -163,7 +152,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Lt)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Eq : public ADPrimitive {
@@ -171,7 +160,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Eq)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Neq : public ADPrimitive {
@@ -179,7 +168,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Neq)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Ge : public ADPrimitive {
@@ -187,7 +176,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Ge)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Le : public ADPrimitive {
@@ -195,7 +184,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Le)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Pow : public ADPrimitive {
@@ -204,7 +193,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Pow)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Max : public ADPrimitive {
@@ -213,7 +202,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Max)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Where : public ADPrimitive {
@@ -221,8 +210,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Where)
-  DEFINE_INFER_OUTPUT_SHAPES
-  DEFINE_INFER_OUTPUT_DTYPES
+  DEFINE_PRECOMPUTE
 };
 
 // REDUCE
@@ -276,7 +264,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_BACKWARD
   DEFINE_STR_NAME(Sum)
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class MaxReduce : public Reduce {
@@ -287,7 +275,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(MaxReduce)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Mean : public Reduce {
@@ -298,7 +286,8 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Mean)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+
+  DEFINE_PRECOMPUTE
 };
 
 class BroadcastTo : public ADPrimitive {
@@ -313,7 +302,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Broadcast)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
   shape_t shape_to() { return _shape_to; }
 };
 
@@ -327,7 +316,7 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Squeeze)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+  DEFINE_PRECOMPUTE
 };
 
 class Unsqueeze : public ADPrimitive {
@@ -340,7 +329,8 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Unsqueeze)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+
+  DEFINE_PRECOMPUTE
 };
 
 class Permute : public ADPrimitive {
@@ -355,7 +345,8 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Permute)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+
+  DEFINE_PRECOMPUTE
 };
 
 class MatMul : public ADPrimitive {
@@ -364,7 +355,8 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(MatMul)
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_SHAPES
+
+  DEFINE_PRECOMPUTE
 };
 
 class Im2Col : public ADPrimitive {
@@ -382,8 +374,9 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Im2Col)
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
 };
 
 class Col2Im : public ADPrimitive {
@@ -402,8 +395,9 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Col2Im)
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
 };
 
 class Reshape : public ADPrimitive {
@@ -415,8 +409,9 @@ public:
   DEFINE_DISPATCH_CUDA
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(Reshape)
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
 };
 
 // SLICING
@@ -471,9 +466,10 @@ public:
   explicit Select(select_t items) : _items(items) {}
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_STR_NAME(Select)
   DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
 };
 
 // 1 inp is dst, 2nd is src, rest are indices
@@ -486,9 +482,10 @@ public:
   explicit AssignAt(select_t items) : _items(items) {}
   DEFINE_DISPATCH_CPU
   DEFINE_STR_NAME(AssignAt)
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_BACKWARD
   DEFINE_DISPATCH_CUDA
+  DEFINE_PRECOMPUTE
 };
 
 class AsContiguous : public ADPrimitive {
@@ -496,8 +493,9 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(AsContiguous)
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
 };
 
 class AsType : public ADPrimitive {
@@ -509,9 +507,10 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(AsType)
-  DEFINE_INFER_OUTPUT_SHAPES
+
   DEFINE_BACKWARD
-  DEFINE_INFER_OUTPUT_DTYPES
+
+  DEFINE_PRECOMPUTE
 };
 
 class Fill : public ADPrimitive {
@@ -526,9 +525,9 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Fill)
-  DEFINE_INFER_OUTPUT_SHAPES
-  DEFINE_INFER_OUTPUT_DTYPES
+
   DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
 
   double value() { return _value; }
 };
@@ -545,6 +544,7 @@ public:
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Binomial)
+  DEFINE_PRECOMPUTE
   std::vector<shape_t> infer_output_shapes(const std::vector<Tensor> &inputs) {
     return {_shape};
   }

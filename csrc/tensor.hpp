@@ -48,6 +48,7 @@ class Tensor;
 Tensor as_contiguous(const Tensor &t); // forward declaration
 
 namespace py = pybind11;
+
 class View {
 
 public:
@@ -96,6 +97,11 @@ public:
   void set_device(device::DeviceKind device) { _device = device; }
   void set_shape(const shape_t &shape) { _shape = shape; }
 
+  void set_ptr(const std::shared_ptr<void> &ptr, size_t nbytes) {
+    _ptr = ptr;
+    _nbytes = nbytes;
+    _initialized = true;
+  }
   device::DeviceKind device() const { return _device; }
 
   View(const std::shared_ptr<void> &ptr, const size_t nbytes,
@@ -163,6 +169,21 @@ public:
     _dtype = dtype;
   }
 
+  void allocate() {
+    size_t nbytes = compute_nbytes(_shape, _dtype);
+    _ptr = device::allocate(nbytes, _device);
+    _nbytes = nbytes;
+    _initialized = true;
+  }
+
+  void deallocate() {
+    if (_ptr) {
+      _ptr = nullptr;
+      _nbytes = 0;
+      _initialized = false;
+    }
+  }
+
   void init_view(const std::shared_ptr<View> &view) {
     _ptr = view->_ptr;
     _nbytes = view->_nbytes;
@@ -223,6 +244,13 @@ public:
     return *this;
   }
 
+  View(size_t nbytes, shape_t shape, strides_t strides, size_t offset,
+       DType dtype, device::DeviceKind device)
+      : _nbytes(nbytes), _shape(shape), _strides(strides), _offset(offset),
+        _dtype(dtype), _device(device) {
+    _initialized = false;
+  }
+
 private:
   std::shared_ptr<void> _ptr;
   size_t _nbytes; // number of bytes of the pointer. Does not necessarily match
@@ -235,6 +263,86 @@ private:
   device::DeviceKind _device;
 };
 
+// builder pattern for view options
+
+class ViewOptions {
+public:
+  ViewOptions &dtype(DType dtype) {
+    _dtype = dtype;
+    return *this;
+  }
+  ViewOptions &device(device::DeviceKind device) {
+    _device = device;
+    return *this;
+  }
+  ViewOptions &shape(const shape_t &shape) {
+    _shape = shape;
+    return *this;
+  }
+  ViewOptions &strides(const strides_t &strides) {
+    _strides = strides;
+    _strides_set = true;
+    return *this;
+  }
+
+  ViewOptions &with_natural_strides() {
+    _strides = _compute_natural_strides(_shape, _dtype);
+    _strides_set = true;
+    return *this;
+  }
+
+  ViewOptions &offset(size_t offset) {
+    _offset = offset;
+    return *this;
+  }
+  ViewOptions &nbytes(size_t nbytes) {
+    _nbytes = nbytes;
+    return *this;
+  }
+
+  ViewOptions &like(const View &view) {
+    _dtype = view.dtype();
+    _device = view.device();
+    _shape = view.shape();
+    _strides = view.strides();
+    _offset = view.offset();
+    _nbytes = view.nbytes();
+    _strides_set = true;
+    return *this;
+  }
+
+  ViewOptions &like(const Tensor &t);
+  ViewOptions &like_natural(const Tensor &t);
+
+  ViewOptions &like_natural(const View &view) {
+    _dtype = view.dtype();
+    _device = view.device();
+    _shape = view.shape();
+    _strides = _compute_natural_strides(view.shape(), view.dtype());
+    _offset = view.offset();
+    _nbytes = compute_nbytes(view.shape(), view.dtype());
+    _strides_set = true;
+    return *this;
+  }
+
+  View build() {
+    if (!_strides_set) {
+      _strides = _compute_natural_strides(_shape, _dtype);
+    }
+    return View(_nbytes, _shape, _strides, _offset, _dtype, _device);
+  }
+
+  ViewOptions() = default;
+
+private:
+  DType _dtype = DType::Float32;
+  device::DeviceKind _device = device::DeviceKind::CPU;
+  shape_t _shape;
+  strides_t _strides;
+  size_t _offset = 0;
+  size_t _nbytes = 0;
+  bool _strides_set = false;
+};
 class ADNode {
 public:
   explicit ADNode(std::shared_ptr<ADPrimitive> primitive,
@@ -418,10 +526,9 @@ public:
     return *this;
   }
 
-  View view() const {
-    _throw_if_not_initialized("view() called on uninitialized tensor.");
-    return *_view;
-  }
+  View view() const { return *_view; }
+
+  std::shared_ptr<View> view_ptr() const { return _view; }
 
   void init_view(std::shared_ptr<View> view) { _view->init_view(view); }
 
@@ -430,20 +537,11 @@ public:
     return _view->shape();
   }
 
-  strides_t strides() const {
-    _throw_if_not_initialized("strides() called on uninitialized tensor.");
-    return view().strides();
-  }
+  strides_t strides() const { return view().strides(); }
 
-  size_t offset() const {
-    _throw_if_not_initialized("offset() called on uninitialized tensor.");
-    return view().offset();
-  }
+  size_t offset() const { return view().offset(); }
 
-  size_t nbytes() const {
-    _throw_if_not_initialized("nbytes() called on uninitialized tensor.");
-    return view().nbytes();
-  }
+  size_t nbytes() const { return view().nbytes(); }
 
   DType dtype() const;
 
@@ -489,7 +587,7 @@ public:
     DType dtype = dtype_from_pytype<T>();
     Tensor a = Tensor::from_primitive(
         std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr,
-                                    size),
+                                    size, device),
         {}, device);
     return a;
   }

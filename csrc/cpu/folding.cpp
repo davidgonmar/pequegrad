@@ -39,8 +39,7 @@ void Im2Col::dispatch_cpu(const std::vector<Tensor> &inputs,
 
   shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
 
-  outputs[0].init_view(
-      std::make_shared<View>(out_shape, a.dtype(), device::CPU));
+  outputs[0].view_ptr()->allocate();
 
   PG_DISPATCH_FLOATING_TYPES(a.dtype(), "dispatch_im2col_kernel", [&] {
     cpu::im2col_cpu<scalar_t>(a.get_casted_base_ptr<scalar_t>(),
@@ -83,8 +82,7 @@ void Col2Im::dispatch_cpu(const std::vector<Tensor> &inputs,
 
   shape_t out_shape = {batch_size, out_channels, out_h, out_w};
 
-  outputs[0].init_view(
-      std::make_shared<View>(out_shape, a.dtype(), device::CPU));
+  outputs[0].view_ptr()->allocate();
   memset(outputs[0].get_base_ptr(), 0,
          outputs[0].numel() *
              dtype_to_size(a.dtype())); // since we'll accumulate

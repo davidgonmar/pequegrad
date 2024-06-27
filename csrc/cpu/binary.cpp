@@ -15,8 +15,7 @@
     const Tensor &a = inputs[0];                                               \
     const Tensor &b = inputs[1];                                               \
     CHECK_SAME_SHAPE(a, b);                                                    \
-    outputs[0].init_view(                                                      \
-        std::make_shared<View>(a.shape(), a.dtype(), device::CPU));            \
+    outputs[0].view_ptr()->allocate();                                         \
     PG_DISPATCH_ALL_TYPES(a.dtype(), "dispatch_binary_op", [&] {               \
       cpu::_dispatch_binary_op_helper<scalar_t>(                               \
           a.shape(), a.strides(), b.strides(), outputs[0].strides(),           \

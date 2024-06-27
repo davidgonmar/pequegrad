@@ -88,7 +88,8 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
                                    std::multiplies<int>());
 
   auto d_shape = cuda_unique_ptr_from_host(inp.ndim(), inp.shape().data());
-  outp.init_view(std::make_shared<View>(new_shape, inp.dtype(), device::CUDA));
+  outp.view_ptr()->allocate();
+
   auto out_d_shape =
       cuda_unique_ptr_from_host(outp.ndim(), outp.shape().data());
   auto src_strides =

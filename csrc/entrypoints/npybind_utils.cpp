@@ -48,14 +48,9 @@ std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
                py::isinstance<py::array_t<int>>(slice)) {
       // To numpy array -> to tensor
       // check if the list contains only integers
-      try {
-        py::array_t<int> arr = slice.cast<py::array_t<int>>();
-        Tensor t = Tensor::from_numpy(arr, inp_device);
-        items.push_back(t);
-      } catch (...) {
-        throw std::runtime_error("Tried to parse array as slice, but it "
-                                 "contains non-integer values");
-      }
+      py::array_t<int> arr = slice.cast<py::array_t<int>>();
+      Tensor t = Tensor::from_numpy(arr, inp_device);
+      items.push_back(t);
 
     } else {
       throw std::runtime_error("[parse_pybind_slices] Invalid slice");

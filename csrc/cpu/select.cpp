@@ -26,17 +26,10 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
     }
   }
 
-  if (items.size() < inp.ndim()) {
-    for (int i = items.size(); i < inp.ndim(); i++) {
-      new_shape.push_back(inp.shape()[i]);
-      items.push_back(SelectKeepDim());
-    }
-  }
-
   int total_size = std::accumulate(new_shape.begin(), new_shape.end(), 1,
                                    std::multiplies<int>());
 
-  outp.init_view(std::make_shared<View>(new_shape, inp.dtype(), device::CPU));
+  outp.view_ptr()->allocate();
 
   std::vector<int *> tensor_indices;
   for (int i = 0; i < idxs.size(); i++) {

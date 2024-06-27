@@ -80,10 +80,9 @@ def test_model(model, ds):
     total = 0
     loader = DataLoader(ds, batch_size=4096)
     step = model.forward
-    step = jit(step, externals=model.parameters())
     start = None
     i = 0
-    for i in range(10):
+    for i in range(1):
         for x, y in loader:
             with no_grad():
                 if i == 1:  # start time after first batch

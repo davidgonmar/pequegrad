@@ -294,14 +294,14 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
     ctx.tensor_id_to_ir_idx[input.id] = i;
     // fill the context for doing a load expression
     ContextForDoingALoadExpr arg_ctx;
-    arg_ctx.is_contiguous = false;
-    auto cont = false;
+    arg_ctx.is_contiguous = input.is_contiguous();
+    auto cont = arg_ctx.is_contiguous;
     if (!cont) {
       // placeholder strides, we will fill them later
       strides_t strides = strides_t();
-      // fill with 1..n
-      for (int k = 1; k <= input.ndim(); k++) {
-        strides.push_back(k);
+
+      for (int k = 0; k < input.ndim(); k++) {
+        strides.push_back(input.strides()[k] / dtype_to_size(input.dtype()));
       }
       // first case, non contiguous
       // then we must create a local idx based from the global idx for each dim
@@ -618,25 +618,6 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   auto out = outputs[0];
 
   if (this->cached_fn == nullptr) {
-    // now update the strides of the exprs of the IR based on the strides of the
-    // input
-    auto ir = this->ir;
-    auto ctx = this->tensor_idx_to_strides;
-
-    // for each input, update the strides
-    for (int i = 0; i < inputs.size(); i++) {
-      auto input = inputs[i];
-      auto stride_exprs = ctx[i];
-      for (int j = 0; j < stride_exprs.size(); j++) {
-        // inverted order
-        auto real_stride = input.strides()[stride_exprs.size() - 1 - j] /
-                           dtype_to_size(input.dtype());
-        // assert that it is an immediate
-        auto imm = std::dynamic_pointer_cast<ImmExpr>(stride_exprs[j]);
-        PG_CHECK_RUNTIME(imm, "Expected immediate expression");
-        imm->value = real_stride;
-      }
-    }
 
     // first
     std::string ker = ir_to_cuda(this->ir);
@@ -689,8 +670,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     this->cached_fn = function_ptr;
   }
 
-  outputs[0].init_view(std::make_shared<View>(
-      outputs[0].shape(), outputs[0].dtype(), device::CUDA));
+  outputs[0].view_ptr()->allocate();
   // Prepare kernel arguments
   // Prepare grid and block dimensions
   dim3 threads_per_block(128, 1, 1);

@@ -4,13 +4,7 @@
 #include "utils.hpp"
 #include <vector>
 
-// for backward and output_shapes, default is throwing an exception
-
 namespace pg {
-std::vector<shape_t>
-ADPrimitive::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  throw std::runtime_error("output_shapes not implemented for " + str());
-}
 std::vector<Tensor> ADPrimitive::backward(const std::vector<Tensor> &primals,
                                           const std::vector<Tensor> &tangents,
                                           const std::vector<Tensor> &outputs) {
@@ -33,94 +27,85 @@ std::vector<Tensor> Add::backward(const std::vector<Tensor> &primals,
   return {tangents[0], tangents[0]};
 }
 
-std::vector<DType>
-FromNumpy::infer_output_dtypes(const std::vector<Tensor> &inputs) {
-  return {_dtype};
+std::vector<View> FromNumpy::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions()
+              .dtype(_dtype)
+              .shape(_shape)
+              .offset(0)
+              .strides(_strides)
+              .device(_device)
+              .build()};
 }
 
-std::vector<shape_t>
-FromNumpy::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {_shape};
-}
+void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs,
+                                  device::DeviceKind device) {
+  auto _ptr = device::allocate(_buffer_size * dtype_to_size(_dtype), device);
+  if (device == device::DeviceKind::CUDA) {
+    copy_from_cpu_to_cuda(_data_ptr, _ptr,
+                          _buffer_size * dtype_to_size(_dtype));
 
-void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs) {
-  auto _ptr = device::allocate(_buffer_size * dtype_to_size(_dtype),
-                               device::DeviceKind::CPU);
-  std::memcpy(_ptr.get(), _data_ptr, _buffer_size * dtype_to_size(_dtype));
-  Tensor arr(_buffer_size * dtype_to_size(_dtype), _shape, _strides, _ptr,
-             _dtype, device::DeviceKind::CPU);
-  outputs[0].init_view(std::make_shared<View>(arr.view()));
+  } else {
+    std::memcpy(_ptr.get(), _data_ptr, _buffer_size * dtype_to_size(_dtype));
+  }
+  outputs[0].view_ptr()->set_ptr(_ptr, _buffer_size * dtype_to_size(_dtype));
 }
 
 void FromNumpy::dispatch_cpu(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
-  _dispatch_general(outputs);
+  _dispatch_general(outputs, device::DeviceKind::CPU);
 }
 
 void FromNumpy::dispatch_cuda(const std::vector<Tensor> &inputs,
                               std::vector<Tensor> &outputs) {
-  _dispatch_general(outputs);
-  outputs[0].to_(device::DeviceKind::CUDA);
+  _dispatch_general(outputs, device::DeviceKind::CUDA);
 }
 
-std::vector<shape_t>
-Add::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Add::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Mul::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Mul::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Sub::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Sub::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Div::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Div::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Pow::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Pow::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Max::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Max::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Gt::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Gt::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Lt::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Lt::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Eq::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Eq::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Neq::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Neq::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Ge::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Ge::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Le::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Le::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
 shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
@@ -145,29 +130,39 @@ shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
   return new_shape;
 }
 
-std::vector<shape_t>
-Sum::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {reduce_shape(inputs[0].shape(), _axes, _keepdims)};
+std::vector<View> Sum::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions()
+              .dtype(inputs[0].dtype())
+              .device(inputs[0].device())
+              .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
+              .with_natural_strides()
+              .build()};
 }
 
-std::vector<shape_t>
-MaxReduce::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {reduce_shape(inputs[0].shape(), _axes, _keepdims)};
+std::vector<View> MaxReduce::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions()
+              .dtype(inputs[0].dtype())
+              .device(inputs[0].device())
+              .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
+              .with_natural_strides()
+              .build()};
 }
 
-std::vector<shape_t>
-Mean::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {reduce_shape(inputs[0].shape(), _axes, _keepdims)};
+std::vector<View> Mean::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions()
+              .dtype(inputs[0].dtype())
+              .device(inputs[0].device())
+              .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
+              .with_natural_strides()
+              .build()};
 }
 
-std::vector<shape_t>
-Log::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Log::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-std::vector<shape_t>
-Exp::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Exp::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
 std::vector<Tensor> Exp::backward(const std::vector<Tensor> &primals,
@@ -176,79 +171,27 @@ std::vector<Tensor> Exp::backward(const std::vector<Tensor> &primals,
   return {mul(tangents[0], exp(primals[0]))};
 }
 
-std::vector<shape_t>
-BroadcastTo::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  // We need here to populate the _created_axis and _broadcasted_axis
-  auto [broadcasted_axes, created_axes] =
-      view::get_broadcasting_info(inputs[0].shape(), _shape_to);
-  this->_broadcasted_axes = broadcasted_axes;
+std::vector<View> BroadcastTo::precompute(const std::vector<Tensor> &inputs) {
+  auto [view, broadcasted_axis, created_axes] =
+      view::broadcasted_to(inputs[0].view(), _shape_to);
+  this->_broadcasted_axes = broadcasted_axis;
   this->_created_axes = created_axes;
-  return {_shape_to};
+  return {ViewOptions().like(view).build()};
 }
 
-std::vector<shape_t>
-Where::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  PG_CHECK_ARG(inputs.size() == 3, "Where expects 3 inputs, got ",
-               inputs.size());
-  return {inputs[0].shape()};
+std::vector<View> Squeeze::precompute(const std::vector<Tensor> &inputs) {
+  View view = view::squeeze(inputs[0].view(), _axes);
+  return {ViewOptions().like(view).build()};
 }
 
-std::vector<DType>
-Where::infer_output_dtypes(const std::vector<Tensor> &inputs) {
-  PG_CHECK_ARG(inputs.size() == 3, "Where expects 3 inputs, got ",
-               inputs.size());
-  PG_CHECK_ARG(inputs[1].dtype() == inputs[2].dtype() &&
-                   inputs[0].dtype() == inputs[1].dtype(),
-               "Where expects inputs to have the same dtype, got ",
-               dtype_to_string(inputs[0].dtype()), ", ",
-               dtype_to_string(inputs[1].dtype()), " and ",
-               dtype_to_string(inputs[2].dtype()));
-  return {inputs[1].dtype()};
+std::vector<View> Unsqueeze::precompute(const std::vector<Tensor> &inputs) {
+  View view = view::unsqueeze(inputs[0].view(), _axes);
+  return {ViewOptions().like(view).build()};
 }
 
-std::vector<shape_t>
-Squeeze::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  shape_t new_shape = inputs[0].shape();
-  for (auto &axis : std::vector<axis_t>(_axes.rbegin(), _axes.rend())) {
-    if (axis < 0) {
-      axis += new_shape.size();
-    }
-    PG_CHECK_ARG(new_shape[axis] == 1, "cannot squeeze axis ", axis,
-                 " as it is not 1, got ", new_shape[axis]);
-    new_shape.erase(new_shape.begin() + axis);
-  }
-  return {new_shape};
-}
-
-std::vector<shape_t>
-Unsqueeze::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  shape_t new_shape = inputs[0].shape();
-  for (auto &axis : axes_t(_axes)) {
-    if (axis < 0) {
-      axis += new_shape.size() + 1;
-    }
-    new_shape.insert(new_shape.begin() + axis, 1);
-  }
-
-  return {new_shape};
-}
-
-std::vector<shape_t>
-Permute::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  shape_t new_shape = inputs[0].shape();
-  // Permute basically reorders the axes
-  // First normalize them (if negative)
-  shape_t new_shape_permuted(new_shape.size());
-  for (size_t i = 0; i < _axes.size(); i++) {
-    if (_axes[i] < 0) {
-      _axes[i] += new_shape.size();
-    }
-    PG_CHECK_ARG(_axes[i] < new_shape.size(),
-                 "Permute axis out of bounds: got axes ", vec_to_string(_axes),
-                 " and shape ", vec_to_string(new_shape));
-    new_shape_permuted[i] = new_shape[_axes[i]];
-  }
-  return {new_shape_permuted};
+std::vector<View> Permute::precompute(const std::vector<Tensor> &inputs) {
+  View view = view::permute(inputs[0].view(), _axes);
+  return {ViewOptions().like(view).build()};
 }
 
 std::vector<Tensor> Mul::backward(const std::vector<Tensor> &primals,
@@ -498,8 +441,8 @@ static std::vector<Tensor> prepare_shapes_for_matmul(const Tensor &_a,
       "Invalid shapes for matmul: " + vec_to_string(shape_a) + " and " +
       vec_to_string(shape_b));
 }
-std::vector<shape_t>
-MatMul::infer_output_shapes(const std::vector<Tensor> &inputs) {
+
+std::vector<View> MatMul::precompute(const std::vector<Tensor> &inputs) {
   std::vector<Tensor> prepared =
       prepare_shapes_for_matmul(inputs[0], inputs[1]);
   Tensor a = prepared[0];
@@ -531,7 +474,13 @@ MatMul::infer_output_shapes(const std::vector<Tensor> &inputs) {
                vec_to_string(shape_a), " and ", vec_to_string(shape_b));
   new_shape.push_back(M);
   new_shape.push_back(N);
-  return {new_shape};
+
+  return {ViewOptions()
+              .dtype(inputs[0].dtype())
+              .device(inputs[0].device())
+              .shape(new_shape)
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<Tensor> MatMul::backward(const std::vector<Tensor> &primals,
@@ -553,42 +502,49 @@ std::vector<Tensor> Unsqueeze::backward(const std::vector<Tensor> &primals,
   return {squeeze(tangents[0], _axes)};
 }
 
-std::vector<shape_t>
-Im2Col::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<Tensor> Im2Col::backward(const std::vector<Tensor> &primals,
+                                     const std::vector<Tensor> &tangents,
+                                     const std::vector<Tensor> &outputs) {
+  // For output shape, we need primals[0].shape()[-2:]
+  shape_t out_shape = {primals[0].shape()[2], primals[0].shape()[3]};
+
+  return {col2im(tangents[0], out_shape, _kernel_shape, _strides, _padding,
+                 _dilation)};
+}
+
+std::vector<View> Im2Col::precompute(const std::vector<Tensor> &inputs) {
   PG_CHECK_ARG(inputs.size() == 1, "Im2Col expects 1 input, got ",
                inputs.size());
   PG_CHECK_ARG(_kernel_shape.size() == 2, "kernel shape size must be 2, got ",
                _kernel_shape.size());
   const Tensor &a = inputs[0];
-  PG_CHECK_ARG(a.ndim() == 4, "Im2Col expects input to have 4 dimensions, got ",
-               a.ndim());
-
   size_t k_h = _kernel_shape[0];
   size_t k_w = _kernel_shape[1];
   size_t stride_y = _strides[0];
   size_t stride_x = _strides[1];
   size_t dilation_y = _dilation[0];
   size_t dilation_x = _dilation[1];
-
   size_t batch_size = a.shape()[0];
   size_t in_channels = a.shape()[1];
+  size_t in_h = a.shape()[2];
+  size_t in_w = a.shape()[3];
 
-  size_t x_h = a.shape()[2];
-  size_t x_w = a.shape()[3];
-
-  size_t out_h = (x_h - dilation_y * (k_h - 1) - 1) / stride_y + 1;
-  size_t out_w = (x_w - dilation_x * (k_w - 1) - 1) / stride_x + 1;
+  size_t out_h = (in_h - dilation_y * (k_h - 1) - 1) / stride_y + 1;
+  size_t out_w = (in_w - dilation_x * (k_w - 1) - 1) / stride_x + 1;
 
   PG_CHECK_RUNTIME(out_h > 0 && out_w > 0,
                    "output height and width should be > 0, got out_h=", out_h,
                    " and out_w=", out_w);
 
   shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
-  return {out_shape};
+  return {ViewOptions()
+              .dtype(a.dtype())
+              .shape(out_shape)
+              .with_natural_strides()
+              .build()};
 }
 
-std::vector<shape_t>
-Col2Im::infer_output_shapes(const std::vector<Tensor> &inputs) {
+std::vector<View> Col2Im::precompute(const std::vector<Tensor> &inputs) {
   PG_CHECK_ARG(inputs.size() == 1, "Col2Im expects 1 input, got ",
                inputs.size());
   PG_CHECK_ARG(_kernel_shape.size() == 2, "kernel shape size must be 2, got ",
@@ -613,17 +569,11 @@ Col2Im::infer_output_shapes(const std::vector<Tensor> &inputs) {
                    " and out_w=", out_w);
 
   shape_t out_shape = {batch_size, out_channels, out_h, out_w};
-  return {out_shape};
-}
-
-std::vector<Tensor> Im2Col::backward(const std::vector<Tensor> &primals,
-                                     const std::vector<Tensor> &tangents,
-                                     const std::vector<Tensor> &outputs) {
-  // For output shape, we need primals[0].shape()[-2:]
-  shape_t out_shape = {primals[0].shape()[2], primals[0].shape()[3]};
-
-  return {col2im(tangents[0], out_shape, _kernel_shape, _strides, _padding,
-                 _dilation)};
+  return {ViewOptions()
+              .dtype(a.dtype())
+              .shape(out_shape)
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<Tensor> Col2Im::backward(const std::vector<Tensor> &primals,
@@ -632,83 +582,122 @@ std::vector<Tensor> Col2Im::backward(const std::vector<Tensor> &primals,
   return {im2col(tangents[0], _kernel_shape, _strides, _padding, _dilation)};
 }
 
-std::vector<shape_t>
-Reshape::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  // we need to get -1 elements to 'infer' the shape
-  shape_t new_shape = shape_t(_shape_to.size());
-  size_t neg_idx = 0;
-  size_t total = 1;
-  for (size_t i = 0; i < _shape_to.size(); i++) {
-    if (_shape_to[i] == -1) {
-      neg_idx = i;
-    } else {
-      total *= _shape_to[i];
-    }
-  }
-  PG_CHECK_ARG(total > 0, "Reshape: total elements must be > 0");
-  size_t neg_val = inputs[0].numel() / total;
-  new_shape[neg_idx] = neg_val;
-  for (size_t i = 0; i < _shape_to.size(); i++) {
-    if (_shape_to[i] == -1) {
-      continue;
-    }
-    new_shape[i] = _shape_to[i];
-  }
-  return {new_shape};
-}
-
 std::vector<Tensor> Reshape::backward(const std::vector<Tensor> &primals,
                                       const std::vector<Tensor> &tangents,
                                       const std::vector<Tensor> &outputs) {
   return {reshape(tangents[0], primals[0].shape())};
 }
 
-std::vector<shape_t>
-Select::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  // 1st input -> src tensor
-  // 2nd..nth input -> indices
-  select_t items = _items;
-  shape_t orig_shape = inputs[0].shape();
-  shape_t new_shape;
+std::vector<View> Reshape::precompute(const std::vector<Tensor> &inputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  shape_t shape = inputs[0].shape();
+  Tensor a = inputs[0];
+  axes_t _new_shape = _shape_to;
+  shape_t new_shape(_new_shape.size());
+  size_t total_new = 1;
 
-  size_t n_tensor_indices = 0;
-  for (size_t i = 0; i < items.size(); i++) {
-    if (std::holds_alternative<SelectWithSlice>(items[i])) {
-      SelectWithSlice sss = std::get<SelectWithSlice>(items[i]);
-      int start = sss.start;
-      int stop = sss.stop;
-      int step = sss.step;
-      if (start < 0) {
-        start += orig_shape[i];
-      }
-      if (stop < 0) {
-        stop += orig_shape[i];
-      }
-      if (step < 0) {
-        step += orig_shape[i];
-      }
-      new_shape.push_back((stop - start + step - 1) / step);
-    } else if (std::holds_alternative<SelectWithTensor>(items[i])) {
-      SelectWithTensor swt = std::get<SelectWithTensor>(items[i]);
-      Tensor t = inputs[n_tensor_indices + 1];
-      PG_CHECK_ARG(t.ndim() == 1,
-                   "Select: tensor indices must be 1D, got shape ",
-                   vec_to_string(t.shape()));
-      new_shape.push_back(t.numel());
-      n_tensor_indices++;
-    } else if (std::holds_alternative<SelectWithSingleIdx>(items[i])) {
-      // Deletes the dimension
-    } else if (std::holds_alternative<SelectKeepDim>(items[i])) {
-      new_shape.push_back(orig_shape[i]);
+  int neg_pos = -1;
+  for (size_t i = 0; i < _new_shape.size(); i++) {
+    if (_new_shape[i] < 0) {
+      PG_CHECK_ARG(
+          neg_pos == -1,
+          "Can only specify one unknown dimension (-1) for reshape, got ",
+          neg_pos, " and ", i, " for shape ", vec_to_string(_new_shape));
+      neg_pos = i;
     }
+    new_shape[i] = _new_shape[i];
+    total_new *= new_shape[i] == -1 ? 1 : new_shape[i];
   }
 
-  return {new_shape};
+  size_t total_old =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  if (neg_pos != -1) {
+    new_shape[neg_pos] = total_old / total_new;
+    PG_CHECK_ARG(
+        total_old % total_new == 0,
+        "New shape is not compatible with old shape: ", vec_to_string(shape),
+        " not compatible with ", vec_to_string(_new_shape));
+  }
+  total_new = total_old;
+
+  if (a.is_contiguous()) {
+    return {ViewOptions()
+                .like(view::nocopy_reshape_nocheck(a.view(), new_shape))
+                .build()};
+  } else {
+    return {ViewOptions()
+                .dtype(a.dtype())
+                .shape(new_shape)
+                .with_natural_strides()
+                .build()};
+  }
 }
 
-std::vector<shape_t>
-AsContiguous::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
+std::vector<View> Select::precompute(const std::vector<Tensor> &inputs) {
+  shape_t new_shape;
+  strides_t new_strides;
+  int _offset = 0;
+  bool slice_with_array = false;
+  int visited_tensors = 0;
+  Tensor inp = inputs[0];
+  PG_CHECK_ARG(inp.ndim() == _items.size(),
+               "Number of slices must match number of dimensions");
+  for (int i = 0; i < _items.size(); i++) {
+    select_item_t item = _items[i];
+    if (std::holds_alternative<SelectWithSlice>(item)) {
+      // at the moment, only positive slices are supported
+      auto _item = std::get<SelectWithSlice>(item);
+      int start = _item.start;
+      int stop = _item.stop;
+      int step = _item.step;
+      PG_CHECK_ARG(start < inp.shape()[i] && stop <= inp.shape()[i],
+                   "Slice out of bounds, start: " + std::to_string(start) +
+                       ", end: " + std::to_string(stop) +
+                       ", shape: " + std::to_string(inp.shape()[i]));
+      _offset += start * inp.strides()[i];
+      new_shape.push_back((stop - start + step - 1) / step);
+      new_strides.push_back(inp.strides()[i] * step);
+    } else if (std::holds_alternative<SelectWithSingleIdx>(item)) {
+      int _item = std::get<SelectWithSingleIdx>(item).index;
+      PG_CHECK_ARG(_item >= 0, "Only positive slices are supported, got: " +
+                                   std::to_string(_item));
+      PG_CHECK_ARG(_item < inp.shape()[i], "Slice out of bounds, index: ",
+                   std::to_string(_item) +
+                       ", shape: " + std::to_string(inp.shape()[i]));
+      _offset += _item * inp.strides()[i];
+      // but here, since we are doing something like [:, 1], we dont add
+      // anything to the shape we also dont add anything to the strides
+    } else if (std::holds_alternative<SelectWithTensor>(item)) {
+      // this is something like [:, [1, 2, 3]], where we are indexing over the i
+      // dimension with an array we cant work with memory views here, so we just
+      // run through a kernel to copy the values into a new array
+      slice_with_array = true;
+      new_shape.push_back(inputs[visited_tensors + 1].numel());
+    } else if (std::holds_alternative<SelectKeepDim>(item)) {
+      new_shape.push_back(inp.shape()[i]);
+      new_strides.push_back(inp.strides()[i]);
+    }
+    visited_tensors++;
+  }
+  if (slice_with_array) {
+    return {ViewOptions()
+                .dtype(inp.dtype())
+                .shape(new_shape)
+                .with_natural_strides()
+                .build()};
+  }
+
+  return {ViewOptions()
+              .dtype(inp.dtype())
+              .shape(new_shape)
+              .strides(new_strides)
+              .offset(_offset)
+              .device(inp.device())
+              .build()};
+}
+
+std::vector<View> AsContiguous::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like(inputs[0]).build()};
 }
 
 std::vector<Tensor> AsContiguous::backward(const std::vector<Tensor> &primals,
@@ -733,10 +722,8 @@ std::vector<Tensor> Select::backward(const std::vector<Tensor> &primals,
   return gs;
 }
 
-std::vector<shape_t>
-AssignAt::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  // Just return Dst shape
-  return {inputs[0].shape()};
+std::vector<View> AssignAt::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like(inputs[0]).build()};
 }
 
 std::vector<Tensor> AssignAt::backward(const std::vector<Tensor> &primals,
@@ -752,36 +739,38 @@ std::vector<Tensor> AssignAt::backward(const std::vector<Tensor> &primals,
   return {assign_at(tangents[0], zeros_like_src, st), selected_tan_src};
 }
 
-std::vector<shape_t>
-AsType::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {inputs[0].shape()};
-}
-
 std::vector<Tensor> AsType::backward(const std::vector<Tensor> &primals,
                                      const std::vector<Tensor> &tangents,
                                      const std::vector<Tensor> &outputs) {
   return {astype(tangents[0], primals[0].dtype())};
 }
 
-std::vector<DType>
-AsType::infer_output_dtypes(const std::vector<Tensor> &inputs) {
-  return {_dtype_to};
+std::vector<View> AsType::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).dtype(_dtype_to).build()};
 }
 
-std::vector<shape_t>
-Fill::infer_output_shapes(const std::vector<Tensor> &inputs) {
-  return {_shape};
-}
-
-std::vector<DType>
-Fill::infer_output_dtypes(const std::vector<Tensor> &inputs) {
-  return {_dtype};
+std::vector<View> Where::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions()
+              .dtype(inputs[1].dtype())
+              .shape(inputs[1].shape())
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<Tensor> Fill::backward(const std::vector<Tensor> &primals,
                                    const std::vector<Tensor> &tangents,
                                    const std::vector<Tensor> &outputs) {
   return {};
+}
+
+std::vector<View> Fill::precompute(const std::vector<Tensor> &inputs) {
+  return {
+      ViewOptions().dtype(_dtype).shape(_shape).with_natural_strides().build()};
+}
+
+std::vector<View> Binomial::precompute(const std::vector<Tensor> &inputs) {
+  return {
+      ViewOptions().dtype(_dtype).shape(_shape).with_natural_strides().build()};
 }
 
 } // namespace pg

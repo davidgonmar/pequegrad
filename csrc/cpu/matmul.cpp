@@ -41,12 +41,11 @@ void MatMul::dispatch_cpu(const std::vector<Tensor> &inputs,
                vec_to_string(a.shape()), " and ", vec_to_string(b.shape()));
   new_shape.push_back(M);
   new_shape.push_back(N);
-  View out_view(new_shape, a.dtype(), device::CPU);
+  outputs[0].view_ptr()->allocate();
   PG_DISPATCH_FLOATING_TYPES(a.dtype(), "dispatch_matmul_kernel", [&] {
-    matmul_ker<scalar_t>(a.get_casted_base_ptr<scalar_t>(),
-                         b.get_casted_base_ptr<scalar_t>(),
-                         out_view.get_casted_base_ptr<scalar_t>(), M, N, K, B);
+    matmul_ker<scalar_t>(
+        a.get_casted_base_ptr<scalar_t>(), b.get_casted_base_ptr<scalar_t>(),
+        outputs[0].get_casted_base_ptr<scalar_t>(), M, N, K, B);
   });
-  outputs[0].init_view(std::make_shared<View>(out_view));
 }
 } // namespace pg
