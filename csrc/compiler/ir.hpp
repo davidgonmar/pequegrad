@@ -106,7 +106,15 @@ public:
   std::shared_ptr<BaseExpr> lhs;
   std::shared_ptr<BaseExpr> rhs;
   DType dtype;
-  std::string expr_str() override { return "BinaryExpr"; }
+  std::string expr_str() override {
+    std::map<BinaryOpKind, std::string> op_to_str = {
+        {BinaryOpKind::Add, "Add"}, {BinaryOpKind::Mul, "Mul"},
+        {BinaryOpKind::Max, "Max"}, {BinaryOpKind::Sub, "Sub"},
+        {BinaryOpKind::Div, "Div"}, {BinaryOpKind::Gt, "Gt"},
+        {BinaryOpKind::Lt, "Lt"},   {BinaryOpKind::Mod, "Mod"},
+        {BinaryOpKind::Eq, "Eq"},   {BinaryOpKind::Pow, "Pow"}};
+    return "BinaryExpr<" + op_to_str.at(op) + ">";
+  }
 };
 
 enum class TernaryOpKind { Where };
@@ -320,7 +328,8 @@ public:
   std::map<int, std::vector<std::shared_ptr<BaseExpr>>> tensor_idx_to_strides;
 };
 using ir_t = std::vector<std::shared_ptr<BaseExpr>>;
-std::pair<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext>
+std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
+           std::vector<bool>>
 graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs);
 
 std::string ir_to_string(ir_t &ir);

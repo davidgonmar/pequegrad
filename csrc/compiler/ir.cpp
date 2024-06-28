@@ -228,7 +228,131 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
       "Bad schedule. Not an input and not a supported op: out: " + out.str());
 }
 
-std::pair<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext>
+void optim_ir_implace(ir_t &ir) {
+  // if it is a pow with int, replace
+  for (int i = 0; i < ir.size(); i++) {
+    auto expr = ir[i];
+    ir_t new_interm_ir = ir_t();
+    if (is<BinaryExpr>(expr)) {
+      auto binop = as<BinaryExpr>(expr);
+      if (binop->op == BinaryOpKind::Pow) {
+        if (is<ImmExpr>(binop->rhs)) {
+          auto imm = as<ImmExpr>(binop->rhs);
+          // if is int less than 10
+          double val = imm->value;
+          bool is_int = val == (int)val;
+
+          if (is_int && val < 10) {
+            // replace with a series of multiplications
+            auto lhs = binop->lhs;
+            auto res = lhs;
+            for (int j = 1; j < val; j++) {
+              auto new_binop = std::make_shared<BinaryExpr>();
+              new_binop->op = BinaryOpKind::Mul;
+              new_binop->lhs = res;
+              new_binop->rhs = lhs;
+              new_interm_ir.push_back(new_binop);
+              res = new_binop;
+            }
+
+            // delete the old pow, add new_interm_ir
+            ir.erase(ir.begin() + i);
+            ir.insert(ir.begin() + i, new_interm_ir.begin(),
+                      new_interm_ir.end());
+
+            // find all references to the old pow and replace with the new res
+            auto toreplace = expr;
+            for (int j = 0; j < ir.size(); j++) {
+              auto expr = ir[j];
+              if (is<BinaryExpr>(expr)) {
+                auto binop = as<BinaryExpr>(expr);
+                if (binop->lhs == toreplace) {
+                  binop->lhs = res;
+                }
+                if (binop->rhs == toreplace) {
+                  binop->rhs = res;
+                }
+              }
+              if (is<UnaryExpr>(expr)) {
+                auto unop = as<UnaryExpr>(expr);
+                if (unop->child == toreplace) {
+                  unop->child = res;
+                }
+              }
+              if (is<TernaryExpr>(expr)) {
+                auto ternop = as<TernaryExpr>(expr);
+                if (ternop->first == toreplace) {
+                  ternop->first = res;
+                }
+                if (ternop->second == toreplace) {
+                  ternop->second = res;
+                }
+                if (ternop->third == toreplace) {
+                  ternop->third = res;
+                }
+              }
+              if (is<LoadExpr>(expr)) {
+                auto load = as<LoadExpr>(expr);
+                if (load->idx == toreplace) {
+                  load->idx = res;
+                }
+                if (load->child == toreplace) {
+                  load->child = res;
+                }
+              }
+              if (is<StoreExpr>(expr)) {
+                auto store = as<StoreExpr>(expr);
+                if (store->idx == toreplace) {
+                  store->idx = res;
+                }
+                if (store->value == toreplace) {
+                  store->value = res;
+                }
+              }
+
+              if (is<IfStartExpr>(expr)) {
+                auto if_start = as<IfStartExpr>(expr);
+                if (if_start->cond == toreplace) {
+                  if_start->cond = res;
+                }
+              }
+
+              if (is<ReturnExpr>(expr)) {
+                auto ret = as<ReturnExpr>(expr);
+                if (ret->value == toreplace) {
+                  ret->value = res;
+                }
+              }
+
+              if (is<ForStartExpr>(expr)) {
+                auto for_start = as<ForStartExpr>(expr);
+                if (for_start->start == toreplace) {
+                  for_start->start = res;
+                }
+                if (for_start->end == toreplace) {
+                  for_start->end = res;
+                }
+                if (for_start->step == toreplace) {
+                  for_start->step = res;
+                }
+              }
+
+              if (is<IfEndExpr>(expr)) {
+                auto if_end = as<IfEndExpr>(expr);
+                if (if_end->if_start == toreplace) {
+                  if_end->if_start = res;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
+           std::vector<bool>>
 graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   // the result will be a linear IR
   std::vector<std::shared_ptr<BaseExpr>> ir;
@@ -286,7 +410,18 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   // fill the ctx and ir with the input tensors
   int i = 0;
   int impidx = 0;
+  int absi = 0;
+  std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
+    if (is<Fill>(input.ad_node().primitive())) {
+      absi++;
+      // will be replaced by a constant
+      continue;
+    }
+
+    used_inputs[absi] = true;
+    absi++;
+
     auto arg = std::make_shared<ArgExpr>();
     arg->dtype = input.dtype();
     ir.push_back(arg);
@@ -401,7 +536,8 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   store->value = ir.back();
   store->idx = ir[gidx_idx];
   ir.push_back(store);
-  return {ir, ctx};
+  // optim_ir_implace(ir);
+  return {ir, ctx, used_inputs};
 }
 
 static std::string binop_kind_to_str(BinaryOpKind op, std::string lhs,
@@ -619,7 +755,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
 
   if (this->cached_fn == nullptr) {
 
-    // first
+    // firsts
     std::string ker = ir_to_cuda(this->ir);
     nvrtcProgram prog;
     // apend extern C
@@ -674,7 +810,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   // Prepare kernel arguments
   // Prepare grid and block dimensions
   dim3 threads_per_block(128, 1, 1);
-  size_t num_elements = inputs[0].numel();
+  size_t num_elements = outputs[0].numel();
   dim3 blocks_per_grid(
       (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);
   std::vector<void *> kernel_args;

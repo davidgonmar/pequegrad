@@ -94,11 +94,17 @@ void schedule(Tensor &out) {
   }
   // now, we have inputs and out
   Compiled compnode;
-  auto [ir, ctx] = graph_to_ir(out, leafs);
+  auto [ir, ctx, inputs_to_use] = graph_to_ir(out, leafs);
   compnode.ir = ir;
   compnode.tensor_idx_to_strides = ctx.tensor_idx_to_strides;
   out.ad_node().set_primitive(std::make_shared<Compiled>(compnode));
-  out.ad_node().set_children(leafs);
+  std::vector<Tensor> tensors_to_use;
+  for (int i = 0; i < inputs_to_use.size(); i++) {
+    if (inputs_to_use[i]) {
+      tensors_to_use.push_back(leafs[i]);
+    }
+  }
+  out.ad_node().set_children(tensors_to_use);
 }
 
 } // namespace pg

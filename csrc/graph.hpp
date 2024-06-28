@@ -9,7 +9,7 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
   std::vector<Tensor> new_outputs;
   std::vector<Tensor> new_inputs;
 
-  using copy_lambda = std::function<void(Tensor &, bool)>;
+  using copy_lambda = std::function<void(Tensor &)>;
 
   auto tensorComparator = [](const Tensor &lhs, const Tensor &rhs) {
     // ??? weird but works. todo figure this out
@@ -30,7 +30,7 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
     return true;
   };
   // First pass, create new  tensors
-  copy_lambda copy = [&](Tensor &t, bool isinput) {
+  copy_lambda copy = [&](Tensor &t) {
     // we need to find leafs that are not inputs (e.g. constants OR model
     // weights) those will be old_to_new[t] = t
 
@@ -51,7 +51,7 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
     // print children length
     for (Tensor &child : t.children()) {
       if (old_to_new.find(child) == old_to_new.end()) {
-        copy(child, false);
+        copy(child);
       }
     }
     // then get new children
@@ -64,14 +64,15 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
   };
 
   for (Tensor &t : outputs) {
-    copy(t, false);
+    copy(t);
     new_outputs.push_back(old_to_new.at(t));
   }
-
   for (Tensor &t : inputs) {
+    if (old_to_new.find(t) == old_to_new.end()) {
+      throw std::runtime_error("Input not found in old_to_new: " + t.str());
+    }
     new_inputs.push_back(old_to_new.at(t));
   }
-
   auto x = std::make_tuple(new_outputs, new_inputs, externals);
 
   return x;
