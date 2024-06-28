@@ -1,9 +1,14 @@
 #include "ir.hpp"
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <nvrtc.h>
+#include <sstream>
+#include <string>
+#include <unordered_map>
 
 namespace pg {
 namespace ir {
@@ -682,7 +687,13 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       if (imm->dtype == DType::Int32) {
         r[expr] = std::to_string((int)imm->value);
       } else if (imm->dtype == DType::Float32) {
-        r[expr] = std::to_string((float)imm->value);
+        // here we cannot use std::to_string because it will 'round' the float
+        // to 6 digits
+        std::ostringstream oss;
+        oss << std::fixed
+            << std::setprecision(std::numeric_limits<float>::max_digits10)
+            << imm->value;
+        r[expr] = oss.str();
       } else {
         PG_CHECK_RUNTIME(false, "Unsupported dtype");
       }

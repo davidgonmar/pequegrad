@@ -66,29 +66,28 @@ class JittedAdam:
     ):
         self.params = parameters
         self.device = parameters[0].device
-        self.lr = Tensor(lr).to(self.device)
-        self.b1 = Tensor(b1).to(self.device)
-        self.b2 = Tensor(b2).to(self.device)
+        self.lr = lr
+        self.b1 = b1
+        self.b2 = b2
         self.mt_last = [Tensor.zeros(p.shape).to(self.device) for p in parameters]
         self.vt_last = [Tensor.zeros(p.shape).to(self.device) for p in parameters]
         self.t = Tensor(1).to(self.device)
-        self.eps = Tensor(eps).to(self.device)
+        self.eps = eps
 
         self.jitted_steps = [
             jit(
                 self.one_param_step,
-                externals=lambda: [self.b1, self.b2, self.lr, self.eps, self.t],
             )
             for _ in range(len(parameters))
         ]
 
-    def one_param_step(self, p, gt, mt, vt):
+    def one_param_step(self, p, gt, mt, vt, t):
         mt = self.b1 * mt + (1 - self.b1) * gt
         vt = self.b2 * vt + (1 - self.b2) * (
             gt * gt
         )  # todo -- wtf does this not work with gt**2
-        mt_hat = mt / (1 - self.b1**self.t)
-        vt_hat = vt / (1 - self.b2**self.t)
+        mt_hat = mt / (1 - self.b1**t)
+        vt_hat = vt / (1 - self.b2**t)
         newp = p - self.lr * mt_hat / (vt_hat**0.5 + self.eps)
         return mt, vt, newp
 
@@ -97,7 +96,7 @@ class JittedAdam:
         for i, (p, gt) in enumerate(zip(self.params, grads)):
             mt = self.mt_last[i]
             vt = self.vt_last[i]
-            mt, vt, newp = self.jitted_steps[i](p, gt, mt, vt)
+            mt, vt, newp = self.jitted_steps[i](p, gt, mt, vt, self.t)
             self.vt_last[i] = vt.eval().detach()
             self.mt_last[i] = mt.eval().detach()
             p.assign(newp)

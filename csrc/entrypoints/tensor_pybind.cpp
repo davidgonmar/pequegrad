@@ -250,7 +250,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__radd__, add)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(sub, sub)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__sub__, sub)
-      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rsub__, sub)
+      .def("__rsub__",
+           [](const Tensor &a, const Tensor &b) { return pg::sub(b, a); })
+      .def("__rsub__", [](const Tensor &a, double b) { return pg::sub(b, a); })
+      .def("__rsub__",
+           [](const double a, const Tensor &b) { return pg::sub(b, a); })
       .BIND_BINOP_WITH_OVERLOAD_CLASS(mul, mul)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__mul__, mul)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__rmul__, mul)
@@ -267,7 +271,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
            [](const Tensor &a, const Tensor &b) { return pg::matmul(a, b); })
       .BIND_BINOP_WITH_OVERLOAD_CLASS(pow, pow)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__pow__, pow)
-      .BIND_BINOP_WITH_OVERLOAD_CLASS(__rpow__, pow)
+      .def("__rpow__",
+           [](const Tensor &a, const Tensor &b) { return pg::pow(b, a); })
+      .def("__rpow__", [](const Tensor &a, double b) { return pg::pow(b, a); })
+      .def("__rpow__",
+           [](const double a, const Tensor &b) { return pg::pow(b, a); })
       .BIND_BINOP_WITH_OVERLOAD_CLASS(eq, eq)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__eq__, eq)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(neq, neq)
