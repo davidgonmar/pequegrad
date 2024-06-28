@@ -80,7 +80,7 @@ def train(model, ds, epochs=13, batch_size=512):
     start = None
     i = 0
     for x, y in loader:
-        if i == 2:
+        if i == 1:
             start = time.time()
         # Forward pass
         y = Tensor.one_hot(10, y, device=dev)

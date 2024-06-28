@@ -746,7 +746,11 @@ std::vector<Tensor> AsType::backward(const std::vector<Tensor> &primals,
 }
 
 std::vector<View> AsType::precompute(const std::vector<Tensor> &inputs) {
-  return {ViewOptions().like_natural(inputs[0]).dtype(_dtype_to).build()};
+  return {ViewOptions()
+              .like_natural(inputs[0])
+              .dtype(_dtype_to)
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<View> Where::precompute(const std::vector<Tensor> &inputs) {

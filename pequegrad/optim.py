@@ -84,7 +84,9 @@ class JittedAdam:
 
     def one_param_step(self, p, gt, mt, vt):
         mt = self.b1 * mt + (1 - self.b1) * gt
-        vt = self.b2 * vt + (1 - self.b2) * (gt * gt)
+        vt = self.b2 * vt + (1 - self.b2) * (
+            gt * gt
+        )  # todo -- wtf does this not work with gt**2
         mt_hat = mt / (1 - self.b1**self.t)
         vt_hat = vt / (1 - self.b2**self.t)
         newp = p - self.lr * mt_hat / (vt_hat**0.5 + self.eps)
