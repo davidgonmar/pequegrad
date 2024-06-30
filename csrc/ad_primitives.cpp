@@ -108,9 +108,13 @@ std::vector<View> Le::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
-shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
+std::tuple<shape_t, int, int, shape_t>
+reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
   shape_t new_shape;
+  shape_t new_shape_assuming_keepdims;
   axes_t sorted_axes(axes);
+  int total_reduced_per_out_elem = 1;
+  int total_out_elems = 1;
   // substitute negative axes
   for (auto &axis : sorted_axes) {
     if (axis < 0) {
@@ -123,33 +127,59 @@ shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
     if (std::find(sorted_axes.begin(), sorted_axes.end(), i) ==
         sorted_axes.end()) {
       new_shape.push_back(shape[i]);
+      new_shape_assuming_keepdims.push_back(shape[i]);
+      total_out_elems *= shape[i];
     } else if (keepdims) {
       new_shape.push_back(1);
+      total_reduced_per_out_elem *= shape[i];
+      new_shape_assuming_keepdims.push_back(1);
+    } else {
+      total_reduced_per_out_elem *= shape[i];
+      new_shape_assuming_keepdims.push_back(1);
     }
   }
-  return new_shape;
+  return {new_shape, total_out_elems, total_reduced_per_out_elem,
+          new_shape_assuming_keepdims};
 }
 
 std::vector<View> Sum::precompute(const std::vector<Tensor> &inputs) {
+  auto [new_shape, total_out_elems, total_reduced_per_out_elem,
+        shape_assuming_keepdims] =
+      reduce_shape(inputs[0].shape(), _axes, _keepdims);
+  this->_total_out_numel = total_out_elems;
+  this->_total_reduce_numel = total_reduced_per_out_elem;
+  this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
               .dtype(inputs[0].dtype())
-              .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
+              .shape(new_shape)
               .with_natural_strides()
               .build()};
 }
 
 std::vector<View> MaxReduce::precompute(const std::vector<Tensor> &inputs) {
+  auto [new_shape, total_out_elems, total_reduced_per_out_elem,
+        shape_assuming_keepdims] =
+      reduce_shape(inputs[0].shape(), _axes, _keepdims);
+  this->_total_out_numel = total_out_elems;
+  this->_total_reduce_numel = total_reduced_per_out_elem;
+  this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
               .dtype(inputs[0].dtype())
-              .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
+              .shape(new_shape)
               .with_natural_strides()
               .build()};
 }
 
 std::vector<View> Mean::precompute(const std::vector<Tensor> &inputs) {
+  auto [new_shape, total_out_elems, total_reduced_per_out_elem,
+        shape_assuming_keepdims] =
+      reduce_shape(inputs[0].shape(), _axes, _keepdims);
+  this->_total_out_numel = total_out_elems;
+  this->_total_reduce_numel = total_reduced_per_out_elem;
+  this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
               .dtype(inputs[0].dtype())
-              .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
+              .shape(new_shape)
               .with_natural_strides()
               .build()};
 }

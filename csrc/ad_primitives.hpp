@@ -218,7 +218,10 @@ class Reduce : public ADPrimitive {
 protected:
   axes_t _axes;
   bool _keepdims;
-
+  int _total_out_numel;
+  int _total_reduce_numel;
+  shape_t reduced_shape_assuming_keepdims;
+  // out * reduce = in numel
   const shape_t
   _reduce_single_shape_assuming_keepdims(View &input_view,
                                          std::vector<axis_t> axes) {

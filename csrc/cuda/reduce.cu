@@ -5,6 +5,7 @@
 #include "reduce.cuh"
 #include "shape.hpp"
 #include "utils.hpp"
+
 namespace pg {
 void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
                         std::vector<Tensor> &outputs) {
@@ -13,8 +14,7 @@ void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
   const Tensor &a = inputs[0];
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
-  const shape_t new_shape =
-      _reduce_single_shape_assuming_keepdims(old_view, _axes);
+  const shape_t new_shape = this->reduced_shape_assuming_keepdims;
   View new_view = View(new_shape, a.dtype(), device::CUDA);
 
   // normalize axes so they are positive
@@ -27,7 +27,7 @@ void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
   auto d_shape =
       cuda_unique_ptr_from_host(old_view.ndim(), old_view.shape().data());
   auto d_axes = cuda_unique_ptr_from_host(axes.size(), axes.data());
-  dim3 blocksize(DEFAULT_BLOCK_SIZE);
+  dim3 blocksize(REDUCE_N_WARPS * REDUCE_WARP_SIZE);
   dim3 gridsize(new_view.numel());
   size_t n_dims = old_view.ndim();
   size_t smem = sizeof(size_t) * n_dims + sizeof(stride_t) * n_dims;
@@ -35,7 +35,8 @@ void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
     cuda::sum_kernel<scalar_t><<<gridsize, blocksize, smem>>>(
         old_view.get_casted_base_ptr<scalar_t>(),
         new_view.get_casted_base_ptr<scalar_t>(), d_strides.get(),
-        d_shape.get(), old_view.ndim(), d_axes.get(), axes.size());
+        d_shape.get(), old_view.ndim(), d_axes.get(), axes.size(),
+        this->_total_out_numel, this->_total_reduce_numel);
   });
   PG_CUDA_KERNEL_END;
   if (!keepdims) { /* squeeze the axes if keepdims is false*/
@@ -51,10 +52,8 @@ void Mean::dispatch_cuda(const std::vector<Tensor> &inputs,
   const Tensor &a = inputs[0];
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
-  const shape_t new_shape =
-      _reduce_single_shape_assuming_keepdims(old_view, _axes);
+  const shape_t new_shape = this->reduced_shape_assuming_keepdims;
   View new_view = View(new_shape, a.dtype(), device::CUDA);
-
   // normalize axes so they are positive
   axes_t axes = std::vector<axis_t>(_axes);
   for (int i = 0; i < axes.size(); i++) {
@@ -65,7 +64,7 @@ void Mean::dispatch_cuda(const std::vector<Tensor> &inputs,
   auto d_shape =
       cuda_unique_ptr_from_host(old_view.ndim(), old_view.shape().data());
   auto d_axes = cuda_unique_ptr_from_host(axes.size(), axes.data());
-  dim3 blocksize(DEFAULT_BLOCK_SIZE);
+  dim3 blocksize(REDUCE_N_WARPS * REDUCE_WARP_SIZE);
   dim3 gridsize(new_view.numel());
   size_t n_dims = old_view.ndim();
   size_t smem = sizeof(size_t) * n_dims + sizeof(stride_t) * n_dims;
@@ -73,7 +72,8 @@ void Mean::dispatch_cuda(const std::vector<Tensor> &inputs,
     cuda::mean_kernel<scalar_t><<<gridsize, blocksize, smem>>>(
         old_view.get_casted_base_ptr<scalar_t>(),
         new_view.get_casted_base_ptr<scalar_t>(), d_strides.get(),
-        d_shape.get(), old_view.ndim(), d_axes.get(), axes.size());
+        d_shape.get(), old_view.ndim(), d_axes.get(), axes.size(),
+        this->_total_out_numel, this->_total_reduce_numel);
   });
   PG_CUDA_KERNEL_END;
 
@@ -90,8 +90,7 @@ void MaxReduce::dispatch_cuda(const std::vector<Tensor> &inputs,
   const Tensor &a = inputs[0];
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
-  const shape_t new_shape =
-      _reduce_single_shape_assuming_keepdims(old_view, _axes);
+  const shape_t new_shape = this->reduced_shape_assuming_keepdims;
   View new_view = View(new_shape, a.dtype(), device::CUDA);
 
   // normalize axes so they are positive
@@ -104,7 +103,7 @@ void MaxReduce::dispatch_cuda(const std::vector<Tensor> &inputs,
   auto d_shape =
       cuda_unique_ptr_from_host(old_view.ndim(), old_view.shape().data());
   auto d_axes = cuda_unique_ptr_from_host(axes.size(), axes.data());
-  dim3 blocksize(DEFAULT_BLOCK_SIZE);
+  dim3 blocksize(REDUCE_N_WARPS * REDUCE_WARP_SIZE);
   dim3 gridsize(new_view.numel());
   size_t n_dims = old_view.ndim();
   size_t smem = sizeof(size_t) * n_dims + sizeof(stride_t) * n_dims;
@@ -112,7 +111,8 @@ void MaxReduce::dispatch_cuda(const std::vector<Tensor> &inputs,
     cuda::max_kernel<scalar_t><<<gridsize, blocksize, smem>>>(
         old_view.get_casted_base_ptr<scalar_t>(),
         new_view.get_casted_base_ptr<scalar_t>(), d_strides.get(),
-        d_shape.get(), old_view.ndim(), d_axes.get(), axes.size());
+        d_shape.get(), old_view.ndim(), d_axes.get(), axes.size(),
+        this->_total_out_numel, this->_total_reduce_numel);
   });
   PG_CUDA_KERNEL_END;
 
