@@ -61,7 +61,7 @@ ViewOptions &ViewOptions::like_natural(const Tensor &t) {
   _device = t.device();
   _shape = t.shape();
   _strides = _compute_natural_strides(t.shape(), t.dtype());
-  _offset = t.offset();
+  _offset = 0;
   _nbytes = compute_nbytes(t.shape(), t.dtype());
   _strides_set = true;
   return *this;
@@ -100,7 +100,13 @@ Tensor Tensor::eval(bool detach) {
   }
   // outputs is just `this` tensor
   std::vector<Tensor> outputs = {*this};
+  // assert all children are on the same device
+  for (Tensor &child : children) {
+    PG_CHECK_RUNTIME(child.device() == this_device,
+                     "All children must be on the same device");
+  }
   switch (this_device) {
+
   case device::DeviceKind::CPU:
     primitive->dispatch_cpu(children, outputs);
     break;
@@ -257,7 +263,6 @@ void ADNode::set_children(const std::vector<Tensor> &children) {
 
 void ADNode::replace_child(const Tensor &old_child, const Tensor &new_child) {
   // we need to specifically find the one with the same id
-  // print children
   for (size_t i = 0; i < _children.size(); i++) {
     if (_children[i].id == old_child.id) {
       _children[i] = new_child;

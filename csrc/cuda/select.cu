@@ -24,7 +24,8 @@ CudaSelect convert_to_slice(const select_item_t &_item,
     const auto &idxArray = std::get<SelectWithTensor>(_item);
     PG_CHECK_ARG(tensor != std::nullopt, "Index tensor must be provided");
     PG_CHECK_ARG(tensor->dtype() == DType::Int32,
-                 "Index tensor must be of type int32");
+                 "Index tensor must be of type int32, got: " +
+                     dtype_to_string(tensor->dtype()));
     PG_CHECK_ARG(tensor->ndim() == 1, "Index tensor must be 1D");
     PG_CHECK_ARG(tensor->is_contiguous(), "Index tensor must be contiguous");
     PG_CHECK_ARG(tensor->device() == device::CUDA,
@@ -191,6 +192,7 @@ void select(const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs,
       int start = _item.start;
       int stop = _item.stop;
       int step = _item.step;
+
       PG_CHECK_ARG(start < inp.shape()[i] && stop <= inp.shape()[i],
                    "Slice out of bounds, start: " + std::to_string(start) +
                        ", end: " + std::to_string(stop) +

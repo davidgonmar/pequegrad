@@ -177,6 +177,31 @@ PYBIND11_MODULE(pequegrad_c, m) {
            [](py::array_t<float> np_array) {
              return Tensor::from_numpy(np_array);
            })
+      .def("unsqueeze",
+           [](const Tensor &a, py::object axes) {
+             if (py::isinstance<py::int_>(axes)) {
+               return unsqueeze(a, axes.cast<axis_t>());
+             } else if (py::isinstance<py::list>(axes) ||
+                        py::isinstance<py::tuple>(axes)) {
+               return unsqueeze(a, axes.cast<axes_t>());
+             } else {
+               throw std::runtime_error(
+                   "unsqueeze: axes must be an int, list or "
+                   "tuple");
+             }
+           })
+      .def("squeeze",
+           [](const Tensor &a, py::object axes) {
+             if (py::isinstance<py::int_>(axes)) {
+               return squeeze(a, axes.cast<axis_t>());
+             } else if (py::isinstance<py::list>(axes) ||
+                        py::isinstance<py::tuple>(axes)) {
+               return squeeze(a, axes.cast<axes_t>());
+             } else {
+               throw std::runtime_error("squeeze: axes must be an int, list or "
+                                        "tuple");
+             }
+           })
       .def("from_numpy",
            [](py::array_t<int> np_array) {
              return Tensor::from_numpy(np_array);

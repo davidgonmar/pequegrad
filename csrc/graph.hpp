@@ -48,7 +48,6 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
     }
 
     // first children
-    // print children length
     for (Tensor &child : t.children()) {
       if (old_to_new.find(child) == old_to_new.end()) {
         copy(child);

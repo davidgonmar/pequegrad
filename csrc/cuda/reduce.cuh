@@ -93,7 +93,7 @@ __device__ void reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
   // now, we have accumulated value in 'accum' per thread
   // block reduce it
   accum = BlockReduce(temp_storage).Reduce(accum, op);
-  __syncthreads();
+
   if (threadIdx.x == 0) {
     accum = op.post_reduce(accum, red_elements);
     out[idx] = accum;

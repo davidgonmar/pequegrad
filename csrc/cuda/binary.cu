@@ -57,7 +57,7 @@ DEF_BIN_OP_KERNEL(pow_kernel, pow(x, y), int)
     const Tensor &b = inputs[1];                                               \
     CHECK_SAME_SHAPE(a, b);                                                    \
     outputs[0].view_ptr()->allocate();                                         \
-    size_t numels = a.numel();                                                 \
+    size_t numels = outputs[0].numel();                                        \
     auto d_strides_a =                                                         \
         cuda_unique_ptr_from_host<stride_t>(a.ndim(), a.strides().data());     \
     auto d_strides_b =                                                         \

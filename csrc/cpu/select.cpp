@@ -188,7 +188,6 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
       return _assign_with_array(outputs[0], src, _items, idxs);
     }
   }
-
   // First, out = dst
   outputs[0].init_view(
       std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));

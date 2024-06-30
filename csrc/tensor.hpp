@@ -445,8 +445,6 @@ public:
       std::optional<std::shared_ptr<ADPrimitive>> primitive = std::nullopt);
   Tensor copy_but_lose_grad_info() {
     Tensor copy = *this;
-    // print primitive
-
     copy._ad_node = std::make_shared<ADNode>(copy._ad_node->primitive(),
                                              copy._ad_node->children());
 

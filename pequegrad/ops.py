@@ -324,7 +324,6 @@ def conv_transpose2d(
     # if padding is not 0, we need to crop the output
     if p_y > 0 or p_x > 0:
         out = out[:, :, p_y:-p_y, p_x:-p_x]
-    # output padding not supported
 
     if bias is not None:
         assert (
@@ -332,7 +331,9 @@ def conv_transpose2d(
         ), "bias shape must match output shape (channels). Got {} but expected {}".format(
             bias.shape, (out.shape)
         )
-        out += bias.reshape((1, -1, 1, 1))  # so we add the bias to each channel
+        # bias of shape (out_channels,) -> (1, out_channels, 1, 1)
+        bias = bias.reshape((1, -1, 1, 1))
+        out = out + bias
     return out
 
 

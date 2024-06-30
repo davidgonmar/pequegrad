@@ -133,7 +133,6 @@ shape_t reduce_shape(const shape_t &shape, const axes_t &axes, bool keepdims) {
 std::vector<View> Sum::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions()
               .dtype(inputs[0].dtype())
-              .device(inputs[0].device())
               .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
               .with_natural_strides()
               .build()};
@@ -142,7 +141,6 @@ std::vector<View> Sum::precompute(const std::vector<Tensor> &inputs) {
 std::vector<View> MaxReduce::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions()
               .dtype(inputs[0].dtype())
-              .device(inputs[0].device())
               .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
               .with_natural_strides()
               .build()};
@@ -151,7 +149,6 @@ std::vector<View> MaxReduce::precompute(const std::vector<Tensor> &inputs) {
 std::vector<View> Mean::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions()
               .dtype(inputs[0].dtype())
-              .device(inputs[0].device())
               .shape(reduce_shape(inputs[0].shape(), _axes, _keepdims))
               .with_natural_strides()
               .build()};
@@ -673,11 +670,11 @@ std::vector<View> Select::precompute(const std::vector<Tensor> &inputs) {
       // run through a kernel to copy the values into a new array
       slice_with_array = true;
       new_shape.push_back(inputs[visited_tensors + 1].numel());
+      visited_tensors++;
     } else if (std::holds_alternative<SelectKeepDim>(item)) {
       new_shape.push_back(inp.shape()[i]);
       new_strides.push_back(inp.strides()[i]);
     }
-    visited_tensors++;
   }
   if (slice_with_array) {
     return {ViewOptions()
@@ -723,7 +720,7 @@ std::vector<Tensor> Select::backward(const std::vector<Tensor> &primals,
 }
 
 std::vector<View> AssignAt::precompute(const std::vector<Tensor> &inputs) {
-  return {ViewOptions().like(inputs[0]).build()};
+  return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
 std::vector<Tensor> AssignAt::backward(const std::vector<Tensor> &primals,

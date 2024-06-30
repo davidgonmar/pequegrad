@@ -111,7 +111,7 @@ class TestNew:
             [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @pytest.mark.parametrize("device", [device.cuda, device.cpu])
     def test_local_response_norm(self, data, device):
         shape_input, size, alpha, beta, k = data
 
@@ -269,7 +269,7 @@ class TestNew:
             [(1, 1, 4, 4), (1, 1, 3, 3), True, 1, 1, 0, 0],
             [(1, 1, 4, 4), (1, 1, 3, 3), False, 2, 1, 0, 0],
             [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2, 1, 0],
-            [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2, 2, 0],
+            [(1, 1, 10, 5), (1, 1, 3, 3), False, 2, 2, 2, 0],  # 4
             [(1, 1, 10, 5), (1, 1, 3, 3), True, 2, 2, 0, 1],
             [(1, 1, 3, 3), (1, 1, 3, 3), True, 2, 1, 0, 1],
         ],

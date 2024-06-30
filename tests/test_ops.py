@@ -365,8 +365,6 @@ class TestNew:
 
         _compare_fn_with_torch([shape], pq_fn, torch_fn, backward=True, device=device)
 
-        print("col2im test pass!. im2col_out_shape: ", im2col_out_shape)
-
         # Now col2im
         def pq_fn(x):
             return pg.col2im(x, shape[2:], kernel_size, stride, (), dilation)

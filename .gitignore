@@ -132,3 +132,6 @@ CMakeSettings.json
 
 
 a.py
+
+
+*.nsys-rep

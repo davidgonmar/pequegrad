@@ -46,7 +46,7 @@ class Resize(Mod):
 
 class ToTensor(Mod):
     def __init__(self, device=None):
-        self.device = device or pgb.cpu
+        self.device = device or pgb.device.cpu
 
     def forward(self, x: Image):
         if isinstance(x, Tensor):
