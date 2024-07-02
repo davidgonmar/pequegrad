@@ -121,6 +121,18 @@ public:
   }
 };
 
+enum class AccumOpKind { Add, Max };
+
+// rendered like lhs = lhs + rhs (so name is useless)
+class AccumExpr : public BaseExpr {
+public:
+  AccumOpKind op;
+  std::shared_ptr<BaseExpr> lhs;
+  std::shared_ptr<BaseExpr> rhs;
+  DType dtype;
+  std::string expr_str() override { return "AccumExpr"; }
+};
+
 enum class TernaryOpKind { Where };
 
 /*Represents ternary operations like
@@ -414,7 +426,9 @@ public:
     if (is<TernaryExpr>(expr)) {
       return get_unique_name_tmp();
     }
-
+    if (is<AccumExpr>(expr)) {
+      return get_unique_name_tmp();
+    }
     PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
   }
 

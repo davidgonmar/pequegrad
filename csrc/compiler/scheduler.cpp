@@ -7,7 +7,8 @@ using namespace ir;
 
 using leaf_record_t = std::vector<Tensor>;
 
-static void schedule_inner(Tensor &node, leaf_record_t &leafs) {
+static void schedule_inner(Tensor &node, leaf_record_t &leafs,
+                           bool is_root = false) {
   if (is<Log>(node.ad_node().primitive())) {
     auto &log = dynamic_cast<Log &>(*node.ad_node().primitive());
     schedule_inner(node.ad_node().children()[0], leafs);
@@ -79,10 +80,11 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs) {
     schedule_inner(node.ad_node().children()[1], leafs);
     return;
   }
-  /*auto prim = node.ad_node().primitive();
-  if (is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) {
-     schedule_inner(node.ad_node().children()[0], leafs);
-  }*/
+  auto prim = node.ad_node().primitive();
+  if ((is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) && is_root) {
+    schedule_inner(node.ad_node().children()[0], leafs);
+    return;
+  }
   // ...
   // else, we have a leaf
   leafs.push_back(node);
@@ -90,8 +92,7 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs) {
 
 void schedule(Tensor &out) {
   leaf_record_t leafs;
-  schedule_inner(out, leafs);
-
+  schedule_inner(out, leafs, true);
   // if leafs is {out}, we failed to schedule and just return early
   if (leafs.size() == 1 && leafs[0].id == out.id) {
     return;

@@ -257,6 +257,9 @@ public:
   DEFINE_STR_NAME(Reduce)
   explicit Reduce(axes_t axes, bool keepdims)
       : _axes(axes), _keepdims(keepdims) {}
+  axes_t axes() { return _axes; }
+  int total_out_numel() { return _total_out_numel; }
+  int total_reduce_numel() { return _total_reduce_numel; }
 };
 
 class Sum : public Reduce {

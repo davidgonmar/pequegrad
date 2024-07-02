@@ -80,6 +80,10 @@ static bool is_ternary_op(std::shared_ptr<ADPrimitive> prim) {
   return is<Where>(prim);
 }
 
+static bool is_reduce_op(std::shared_ptr<ADPrimitive> prim) {
+  return is<Sum>(prim) || is<Mean>(prim) || is<MaxReduce>(prim);
+}
+
 std::shared_ptr<BaseExpr>
 graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
                   IrBuilderContext &ctx,
@@ -292,14 +296,21 @@ static ir_t render_return_guard(int max_val, std::shared_ptr<BaseExpr> idx) {
   return res;
 }
 
-static std::pair<ir_t, ir_t> render_local_idxs(ir_item_t gidx, ir_t shapes,
-                                               int input_idx) {
+using l = std::function<bool(int)>;
+l default_choose_which_idxs_to_load = [](int i) { return true; };
+
+static std::pair<ir_t, ir_t> render_local_idxs(
+    ir_item_t gidx, ir_t shapes, int input_idx,
+    l choose_which_idxs_to_load = default_choose_which_idxs_to_load) {
   ir_t res;
   ir_t only_loads = ir_t();
   only_loads.resize(shapes.size());
   std::vector<std::shared_ptr<BaseExpr>> shapes_to_div =
       std::vector<std::shared_ptr<BaseExpr>>();
   for (int j = shapes.size() - 1; j >= 0; j--) {
+    if (!choose_which_idxs_to_load(j)) {
+      continue;
+    }
     // now, the expression is expr = global_idx / (shapes_to_div_0 *
     // shapes_to_div_1 * ... * shapes_to_div_n) % shape
     std::shared_ptr<BaseExpr> mod_lhs;
@@ -354,12 +365,247 @@ static std::pair<ir_t, ir_t> render_local_idxs(ir_item_t gidx, ir_t shapes,
 
   return {res, only_loads};
 }
+
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
-graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
+graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
+  PG_CHECK_RUNTIME(is_reduce_op(out.ad_node().primitive()),
+                   "graph_to_ir_reduce can only be called with a reduce op");
+
+  std::shared_ptr<Reduce> reduce =
+      std::dynamic_pointer_cast<Reduce>(out.ad_node().primitive());
+  axes_t axes = reduce->axes();
+
+  auto is_reduced = [&axes](int i) {
+    return std::find(axes.begin(), axes.end(), i) != axes.end();
+  };
+  // make sure all positivwe
+  for (int xx = 0; xx < axes.size(); xx++) {
+    axes[xx] = axes[xx] < 0 ? out.ndim() + axes[xx] : axes[xx];
+  }
+  int total_out_elems = out.numel();
+  int total_reduced_elems = reduce->total_reduce_numel();
+  // out = reduce(fn(inputs), axis=...
   // the result will be a linear IR
   std::vector<std::shared_ptr<BaseExpr>> ir;
   IrBuilderContext ctx;
+
+  // rn only works for cuda
+  // declare global idx as a (blockIdx * blockDim + threadIdx)
+  auto lhs = std::make_shared<BinaryExpr>();
+  lhs->op = BinaryOpKind::Mul;
+  lhs->lhs = std::make_shared<BlockIdxExpr>();
+  lhs->rhs = std::make_shared<BlockDimExpr>();
+
+  auto rhs = std::make_shared<ThreadIdxExpr>();
+
+  auto global_idx = std::make_shared<BinaryExpr>();
+  global_idx->op = BinaryOpKind::Add;
+  global_idx->lhs = lhs;
+  global_idx->rhs = rhs;
+  global_idx->force_render = true;
+  global_idx->name = "global_idx";
+
+  ir.push_back(lhs->lhs);
+  ir.push_back(lhs->rhs);
+  ir.push_back(lhs);
+  ir.push_back(rhs);
+  ir.push_back(global_idx);
+
+  int gidx_idx = ir.size() - 1;
+
+  // we will render reduce like:
+  /*
+  void kernel(args...) {
+    int gidx = ... // represents an element in the output tensor
+    int out_local_idx_1 = ...
+    int out_local_idx_0 = ...
+    int in_local_idx_1 = ...
+    ...
+    for (int i = 0; i < total_reduce_numel; i++) { // in this case we reduce
+  over axis 0 int in_local_idx_0 = ...
+      ...
+      // out is a reduction of in, so in idxs depends on the gidx and the 'i'
+  idx (the reduction) float val = fn(in[in_local_idx_0, in_local_idx_1, ...]);
+      out[out_local_idx_0, out_local_idx_1, ...] = val;
+    }
+  }
+  */
+
+  // add 'if (global_idx < numel) { return; }' to the ir
+  auto return_guard = render_return_guard(out.numel(), global_idx);
+  ir.insert(ir.end(), return_guard.begin(), return_guard.end());
+
+  // fill the ctx and ir with the input tensors
+  int i = 0;
+  std::vector<bool> used_inputs(inputs.size(), false);
+  for (auto &input : inputs) {
+    if (is<Fill>(input.ad_node().primitive())) {
+      i++;
+      // will be replaced by a constant
+      continue;
+    }
+    used_inputs[i] = true;
+    auto arg = std::make_shared<ArgExpr>();
+    arg->dtype = input.dtype();
+    ir.push_back(arg);
+    ctx.tid_to_arg[input.id] = arg;
+    // add to ctx.tid_to_shape and tid_to_strides
+    ctx.arg_to_shape[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_strides[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_idxs_to_load[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_idxs_to_load[arg].resize(input.ndim());
+    for (int j = 0; j < input.ndim(); j++) {
+      auto shape = std::make_shared<ImmExpr>();
+      shape->value = input.shape()[j];
+      ir.push_back(shape);
+      ctx.arg_to_shape.at(arg).push_back(shape);
+      auto stride = std::make_shared<ImmExpr>();
+      stride->value = input.strides()[j] /
+                      dtype_to_size(input.dtype()); // stride is in bytes
+      ir.push_back(stride);
+      ctx.arg_to_strides.at(arg).push_back(stride);
+    }
+    auto [local_idxs, only_loads] =
+        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i,
+                          [=](int i) { return !is_reduced(i); });
+    ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
+    ctx.arg_to_idxs_to_load[arg] = only_loads;
+    i++;
+  }
+
+  // now same but for the output tensor
+  auto arg = std::make_shared<ArgExpr>();
+  arg->dtype = out.dtype();
+  ir.push_back(arg);
+  ctx.tid_to_arg[out.id] = arg;
+  ctx.arg_to_shape[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+  ctx.arg_to_strides[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+  ctx.arg_to_idxs_to_load[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+  ctx.arg_to_idxs_to_load[arg].resize(out.ndim());
+  for (int j = 0; j < out.ndim(); j++) {
+
+    auto shape = std::make_shared<ImmExpr>();
+    shape->value = out.shape()[j];
+    ir.push_back(shape);
+    ctx.arg_to_shape.at(arg).push_back(shape);
+    auto stride = std::make_shared<ImmExpr>();
+    stride->value =
+        out.strides()[j] / dtype_to_size(out.dtype()); // stride is in bytes
+    ir.push_back(stride);
+    ctx.arg_to_strides.at(arg).push_back(stride);
+  }
+  auto [local_idxs, only_loads] =
+      render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
+  ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
+  ctx.arg_to_idxs_to_load[arg] = only_loads;
+
+  // first, render the accumulator (imm value of 0)
+  auto acc = std::make_shared<ImmExpr>();
+  acc->value = (is<Sum>(out.ad_node().primitive()) ||
+                is<Mean>(out.ad_node().primitive()))
+                   ? 0
+                   : std::numeric_limits<float>::lowest();
+  acc->dtype = out.dtype();
+  acc->force_render = true;
+  acc->name = "acc0";
+  ir.push_back(acc);
+
+  // now, render the reduce loop
+  auto reduce_loop = std::make_shared<ForStartExpr>();
+  auto start = std::make_shared<ImmExpr>();
+  start->force_render = true;
+  start->name = "reduce_i";
+  start->value = 0;
+  reduce_loop->start = start;
+  auto end = std::make_shared<ImmExpr>();
+  end->value = total_reduced_elems;
+  reduce_loop->end = end;
+  auto step = std::make_shared<ImmExpr>();
+  step->value = 1;
+  reduce_loop->step = step;
+  ir.push_back(start);
+  ir.push_back(end);
+  ir.push_back(step);
+  ir.push_back(reduce_loop);
+
+  i = 0;
+  // here, render the missing input idxs based on the reduce idx for each input
+  for (auto &input : inputs) {
+    if (is<Fill>(input.ad_node().primitive())) {
+      i++;
+      continue;
+    }
+    auto arg = ctx.tid_to_arg.at(input.id);
+    auto [local_idxs_reduce, only_loads_reduce] =
+        render_local_idxs(start, ctx.arg_to_shape.at(arg), i,
+                          [=](int i) { return is_reduced(i); });
+
+    ir.insert(ir.end(), local_idxs_reduce.begin(), local_idxs_reduce.end());
+    for (int j = 0; j < only_loads_reduce.size(); j++) {
+      if (only_loads_reduce[j] != nullptr) {
+        ctx.arg_to_idxs_to_load.at(arg)[j] = only_loads_reduce[j];
+      }
+    }
+    i++;
+  }
+
+  // render inner
+  graph_to_ir_inner(out.ad_node().children()[0], ir, ctx, inputs);
+
+  // acc += inner_ir[-1]
+
+  auto acc_binop = std::make_shared<AccumExpr>();
+  auto prim = out.ad_node().primitive();
+  acc_binop->op =
+      (is<Sum>(prim) || is<Mean>(prim)) ? AccumOpKind::Add : AccumOpKind::Max;
+  acc_binop->lhs = acc;
+  acc_binop->rhs = ir.back();
+
+  ir.push_back(acc_binop);
+
+  // end loop
+  auto reduce_loop_end = std::make_shared<ForEndExpr>();
+  reduce_loop_end->for_start = reduce_loop;
+  ir.push_back(reduce_loop_end);
+
+  // if its mean, divide by total_reduced_elems
+  if (is<Mean>(prim)) {
+    auto div = std::make_shared<BinaryExpr>();
+    div->op = BinaryOpKind::Div;
+    div->lhs = acc;
+    auto total_reduced_elems_imm = std::make_shared<ImmExpr>();
+    total_reduced_elems_imm->value = total_reduced_elems;
+    ir.push_back(total_reduced_elems_imm);
+    div->rhs = total_reduced_elems_imm;
+    ir.push_back(div);
+    auto store_ir = render_store_idxs_for_expr(
+        ctx.arg_to_idxs_to_load.at(arg), ctx.arg_to_strides.at(arg), arg, div);
+    ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+  }
+  // else, just store the acc
+  else {
+    auto store_ir = render_store_idxs_for_expr(
+        ctx.arg_to_idxs_to_load.at(arg), ctx.arg_to_strides.at(arg), arg, acc);
+
+    ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+  }
+  // optim_ir_implace(ir);
+  return {ir, ctx, used_inputs};
+}
+
+std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
+           std::vector<bool>>
+graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
+
+  // out = reduce(fn(inputs), axis=...)
+  if (is_reduce_op(out.ad_node().primitive())) {
+    return graph_to_ir_reduce(out, inputs);
+  }
+  // the result will be a linear IR
+  std::vector<std::shared_ptr<BaseExpr>> ir;
+  IrBuilderContext ctx;
+
   // rn only works for cuda
   // declare global idx as a (blockIdx * blockDim + threadIdx)
   auto lhs = std::make_shared<BinaryExpr>();
@@ -601,20 +847,30 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       }
     } else if (is<ImmExpr>(expr)) {
       auto imm = as<ImmExpr>(expr);
-      // switch type
-      if (imm->dtype == DType::Int32) {
-        r[expr] = std::to_string((int)imm->value);
-      } else if (imm->dtype == DType::Float32) {
-        // here we cannot use std::to_string because it will 'round' the float
-        // to 6 digits
-        std::ostringstream oss;
-        oss << std::fixed
-            << std::setprecision(std::numeric_limits<float>::max_digits10)
-            << imm->value;
-        r[expr] = oss.str();
+      auto val_to_str = [&imm]() {
+        if (imm->dtype == DType::Int32) {
+          return std::to_string((int)imm->value);
+        } else if (imm->dtype == DType::Float32) {
+          // here we cannot use std::to_string because it will 'round' the float
+          // to 6 digits
+          std::ostringstream oss;
+          oss << std::fixed
+              << std::setprecision(std::numeric_limits<float>::max_digits10)
+              << imm->value;
+          return oss.str();
+        } else {
+          PG_CHECK_RUNTIME(false, "Unsupported dtype");
+        }
+      };
+
+      if (expr->force_render) {
+        r[expr] = expr->name;
+        res += get_dtype_cpp_str(imm->dtype) + " " + expr->name + " = " +
+               val_to_str() + ";\n";
       } else {
-        PG_CHECK_RUNTIME(false, "Unsupported dtype");
+        r[expr] = val_to_str();
       }
+
     } else if (is<ArgExpr>(expr)) {
       continue; // already rendered in the header
     } else if (is<BlockIdxExpr>(expr)) {
@@ -666,6 +922,25 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
                 ternop_kind_to_str(ternop->op, r[ternop->first],
                                    r[ternop->second], r[ternop->third]) +
                 ")";
+    } else if (is<ForStartExpr>(expr)) {
+      auto for_start = as<ForStartExpr>(expr);
+      res += "for (" + r[for_start->start] + "; " + r[for_start->start] +
+             " < " + r[for_start->end] + "; " + r[for_start->start] +
+             "+=" + r[for_start->step] + ") {\n";
+    } else if (is<ForEndExpr>(expr)) {
+      res += "}\n";
+    } else if (is<AccumExpr>(expr)) {
+      PG_CHECK_RUNTIME(as<AccumExpr>(expr)->lhs->force_render,
+                       "Accum lhs must be forced to render");
+      auto acc = as<AccumExpr>(expr);
+      if (acc->op == AccumOpKind::Add) {
+        res += r[acc->lhs] + " += " + r[acc->rhs] + ";\n";
+      } else if (acc->op == AccumOpKind::Max) {
+        res +=
+            r[acc->lhs] + " = max(" + r[acc->lhs] + ", " + r[acc->rhs] + ");\n";
+      } else {
+        PG_CHECK_RUNTIME(false, "Unsupported accum op");
+      }
     } else {
       PG_CHECK_RUNTIME(false, "Unsupported expression: " + expr->expr_str());
     }
