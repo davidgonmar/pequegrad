@@ -118,7 +118,7 @@ class Linear(StatefulModule):
         self.bias = ModuleParam.zeros(out_features)
 
     def forward(self, input):
-        a = (input @ self.weights) + self.bias
+        a = input @ self.weights + self.bias
         return a
 
 

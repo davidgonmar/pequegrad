@@ -16,7 +16,7 @@ void Sum::dispatch_cuda(const std::vector<Tensor> &inputs,
   View old_view = inputs[0].view();
   const shape_t new_shape = this->reduced_shape_assuming_keepdims;
   View new_view = View(new_shape, a.dtype(), device::CUDA);
-
+  PG_CHECK_RUNTIME(new_shape.size() == old_view.ndim());
   // normalize axes so they are positive
   axes_t axes = std::vector<axis_t>(_axes);
   for (int i = 0; i < axes.size(); i++) {
@@ -53,6 +53,7 @@ void Mean::dispatch_cuda(const std::vector<Tensor> &inputs,
   const bool keepdims = _keepdims;
   View old_view = inputs[0].view();
   const shape_t new_shape = this->reduced_shape_assuming_keepdims;
+  PG_CHECK_RUNTIME(new_shape.size() == old_view.ndim());
   View new_view = View(new_shape, a.dtype(), device::CUDA);
   // normalize axes so they are positive
   axes_t axes = std::vector<axis_t>(_axes);

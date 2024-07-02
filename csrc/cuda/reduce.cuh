@@ -57,14 +57,15 @@ reduce_base_fn(const T *in, T *out, const stride_t *_in_strides,
       size_t s = in_shape[j];
       if (isin((stride_t)j, red_axes, n_red_axes)) {
         int current_dim_idx = remaining_i % s;
-        in_idx += current_dim_idx * in_strides[j] / sizeof(T);
+        in_idx += current_dim_idx * (in_strides[j] / sizeof(T));
         remaining_i /= s;
       } else {
         int current_dim_idx = reduced_idx % s;
-        in_idx += current_dim_idx * in_strides[j] / sizeof(T);
+        in_idx += current_dim_idx * (in_strides[j] / sizeof(T));
         reduced_idx /= s;
       }
     }
+
     T el = in[in_idx];
     accum = op.apply(accum, el);
   }

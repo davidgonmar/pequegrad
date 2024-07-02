@@ -58,8 +58,6 @@ def train(model, ds, epochs=13, batch_size=4096):
         outs = train_step(x, batch_y_onehot)
         loss = outs[0]
         g = outs[1:]
-        # import pequegrad.viz as viz
-        # viz.viz(outs, name="outs")
         optim.step(g)
 
         print(f"Step {i} | Loss {loss.numpy()}")

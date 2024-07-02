@@ -586,3 +586,17 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
         start += t.shape[dim]
 
     return out
+
+
+def matmul_with_reshapes(self, other):
+    assert self.ndim >= 2 and other.ndim >= 2
+    a = self.unsqueeze(-1)  # [d1, d2, ..., m, k, 1]
+    b = other.unsqueeze(-3)  # [d1, d2, ..., 1, k, n]
+    pro = a * b
+    x = pro.sum(-2)
+    return x
+
+
+"""pg.matmul = matmul_with_reshapes
+
+Tensor.__matmul__ = matmul_with_reshapes"""

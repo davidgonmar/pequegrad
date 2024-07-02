@@ -375,14 +375,14 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   std::shared_ptr<Reduce> reduce =
       std::dynamic_pointer_cast<Reduce>(out.ad_node().primitive());
   axes_t axes = reduce->axes();
-
+  for (int xx = 0; xx < axes.size(); xx++) {
+    axes[xx] =
+        axes[xx] < 0 ? out.ad_node().children()[0].ndim() + axes[xx] : axes[xx];
+  }
   auto is_reduced = [&axes](int i) {
     return std::find(axes.begin(), axes.end(), i) != axes.end();
   };
-  // make sure all positivwe
-  for (int xx = 0; xx < axes.size(); xx++) {
-    axes[xx] = axes[xx] < 0 ? out.ndim() + axes[xx] : axes[xx];
-  }
+
   int total_out_elems = out.numel();
   int total_reduced_elems = reduce->total_reduce_numel();
   // out = reduce(fn(inputs), axis=...
