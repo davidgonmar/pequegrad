@@ -12,30 +12,6 @@
 
 namespace pg {
 namespace ir {
-static BinaryOpKind op_to_binop_kind(ADPrimitive &prim) {
-  if (is<Add>(prim)) {
-    return BinaryOpKind::Add;
-  } else if (is<Sub>(prim)) {
-    return BinaryOpKind::Sub;
-  } else if (is<Mul>(prim)) {
-    return BinaryOpKind::Mul;
-  } else if (is<Div>(prim)) {
-    return BinaryOpKind::Div;
-  } else if (is<Gt>(prim)) {
-    return BinaryOpKind::Gt;
-  } else if (is<Lt>(prim)) {
-    return BinaryOpKind::Lt;
-  } else if (is<Max>(prim)) {
-    return BinaryOpKind::Max;
-  } else if (is<Eq>(prim)) {
-    return BinaryOpKind::Eq;
-  } else if (is<Pow>(prim)) {
-    return BinaryOpKind::Pow;
-
-  } else {
-    throw std::runtime_error("Unsupported binary operation");
-  }
-}
 
 static BinaryOpKind op_to_binop_kind(std::shared_ptr<ADPrimitive> prim) {
   if (is<Add>(prim)) {
@@ -90,16 +66,18 @@ static UnaryOpKind op_to_unaryop_kind(std::shared_ptr<ADPrimitive> prim) {
   }
 }
 
-static bool is_binary_op(ADPrimitive &prim) {
+static bool is_binary_op(std::shared_ptr<ADPrimitive> prim) {
   return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim) ||
          is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim) ||
          is<Pow>(prim);
 }
 
-static bool is_binary_op(std::shared_ptr<ADPrimitive> prim) {
-  return is<Add>(prim) || is<Sub>(prim) || is<Mul>(prim) || is<Div>(prim) ||
-         is<Gt>(prim) || is<Lt>(prim) || is<Max>(prim) || is<Eq>(prim) ||
-         is<Pow>(prim);
+static bool is_unary_op(std::shared_ptr<ADPrimitive> prim) {
+  return is<Log>(prim) || is<Exp>(prim);
+}
+
+static bool is_ternary_op(std::shared_ptr<ADPrimitive> prim) {
+  return is<Where>(prim);
 }
 
 std::shared_ptr<BaseExpr>
@@ -125,86 +103,24 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     // these are the args to the kernel
     // we need to do a load expression
     // first, get the arg expr
-    auto arg_idx = ctx.tensor_id_to_ir_idx.at(out.id);
-    auto arg = ctx.args[arg_idx];
-    auto arg_ctx = ctx.arg_to_ctx.at(arg);
-    auto load_idxs = arg_ctx.load_idx_exprs_idxs;
-    if (arg_ctx.is_contiguous) {
-      // if contiguous, we can simply load from the global idx
-      auto load = std::make_shared<LoadExpr>();
-      load->child = arg;
-      load->idx = ir[load_idxs[0]];
-      load->dtype = arg->dtype;
-      ir.push_back(load);
-      return load;
-    } else {
-      // if stride size (load_idxs) is 0, then we load from [0]
-      if (load_idxs.size() == 0) {
-        auto load = std::make_shared<LoadExpr>();
-        load->child = arg;
-        auto zero = std::make_shared<ImmExpr>();
-        zero->value = 0;
-        ir.push_back(zero);
-        load->idx = zero;
-        load->dtype = arg->dtype;
-        ir.push_back(load);
-        return load;
-      }
-
-      std::vector<std::shared_ptr<BaseExpr>> muls;
-
-      for (int i = 0; i < load_idxs.size(); i++) {
-        auto mul = std::make_shared<BinaryExpr>();
-        mul->op = BinaryOpKind::Mul;
-        mul->lhs = ir[load_idxs[i]];
-        mul->rhs = ir[arg_ctx.stride_exprs_idxs[i]];
-        ir.push_back(mul);
-        muls.push_back(mul);
-      }
-
-      // now final expression summing all
-      int x = muls.size();
-      if (x == 1) {
-        // no need to sum
-        auto load = std::make_shared<LoadExpr>();
-        load->child = arg;
-        load->idx = muls[0];
-        load->dtype = arg->dtype;
-        ir.push_back(load);
-        return load;
-      }
-      auto sum = std::make_shared<BinaryExpr>();
-      sum->op = BinaryOpKind::Add;
-      sum->lhs = muls[0];
-      sum->rhs = muls[1];
-      ir.push_back(sum);
-      for (int i = 2; i < x; i++) {
-        auto new_sum = std::make_shared<BinaryExpr>();
-        new_sum->op = BinaryOpKind::Add;
-        new_sum->lhs = sum;
-        new_sum->rhs = muls[i];
-        ir.push_back(new_sum);
-        sum = new_sum;
-      }
-
-      // now, do the load
-      auto load = std::make_shared<LoadExpr>();
-      load->child = arg;
-      load->idx = sum;
-      load->dtype = arg->dtype;
-      ir.push_back(load);
-      return load;
-    }
+    // print all the contents of tid_to_arg
+    auto arg = ctx.tid_to_arg.at(out.id);
+    auto strides = ctx.arg_to_strides.at(arg);
+    auto idxs_to_load = ctx.arg_to_idxs_to_load.at(arg);
+    auto ir_load = render_load_idxs_for_expr(idxs_to_load, strides, arg);
+    // irload is a vector
+    ir.insert(ir.end(), ir_load.begin(), ir_load.end());
+    return ir_load.back();
   }
 
-  // first render the input tensors
+  // first recursively the input tensors
   std::vector<std::shared_ptr<BaseExpr>> inputs;
   for (auto &input : out.children()) {
     auto ir_ = graph_to_ir_inner(input, ir, ctx, orig_inputs);
     inputs.push_back(ir_);
   }
-  // then render the current tensor, based on the inputs
 
+  // then render the current tensor, based on the inputs
   if (is_binary_op(prim)) {
     auto binop = std::make_shared<BinaryExpr>();
     binop->op = op_to_binop_kind(prim);
@@ -213,14 +129,14 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     ir.push_back(binop);
     return binop;
   }
-  if (is<Log>(prim) || is<Exp>(prim)) {
+  if (is_unary_op(prim)) {
     auto unop = std::make_shared<UnaryExpr>();
     unop->op = op_to_unaryop_kind(prim);
     unop->child = inputs[0];
     ir.push_back(unop);
     return unop;
   }
-  if (is<Where>(prim)) {
+  if (is_ternary_op(prim)) {
     auto ternop = std::make_shared<TernaryExpr>();
     ternop->op = TernaryOpKind::Where;
     ternop->first = inputs[0];
@@ -356,13 +272,94 @@ void optim_ir_implace(ir_t &ir) {
   }
 }
 
+static ir_t render_return_guard(int max_val, std::shared_ptr<BaseExpr> idx) {
+  ir_t res;
+  auto imm = std::make_shared<ImmExpr>();
+  imm->value = max_val;
+  auto cmp = std::make_shared<BinaryExpr>();
+  cmp->op = BinaryOpKind::Lt;
+  cmp->lhs = imm;
+  cmp->rhs = idx;
+  res.push_back(imm);
+  res.push_back(cmp);
+  auto if_expr = std::make_shared<IfStartExpr>();
+  if_expr->cond = cmp;
+  res.push_back(if_expr);
+  auto ret = std::make_shared<ReturnExpr>();
+  res.push_back(ret);
+  auto if_end = std::make_shared<IfEndExpr>();
+  res.push_back(if_end);
+  return res;
+}
+
+static std::pair<ir_t, ir_t> render_local_idxs(ir_item_t gidx, ir_t shapes,
+                                               int input_idx) {
+  ir_t res;
+  ir_t only_loads = ir_t();
+  only_loads.resize(shapes.size());
+  std::vector<std::shared_ptr<BaseExpr>> shapes_to_div =
+      std::vector<std::shared_ptr<BaseExpr>>();
+  for (int j = shapes.size() - 1; j >= 0; j--) {
+    // now, the expression is expr = global_idx / (shapes_to_div_0 *
+    // shapes_to_div_1 * ... * shapes_to_div_n) % shape
+    std::shared_ptr<BaseExpr> mod_lhs;
+    if (shapes_to_div.size() == 0) {
+      auto shapes_mul_accum = std::make_shared<BinaryExpr>();
+      shapes_mul_accum->op = BinaryOpKind::Mul;
+      auto one1 = std::make_shared<ImmExpr>();
+      one1->value = 1;
+      auto one2 = std::make_shared<ImmExpr>();
+      one2->value = 1;
+      res.push_back(one1);
+      res.push_back(one2);
+      shapes_mul_accum->lhs = one1;
+      shapes_mul_accum->rhs = one2;
+      res.push_back(shapes_mul_accum);
+      mod_lhs = shapes_mul_accum;
+    } else {
+      mod_lhs = shapes_to_div[0];
+      for (int k = 1; k < shapes_to_div.size(); k++) {
+        auto new_mul = std::make_shared<BinaryExpr>();
+        new_mul->op = BinaryOpKind::Mul;
+        new_mul->lhs = mod_lhs;
+        new_mul->rhs = shapes_to_div[k];
+        res.push_back(new_mul);
+        mod_lhs = new_mul;
+      }
+    }
+
+    // now local_idx = (global_idx / shapes_mul_accum) % shape
+    auto local_idx = std::make_shared<BinaryExpr>();
+
+    auto div = std::make_shared<BinaryExpr>();
+    div->op = BinaryOpKind::Div;
+    div->lhs = gidx;
+    div->rhs = mod_lhs;
+
+    res.push_back(div);
+
+    local_idx->lhs = div;
+    local_idx->rhs = shapes[j];
+    local_idx->op = BinaryOpKind::Mod;
+    res.push_back(local_idx);
+
+    // force local_idx to render
+    local_idx->name =
+        "arg_" + std::to_string(input_idx) + "_idx_" + std::to_string(j);
+    local_idx->force_render = true;
+
+    shapes_to_div.push_back(shapes[j]);
+    only_loads[j] = local_idx;
+  }
+
+  return {res, only_loads};
+}
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
 graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   // the result will be a linear IR
   std::vector<std::shared_ptr<BaseExpr>> ir;
   IrBuilderContext ctx;
-
   // rn only works for cuda
   // declare global idx as a (blockIdx * blockDim + threadIdx)
   auto lhs = std::make_shared<BinaryExpr>();
@@ -388,159 +385,80 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   int gidx_idx = ir.size() - 1;
 
   // add 'if (global_idx < numel) { return; }' to the ir
-
-  auto numel = std::make_shared<ImmExpr>();
-  numel->value = out.numel();
-  ir.push_back(numel);
-
-  auto cmp = std::make_shared<BinaryExpr>();
-  cmp->op = BinaryOpKind::Lt;
-  cmp->lhs = numel;
-  cmp->rhs = global_idx;
-  ir.push_back(cmp);
-
-  auto if_expr = std::make_shared<IfStartExpr>();
-  if_expr->cond = cmp;
-  ir.push_back(if_expr);
-
-  // if the condition is false, we must return
-  auto ret = std::make_shared<ReturnExpr>();
-  ir.push_back(ret);
-
-  // end of the if
-  auto if_end = std::make_shared<IfEndExpr>();
-  ir.push_back(if_end);
-  // no else
+  auto return_guard = render_return_guard(out.numel(), global_idx);
+  ir.insert(ir.end(), return_guard.begin(), return_guard.end());
 
   // fill the ctx and ir with the input tensors
   int i = 0;
-  int impidx = 0;
-  int absi = 0;
   std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
     if (is<Fill>(input.ad_node().primitive())) {
-      absi++;
+      i++;
       // will be replaced by a constant
       continue;
     }
-
-    used_inputs[absi] = true;
-    absi++;
-
+    used_inputs[i] = true;
     auto arg = std::make_shared<ArgExpr>();
     arg->dtype = input.dtype();
     ir.push_back(arg);
-    ctx.args.push_back(arg);
-    ctx.tensor_id_to_ir_idx[input.id] = i;
-    // fill the context for doing a load expression
-    ContextForDoingALoadExpr arg_ctx;
-    arg_ctx.is_contiguous = input.is_contiguous();
-    auto cont = arg_ctx.is_contiguous;
-    if (!cont) {
-      // placeholder strides, we will fill them later
-      strides_t strides = strides_t();
-
-      for (int k = 0; k < input.ndim(); k++) {
-        strides.push_back(input.strides()[k] / dtype_to_size(input.dtype()));
-      }
-      // first case, non contiguous
-      // then we must create a local idx based from the global idx for each dim
-      std::vector<std::shared_ptr<BaseExpr>> shapes_to_div =
-          std::vector<std::shared_ptr<BaseExpr>>();
-      for (int j = input.ndim() - 1; j >= 0; j--) {
-        auto stride = std::make_shared<ImmExpr>();
-        stride->value = strides[j];
-        ir.push_back(stride);
-        ctx.tensor_idx_to_strides[impidx].push_back(
-            stride); // we will update this later
-        arg_ctx.stride_exprs_idxs.push_back(ir.size() - 1);
-        auto shape = std::make_shared<ImmExpr>();
-        // shape is already inferred
-        shape->value = input.shape()[j];
-        ir.push_back(shape);
-        arg_ctx.shape_exprs_idxs.push_back(ir.size() - 1);
-        // now, the expression is expr = global_idx / (shapes_to_div_0 *
-        // shapes_to_div_1 * ... * shapes_to_div_n) % shape
-        std::shared_ptr<BaseExpr> mod_lhs;
-        if (shapes_to_div.size() == 0) {
-          auto shapes_mul_accum = std::make_shared<BinaryExpr>();
-          shapes_mul_accum->op = BinaryOpKind::Mul;
-          auto one1 = std::make_shared<ImmExpr>();
-          one1->value = 1;
-          auto one2 = std::make_shared<ImmExpr>();
-          one2->value = 1;
-          ir.push_back(one1);
-          ir.push_back(one2);
-          shapes_mul_accum->lhs = one1;
-          shapes_mul_accum->rhs = one2;
-          ir.push_back(shapes_mul_accum);
-          mod_lhs = shapes_mul_accum;
-        } else {
-          mod_lhs = shapes_to_div[0];
-          for (int k = 1; k < shapes_to_div.size(); k++) {
-            auto new_mul = std::make_shared<BinaryExpr>();
-            new_mul->op = BinaryOpKind::Mul;
-            new_mul->lhs = mod_lhs;
-            new_mul->rhs = shapes_to_div[k];
-            ir.push_back(new_mul);
-            mod_lhs = new_mul;
-          }
-        }
-
-        // now local_idx = (global_idx / shapes_mul_accum) % shape
-        auto local_idx = std::make_shared<BinaryExpr>();
-
-        auto div = std::make_shared<BinaryExpr>();
-        div->op = BinaryOpKind::Div;
-        div->lhs = global_idx;
-        div->rhs = mod_lhs;
-
-        ir.push_back(div);
-
-        local_idx->lhs = div;
-        local_idx->rhs = shape;
-        local_idx->op = BinaryOpKind::Mod;
-        ir.push_back(local_idx);
-
-        // force local_idx to render
-        local_idx->name =
-            "arg_" + std::to_string(impidx) + "_idx_" + std::to_string(j);
-        local_idx->force_render = true;
-
-        arg_ctx.load_idx_exprs_idxs.push_back(ir.size() - 1);
-        shapes_to_div.push_back(shape);
-      }
-    } else {
-      // second case
-      // contigous, then we can simply load from the global idx
-      arg_ctx.load_idx_exprs_idxs.push_back(gidx_idx);
+    ctx.tid_to_arg[input.id] = arg;
+    // add to ctx.tid_to_shape and tid_to_strides
+    ctx.arg_to_shape[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_strides[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_idxs_to_load[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_idxs_to_load[arg].resize(input.ndim());
+    for (int j = 0; j < input.ndim(); j++) {
+      auto shape = std::make_shared<ImmExpr>();
+      shape->value = input.shape()[j];
+      ir.push_back(shape);
+      ctx.arg_to_shape.at(arg).push_back(shape);
+      auto stride = std::make_shared<ImmExpr>();
+      stride->value = input.strides()[j] /
+                      dtype_to_size(input.dtype()); // stride is in bytes
+      ir.push_back(stride);
+      ctx.arg_to_strides.at(arg).push_back(stride);
     }
-    ctx.arg_to_ctx[arg] = arg_ctx;
+    auto [local_idxs, only_loads] =
+        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
+    ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
+    ctx.arg_to_idxs_to_load[arg] = only_loads;
+
     i++;
-    impidx++;
   }
 
-  // same, but for the output tensor
+  // now same but for the output tensor
   auto arg = std::make_shared<ArgExpr>();
-  ir.push_back(arg);
   arg->dtype = out.dtype();
-  ctx.args.push_back(arg);
-  ctx.tensor_id_to_ir_idx[out.id] = i;
-  // fill the context for doing a load expression
-  ContextForDoingALoadExpr arg_ctx;
-  // assume output is contiguous
-  arg_ctx.is_contiguous = true;
-  arg_ctx.load_idx_exprs_idxs.push_back(gidx_idx);
-  ctx.arg_to_ctx[arg] = arg_ctx;
-  i++;
+  ir.push_back(arg);
+  ctx.tid_to_arg[out.id] = arg;
+  ctx.arg_to_shape[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+  ctx.arg_to_strides[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+  ctx.arg_to_idxs_to_load[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+  ctx.arg_to_idxs_to_load[arg].resize(out.ndim());
+  for (int j = 0; j < out.ndim(); j++) {
+    auto shape = std::make_shared<ImmExpr>();
+    shape->value = out.shape()[j];
+    ir.push_back(shape);
+    ctx.arg_to_shape.at(arg).push_back(shape);
+    auto stride = std::make_shared<ImmExpr>();
+    stride->value =
+        out.strides()[j] / dtype_to_size(out.dtype()); // stride is in bytes
+    ir.push_back(stride);
+    ctx.arg_to_strides.at(arg).push_back(stride);
+  }
+  auto [local_idxs, only_loads] =
+      render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
+  ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
+  ctx.arg_to_idxs_to_load[arg] = only_loads;
+
   graph_to_ir_inner(out, ir, ctx, inputs);
 
   // now, at the end, add a store operation
-  auto store = std::make_shared<StoreExpr>();
-  store->ptr = ctx.args.back();
-  store->value = ir.back();
-  store->idx = ir[gidx_idx];
-  ir.push_back(store);
+  auto store_ir =
+      render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(arg),
+                                 ctx.arg_to_strides.at(arg), arg, ir.back());
+
+  ir.insert(ir.end(), store_ir.begin(), store_ir.end());
   // optim_ir_implace(ir);
   return {ir, ctx, used_inputs};
 }

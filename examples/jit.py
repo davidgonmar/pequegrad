@@ -15,9 +15,9 @@ def test_some_fn():
         return x.log() + y + z.exp().log().exp()
 
     for i in range(10):
-        x = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32).eval()
-        y = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32).eval()
-        z = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32).eval()
+        x = Tensor(np.random.randn(20000, 500), device=dev).astype(dt.float32).eval()
+        y = Tensor(np.random.randn(20000, 500), device=dev).astype(dt.float32).eval()
+        z = Tensor(np.random.randn(20000, 500), device=dev).astype(dt.float32).eval()
 
         start = time.time()
         j = some_function(x, y, z).eval()

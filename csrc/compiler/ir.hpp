@@ -29,6 +29,9 @@ public:
   virtual ~BaseExpr() = default;
   virtual std::string expr_str() { return "BaseExpr"; }
 };
+using ir_item_t = std::shared_ptr<BaseExpr>;
+
+using ir_t = std::vector<std::shared_ptr<BaseExpr>>;
 
 /*Represents immediate assignments like
 {
@@ -61,6 +64,7 @@ public:
   std::string expr_str() override { return "ArgExpr"; }
 };
 
+using ir_arg_t = std::shared_ptr<ArgExpr>;
 enum class UnaryOpKind { Log, Exp };
 
 /*Represents unary operations like
@@ -308,26 +312,14 @@ public:
   std::string expr_str() override { return "StoreExpr"; }
 };
 
-class ContextForDoingALoadExpr {
-public:
-  bool is_contiguous;
-  std::vector<int> stride_exprs_idxs;
-  std::vector<int> shape_exprs_idxs;
-  std::vector<int> load_idx_exprs_idxs;
-};
-
 class IrBuilderContext {
 public:
-  std::map<std::shared_ptr<ArgExpr>, ContextForDoingALoadExpr> arg_to_ctx;
-  std::vector<std::shared_ptr<ArgExpr>> args;
-  // tensor id -> ir expr idx
-  std::map<int, int> tensor_id_to_ir_idx;
-
-  // we dont know strides at the moment of gathering the IR
-  // so we will update them later
-  std::map<int, std::vector<std::shared_ptr<BaseExpr>>> tensor_idx_to_strides;
+  std::map<int, ir_arg_t> tid_to_arg;
+  std::map<ir_arg_t, ir_t> arg_to_strides;
+  std::map<ir_arg_t, ir_t> arg_to_shape;
+  std::map<ir_arg_t, ir_t> arg_to_idxs_to_load;
 };
-using ir_t = std::vector<std::shared_ptr<BaseExpr>>;
+
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
 graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs);
@@ -434,6 +426,123 @@ public:
   }
 };
 
+// something like (arg1 * arg2) * arg3
+static ir_t binop_chain(ir_t operands, BinaryOpKind op_kind) {
+  ir_t res;
+  for (int i = 0; i < operands.size(); i++) {
+    auto operand = operands[i];
+    if (i == 0) {
+      res.push_back(operand);
+    } else {
+      auto new_binop = std::make_shared<BinaryExpr>();
+      new_binop->op = op_kind;
+      new_binop->lhs = res.back();
+      new_binop->rhs = operand;
+      res.push_back(new_binop);
+    }
+  }
+  return res;
+}
+
+static ir_t get_imm_expr(double value, DType dtype) {
+  auto imm = std::make_shared<ImmExpr>();
+  imm->dtype = dtype;
+  imm->value = value;
+  return {imm};
+}
+
+// renders Tensor<shape=(A, B, C), strides=(X, Y, Z)>[i, j, k] where 0 <= i < A,
+// 0 <= j < B, 0 <= k < C
+static ir_t render_load_idxs_for_expr(ir_t load_idxs, ir_t tensor_strides,
+                                      ir_arg_t arg) {
+  PG_CHECK_RUNTIME(
+      load_idxs.size() == tensor_strides.size(),
+      "[render_load_idxs_for_expr] load_idxs.size() != tensor_strides.size()");
+  ir_t res;
+  if (load_idxs.size() == 0) {
+    auto load = std::make_shared<LoadExpr>();
+    load->child = arg;
+    auto zero = std::make_shared<ImmExpr>();
+    zero->value = 0;
+    res.push_back(zero);
+    load->idx = zero;
+    load->dtype = arg->dtype;
+    res.push_back(load);
+    return res;
+  }
+
+  std::vector<std::shared_ptr<BaseExpr>> muls;
+
+  for (int i = 0; i < load_idxs.size(); i++) {
+    auto mul = std::make_shared<BinaryExpr>();
+    mul->op = BinaryOpKind::Mul;
+    mul->lhs = load_idxs[i];
+    mul->rhs = tensor_strides[i];
+    res.push_back(mul);
+    muls.push_back(mul);
+  }
+
+  // now final expression summing all
+  int x = muls.size();
+  auto sum = binop_chain(muls, BinaryOpKind::Add);
+
+  res.insert(res.end(), sum.begin(), sum.end());
+  // now, do the load
+  auto load = std::make_shared<LoadExpr>();
+  load->child = arg;
+  load->idx = sum.back();
+  load->dtype = arg->dtype;
+  res.push_back(load);
+  return res;
+}
+
+// same that for load, but at the end we just do a store
+static ir_t render_store_idxs_for_expr(ir_t store_idxs, ir_t tensor_strides,
+                                       ir_arg_t arg,
+                                       std::shared_ptr<BaseExpr> value) {
+  PG_CHECK_RUNTIME(store_idxs.size() == tensor_strides.size(),
+                   "[render_store_idxs_for_expr] store_idxs.size() != "
+                   "tensor_strides.size()");
+  ir_t res;
+  if (store_idxs.size() == 0) {
+    auto store = std::make_shared<StoreExpr>();
+    store->ptr = arg;
+    auto zero = std::make_shared<ImmExpr>();
+    zero->value = 0;
+    res.push_back(zero);
+    store->idx = zero;
+    store->value = value;
+    store->dtype = arg->dtype;
+    res.push_back(store);
+    return res;
+  }
+
+  std::vector<std::shared_ptr<BaseExpr>> muls;
+
+  for (int i = 0; i < store_idxs.size(); i++) {
+    auto mul = std::make_shared<BinaryExpr>();
+    mul->op = BinaryOpKind::Mul;
+    mul->lhs = store_idxs[i];
+    mul->rhs = tensor_strides[i];
+    res.push_back(mul);
+    muls.push_back(mul);
+  }
+
+  // now final expression summing all
+  int x = muls.size();
+  auto sum = binop_chain(muls, BinaryOpKind::Add);
+
+  res.insert(res.end(), sum.begin(), sum.end());
+  // now, do the store
+  auto store = std::make_shared<StoreExpr>();
+  store->ptr = arg;
+  store->idx = sum.back();
+  store->value = value;
+  store->dtype = arg->dtype;
+  res.push_back(store);
+  return res;
+}
+
 } // namespace ir
 class Compiled : public ADPrimitive {
 public:
@@ -444,4 +553,5 @@ public:
       tensor_idx_to_strides;
   void *cached_fn = nullptr;
 };
+
 } // namespace pg

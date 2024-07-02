@@ -79,6 +79,10 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs) {
     schedule_inner(node.ad_node().children()[1], leafs);
     return;
   }
+  /*auto prim = node.ad_node().primitive();
+  if (is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) {
+     schedule_inner(node.ad_node().children()[0], leafs);
+  }*/
   // ...
   // else, we have a leaf
   leafs.push_back(node);
@@ -96,7 +100,6 @@ void schedule(Tensor &out) {
   Compiled compnode;
   auto [ir, ctx, inputs_to_use] = graph_to_ir(out, leafs);
   compnode.ir = ir;
-  compnode.tensor_idx_to_strides = ctx.tensor_idx_to_strides;
   out.ad_node().set_primitive(std::make_shared<Compiled>(compnode));
   std::vector<Tensor> tensors_to_use;
   for (int i = 0; i < inputs_to_use.size(); i++) {
