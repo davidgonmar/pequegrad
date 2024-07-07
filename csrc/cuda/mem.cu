@@ -3,7 +3,7 @@
 
 std::shared_ptr<void> allocate_cuda(const size_t nbytes) {
   void *ptr;
-  CHECK_CUDA(cudaMalloc(&ptr, nbytes));
+  CHECK_CUDA(cudaMallocAsync(&ptr, nbytes, 0));
   return std::shared_ptr<void>(ptr, [](void *p) { CHECK_CUDA(cudaFree(p)); });
 }
 

@@ -937,7 +937,8 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
     } else if (is<ForStartExpr>(expr)) {
       auto for_start = as<ForStartExpr>(expr);
       // res += add_indent() + "#pragma unroll\n"; // prevent register
-      // overloading -- in the future maybe 'search' for optimal unroll factor ??
+      // overloading -- in the future maybe 'search' for optimal unroll factor
+      // ??
       res += add_indent() + "for (" + r[for_start->start] + "; " +
              r[for_start->start] + " < " + r[for_start->end] + "; " +
              r[for_start->start] + "+=" + r[for_start->step] + ") {\n";
@@ -1029,7 +1030,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   outputs[0].view_ptr()->allocate();
   // Prepare kernel arguments
   // Prepare grid and block dimensions
-  dim3 threads_per_block(128, 1, 1);
+  dim3 threads_per_block(256, 1, 1);
   size_t num_elements = outputs[0].numel();
   dim3 blocks_per_grid(
       (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);

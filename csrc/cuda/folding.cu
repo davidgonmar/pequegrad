@@ -39,10 +39,7 @@ void Im2Col::dispatch_cuda(const std::vector<Tensor> &inputs,
                    "output height and width should be > 0, got out_h=", out_h,
                    " and out_w=", out_w);
 
-  shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
-
-  outputs[0].init_view(
-      std::make_shared<View>(out_shape, a.dtype(), device::CUDA));
+  outputs[0].view_ptr()->allocate();
 
   int total_iters = batch_size * out_h * out_w * in_channels * k_h *
                     k_w; // check kernel code for more details
@@ -91,10 +88,7 @@ void Col2Im::dispatch_cuda(const std::vector<Tensor> &inputs,
                    "output height and width should be > 0, got out_h=", out_h,
                    " and out_w=", out_w);
 
-  shape_t out_shape = {batch_size, out_channels, out_h, out_w};
-
-  outputs[0].init_view(
-      std::make_shared<View>(out_shape, a.dtype(), device::CUDA));
+  outputs[0].view_ptr()->allocate();
   cudaMemset(outputs[0].get_base_ptr(), 0,
              outputs[0].numel() *
                  dtype_to_size(a.dtype())); // since we'll accumulate
