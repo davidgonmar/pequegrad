@@ -187,6 +187,7 @@ CODE:
 
 class ForStartExpr : public BaseExpr {
 public:
+  int unroll = 0;
   std::shared_ptr<BaseExpr> start;
   std::shared_ptr<BaseExpr> end;
   std::shared_ptr<BaseExpr> step;

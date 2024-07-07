@@ -511,41 +511,51 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   acc->name = "acc0";
   ir.push_back(acc);
 
-  // now, render the reduce loop
-  auto reduce_loop = std::make_shared<ForStartExpr>();
-  auto start = std::make_shared<ImmExpr>();
-  start->force_render = true;
-  start->name = "reduce_i";
-  start->value = 0;
-  reduce_loop->start = start;
-  auto end = std::make_shared<ImmExpr>();
-  end->value = total_reduced_elems;
-  reduce_loop->end = end;
-  auto step = std::make_shared<ImmExpr>();
-  step->value = 1;
-  reduce_loop->step = step;
-  ir.push_back(start);
-  ir.push_back(end);
-  ir.push_back(step);
-  ir.push_back(reduce_loop);
-
+  auto reduce_loops = std::vector<std::shared_ptr<ForStartExpr>>();
+  for (int i = 0; i < reduce->axes().size(); i++) {
+    auto reduce_loop = std::make_shared<ForStartExpr>();
+    auto start = std::make_shared<ImmExpr>();
+    start->force_render = true;
+    start->value = 0;
+    reduce_loop->start = start;
+    auto end = std::make_shared<ImmExpr>();
+    end->value = inputs[0].shape()[reduce->axes()[i]];
+    reduce_loop->end = end;
+    auto step = std::make_shared<ImmExpr>();
+    step->value = 1;
+    reduce_loop->step = step;
+    ir.push_back(start);
+    ir.push_back(end);
+    ir.push_back(step);
+    ir.push_back(reduce_loop);
+    reduce_loops.push_back(reduce_loop);
+  }
   i = 0;
+
   // here, render the missing input idxs based on the reduce idx for each input
   for (auto &input : inputs) {
     if (is<Fill>(input.ad_node().primitive())) {
       i++;
       continue;
     }
-    auto arg = ctx.tid_to_arg.at(input.id);
-    auto [local_idxs_reduce, only_loads_reduce] =
-        render_local_idxs(start, ctx.arg_to_shape.at(arg), i,
-                          [=](int i) { return is_reduced(i); });
-
-    ir.insert(ir.end(), local_idxs_reduce.begin(), local_idxs_reduce.end());
-    for (int j = 0; j < only_loads_reduce.size(); j++) {
-      if (only_loads_reduce[j] != nullptr) {
-        ctx.arg_to_idxs_to_load.at(arg)[j] = only_loads_reduce[j];
+    int redidx = 0;
+    // Render the inner idxs of the loop
+    for (int x = 0; x < input.ndim(); x++) {
+      if (!is_reduced(x)) {
+        continue;
       }
+      auto arg = ctx.tid_to_arg.at(input.id);
+      auto [local_idxs_reduce, only_loads_reduce] = render_local_idxs(
+          reduce_loops.at(redidx)->start, ctx.arg_to_shape.at(arg), i,
+          [=](int i) { return i == x; });
+
+      ir.insert(ir.end(), local_idxs_reduce.begin(), local_idxs_reduce.end());
+      for (int j = 0; j < only_loads_reduce.size(); j++) {
+        if (only_loads_reduce[j] != nullptr) {
+          ctx.arg_to_idxs_to_load.at(arg)[j] = only_loads_reduce[j];
+        }
+      }
+      redidx++;
     }
     i++;
   }
@@ -564,10 +574,13 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   ir.push_back(acc_binop);
 
-  // end loop
-  auto reduce_loop_end = std::make_shared<ForEndExpr>();
-  reduce_loop_end->for_start = reduce_loop;
-  ir.push_back(reduce_loop_end);
+  // end loops
+  for (int i = reduce_loops.size() - 1; i >= 0; i--) {
+    auto reduce_loop = reduce_loops[i];
+    auto for_end = std::make_shared<ForEndExpr>();
+    for_end->for_start = reduce_loop;
+    ir.push_back(for_end);
+  }
 
   // if its mean, divide by total_reduced_elems
   if (is<Mean>(prim)) {
@@ -818,32 +831,33 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   std::map<std::string, bool> rendered; // used for example not to render block
                                         // dim twice
   NameDatabase nmdb;
+  int indent_level = 1;
+  auto add_indent = [&indent_level]() {
+    return std::string(indent_level * 2, ' ');
+  };
   for (auto &expr : ir) {
     if (is<BinaryExpr>(expr)) {
       auto binop = as<BinaryExpr>(expr);
-      /*res += get_dtype_cpp_str(binop->dtype) + " " + binop->name + " = " +
-             binop->lhs->name + " " + binop_kind_to_str(binop->op) + " " +
-             binop->rhs->name + ";\n";*/
       if (!binop->force_render) {
         r[expr] = "(" +
                   binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs]) +
                   ")";
       } else {
         r[expr] = binop->name;
-        res += get_dtype_cpp_str(binop->dtype) + " " + binop->name + " = " +
+        res += add_indent() + get_dtype_cpp_str(binop->dtype) + " " +
+               binop->name + " = " +
                binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs]) +
                ";\n";
       }
     } else if (is<UnaryExpr>(expr)) {
       auto unop = as<UnaryExpr>(expr);
-      /*res += get_dtype_cpp_str(unop->dtype) + " " + unop->name + " = " +
-             unop_kind_to_str(unop->op) + "(" + unop->child->name + ");\n";*/
       if (!unop->force_render) {
         r[expr] = unop_kind_to_str(unop->op) + "(" + r[unop->child] + ")";
       } else {
         r[expr] = unop->name;
-        res += get_dtype_cpp_str(unop->dtype) + " " + unop->name + " = " +
-               unop_kind_to_str(unop->op) + "(" + r[unop->child] + ");\n";
+        res += add_indent() + get_dtype_cpp_str(unop->dtype) + " " +
+               unop->name + " = " + unop_kind_to_str(unop->op) + "(" +
+               r[unop->child] + ");\n";
       }
     } else if (is<ImmExpr>(expr)) {
       auto imm = as<ImmExpr>(expr);
@@ -851,8 +865,6 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
         if (imm->dtype == DType::Int32) {
           return std::to_string((int)imm->value);
         } else if (imm->dtype == DType::Float32) {
-          // here we cannot use std::to_string because it will 'round' the float
-          // to 6 digits
           std::ostringstream oss;
           oss << std::fixed
               << std::setprecision(std::numeric_limits<float>::max_digits10)
@@ -865,8 +877,8 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
 
       if (expr->force_render) {
         r[expr] = expr->name;
-        res += get_dtype_cpp_str(imm->dtype) + " " + expr->name + " = " +
-               val_to_str() + ";\n";
+        res += add_indent() + get_dtype_cpp_str(imm->dtype) + " " + expr->name +
+               " = " + val_to_str() + ";\n";
       } else {
         r[expr] = val_to_str();
       }
@@ -876,46 +888,46 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
     } else if (is<BlockIdxExpr>(expr)) {
       auto block_idx = as<BlockIdxExpr>(expr);
       if (!rendered["bidx"]) {
-        res += get_dtype_cpp_str(DType::Int32) + " " + "bidx" + " = " +
-               "blockIdx.x" + ";\n";
+        res += add_indent() + get_dtype_cpp_str(DType::Int32) + " " + "bidx" +
+               " = " + "blockIdx.x" + ";\n";
         rendered["bidx"] = true;
       }
       r[expr] = "bidx";
     } else if (is<BlockDimExpr>(expr)) {
       auto block_dim = as<BlockDimExpr>(expr);
       if (!rendered["bdim"]) {
-        res += get_dtype_cpp_str(DType::Int32) + " " + "bdim" + " = " +
-               "blockDim.x" + ";\n";
+        res += add_indent() + get_dtype_cpp_str(DType::Int32) + " " + "bdim" +
+               " = " + "blockDim.x" + ";\n";
         rendered["bdim"] = true;
       }
       r[expr] = "bdim";
     } else if (is<ThreadIdxExpr>(expr)) {
       auto thread_idx = as<ThreadIdxExpr>(expr);
       if (!rendered["tidx"]) {
-        res += get_dtype_cpp_str(DType::Int32) + " " + "tidx" + " = " +
-               "threadIdx.x" + ";\n";
+        res += add_indent() + get_dtype_cpp_str(DType::Int32) + " " + "tidx" +
+               " = " + "threadIdx.x" + ";\n";
         rendered["tidx"] = true;
       }
       r[expr] = "tidx";
     } else if (is<LoadExpr>(expr)) {
       auto load = as<LoadExpr>(expr);
-      /*res += get_dtype_cpp_str(load->dtype) + " " + expr->name + " = " +
-             load->child->name + "[" + load->idx->name + "];\n";*/
       auto x = nmdb.get_with_prefix("load");
       r[expr] = x;
-      res += get_dtype_cpp_str(load->dtype) + " " + x + " = " +
+      res += add_indent() + get_dtype_cpp_str(load->dtype) + " " + x + " = " +
              load->child->name + "[" + r[load->idx] + "]" + ";\n";
     } else if (is<StoreExpr>(expr)) {
       auto store = as<StoreExpr>(expr);
-      res += store->ptr->name + "[" + r[store->idx] + "] = " + r[store->value] +
-             ";\n";
+      res += add_indent() + store->ptr->name + "[" + r[store->idx] +
+             "] = " + r[store->value] + ";\n";
     } else if (is<IfStartExpr>(expr)) {
       auto if_start = as<IfStartExpr>(expr);
-      res += "if (" + r[if_start->cond] + ") {\n";
+      res += add_indent() + "if (" + r[if_start->cond] + ") {\n";
+      indent_level++;
     } else if (is<IfEndExpr>(expr)) {
-      res += "}\n";
+      indent_level--;
+      res += add_indent() + "}\n";
     } else if (is<ReturnExpr>(expr)) {
-      res += "return;\n";
+      res += add_indent() + "return;\n";
     } else if (is<TernaryExpr>(expr)) {
       auto ternop = as<TernaryExpr>(expr);
       r[expr] = "(" +
@@ -924,20 +936,24 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
                 ")";
     } else if (is<ForStartExpr>(expr)) {
       auto for_start = as<ForStartExpr>(expr);
-      res += "for (" + r[for_start->start] + "; " + r[for_start->start] +
-             " < " + r[for_start->end] + "; " + r[for_start->start] +
-             "+=" + r[for_start->step] + ") {\n";
+      // res += add_indent() + "#pragma unroll\n"; // prevent register
+      // overloading -- in the future maybe 'search' for optimal unroll factor ??
+      res += add_indent() + "for (" + r[for_start->start] + "; " +
+             r[for_start->start] + " < " + r[for_start->end] + "; " +
+             r[for_start->start] + "+=" + r[for_start->step] + ") {\n";
+      indent_level++;
     } else if (is<ForEndExpr>(expr)) {
-      res += "}\n";
+      indent_level--;
+      res += add_indent() + "}\n";
     } else if (is<AccumExpr>(expr)) {
       PG_CHECK_RUNTIME(as<AccumExpr>(expr)->lhs->force_render,
                        "Accum lhs must be forced to render");
       auto acc = as<AccumExpr>(expr);
       if (acc->op == AccumOpKind::Add) {
-        res += r[acc->lhs] + " += " + r[acc->rhs] + ";\n";
+        res += add_indent() + r[acc->lhs] + " += " + r[acc->rhs] + ";\n";
       } else if (acc->op == AccumOpKind::Max) {
-        res +=
-            r[acc->lhs] + " = max(" + r[acc->lhs] + ", " + r[acc->rhs] + ");\n";
+        res += add_indent() + r[acc->lhs] + " = max(" + r[acc->lhs] + ", " +
+               r[acc->rhs] + ");\n";
       } else {
         PG_CHECK_RUNTIME(false, "Unsupported accum op");
       }
