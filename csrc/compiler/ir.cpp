@@ -513,13 +513,15 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   auto reduce_loops = std::vector<std::shared_ptr<ForStartExpr>>();
   for (int i = 0; i < reduce->axes().size(); i++) {
+    auto axis = reduce->axes()[i] < 0 ? inputs[0].ndim() + reduce->axes()[i]
+                                      : reduce->axes()[i];
     auto reduce_loop = std::make_shared<ForStartExpr>();
     auto start = std::make_shared<ImmExpr>();
     start->force_render = true;
     start->value = 0;
     reduce_loop->start = start;
     auto end = std::make_shared<ImmExpr>();
-    end->value = inputs[0].shape()[reduce->axes()[i]];
+    end->value = inputs[0].shape()[axis];
     reduce_loop->end = end;
     auto step = std::make_shared<ImmExpr>();
     step->value = 1;
