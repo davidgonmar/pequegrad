@@ -23,7 +23,9 @@ class jit:
             inputs = args
             assert all(
                 isinstance(x, Tensor) for x in inputs
-            ), "Only Tensors are supported. Functions must be pure."
+            ), "Only Tensors are supported. Functions must be pure, got {}".format(
+                [type(x) for x in inputs]
+            )
             outs, inps, _ = clone_graph(
                 outs, list(inputs) + list(self.get_externals()), []
             )

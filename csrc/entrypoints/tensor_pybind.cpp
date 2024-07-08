@@ -276,8 +276,10 @@ PYBIND11_MODULE(pequegrad_c, m) {
         auto res = basefn(*args);
         // assert res returned a tuple py::tuple
         std::vector<Tensor> out;
-        PG_CHECK_RUNTIME(py::isinstance<py::tuple>(res),
-                         "Custom primitive must return a tuple");
+        PG_CHECK_RUNTIME(py::isinstance<py::tuple>(res) ||
+                             py::isinstance<py::list>(res),
+                         "Custom primitive must return a tuple or list, got: " +
+                             std::string(py::str(res)));
         auto castedres = res.cast<py::tuple>();
         for (size_t i = 0; i < castedres.size(); ++i) {
           out.push_back(castedres[i].cast<Tensor>());
@@ -287,9 +289,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
     }
   };
 
-  py::class_<PyCustomPrimitiveFromFn>(m, "custom_prim")
+  py::class_<PyCustomPrimitiveFromFn>(m, "custom_prim", py::dynamic_attr())
       .def(py::init<py::function>())
-      .def("vjp", &PyCustomPrimitiveFromFn::set_vjpfn)
+      .def("setvjp", &PyCustomPrimitiveFromFn::set_vjpfn)
       .def("__call__", [](PyCustomPrimitiveFromFn &self, py::args args) {
         std::vector<Tensor> inputs;
         for (auto arg : args) {
