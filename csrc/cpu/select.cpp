@@ -35,7 +35,8 @@ void _select_with_tensor(const Tensor &inp, Tensor &outp, select_t items,
   for (int i = 0; i < idxs.size(); i++) {
     PG_CHECK_ARG(idxs[i].dtype() == DType::Int32,
                  "Index must be of type int32");
-    PG_CHECK_ARG(idxs[i].ndim() == 1, "Index must be 1D");
+    PG_CHECK_ARG(idxs[i].ndim() == 1,
+                 "Index must be 1D, got: " + idxs[i].str());
     PG_CHECK_ARG(idxs[i].is_contiguous(), "Index must be contiguous");
     tensor_indices.push_back(idxs[i].get_casted_base_ptr<int>());
   }
@@ -135,7 +136,8 @@ void _assign_with_array(const Tensor &dst, Tensor &src, select_t items,
   for (int i = 0; i < idxs.size(); i++) {
     PG_CHECK_ARG(idxs[i].dtype() == DType::Int32,
                  "Index must be of type int32");
-    PG_CHECK_ARG(idxs[i].ndim() == 1, "Index must be 1D");
+    PG_CHECK_ARG(idxs[i].ndim() == 1,
+                 "Index must be 1D, got: " + idxs[i].str());
     PG_CHECK_ARG(idxs[i].is_contiguous(), "Index must be contiguous");
     _idxs[i] = idxs[i].get_casted_base_ptr<int>();
   }

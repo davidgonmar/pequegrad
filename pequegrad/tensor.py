@@ -50,11 +50,25 @@ bind_method(
 )
 
 
+def size(self, dim=None):
+    return self.shape[dim] if dim is not None else self.shape
+
+
+bind_method(
+    Tensor,
+    "size",
+    size,
+)
+
+
 def relu(self):
     return pg.max(self, 0)
 
 
 bind_method(Tensor, "relu", relu)
+bind_method(
+    Tensor, "layer_norm", lambda *args, **kwargs: pg.layer_norm(*args, **kwargs)
+)
 bind_method(Tensor, "unfold", lambda *args, **kwargs: pg.im2col(*args, **kwargs))
 bind_method(Tensor, "fold", lambda *args, **kwargs: pg.col2im(*args, **kwargs))
 bind_method(Tensor, "one_hot", classmethod(one_hot))

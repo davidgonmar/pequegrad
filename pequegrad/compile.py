@@ -24,17 +24,19 @@ def reconstruct_tree(flat, example):
 
 
 class jit:
-    def __init__(self, f, externals=[], aot_grads=False):
+    def __init__(self, f, externals=[], enabled=True):
         self.f = f
-        self.aot_grads = aot_grads
         self.cache = dict()
         self.outsistuple = False
         self.externals = externals  # might be things like model parameters
+        self.enabled = enabled
 
     def get_externals(self):
         return self.externals() if callable(self.externals) else self.externals
 
     def __call__(self, *args):
+        if not self.enabled:
+            return self.f(*args)
         f = self.f
         inpshapes = tuple(tuple((tuple(x.shape), x.dtype)) for x in flatten_tree(args))
         if self.cache.get(inpshapes) is None:

@@ -112,13 +112,15 @@ class StatefulModule:
 
 
 class Linear(StatefulModule):
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, bias=True):
         super().__init__()
         self.weights = kaiming_init((in_features, out_features))
-        self.bias = ModuleParam.zeros(out_features)
+        self.bias = ModuleParam.zeros(out_features) if bias else None
 
     def forward(self, input):
-        a = input @ self.weights + self.bias
+        a = input @ self.weights
+        if self.bias is not None:
+            a += self.bias
         return a
 
 
@@ -214,3 +216,22 @@ class Dropout(StatefulModule):
 
     def forward(self, input: Tensor) -> Tensor:
         return input.dropout(self.p, self.training)
+
+
+class Embedding(StatefulModule):
+    def __init__(self, num_embeddings, embedding_dim):
+        self.weight = kaiming_init((num_embeddings, embedding_dim))
+
+    def forward(self, input: Tensor) -> Tensor:
+        return self.weight[input]
+
+
+class LayerNorm(StatefulModule):
+    def __init__(self, normalized_shape, eps=1e-5):
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        # self.weight = ModuleParam.ones(normalized_shape)
+        # self.bias = ModuleParam.zeros(normalized_shape)
+
+    def forward(self, input: Tensor) -> Tensor:
+        return input.layer_norm(self.normalized_shape, self.eps)

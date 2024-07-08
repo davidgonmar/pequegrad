@@ -62,7 +62,8 @@ broadcast_to = pg.broadcast_to
 
 def gelu(self, approximate: str = None):
     if not approximate:
-        raise NotImplementedError("gelu not implemented yet without approximation")
+        # raise NotImplementedError("gelu not implemented yet without approximation")
+        approximate = "tanh"
     if approximate == "tanh":
         return (
             0.5
@@ -432,10 +433,18 @@ def sqrt(self):
     return self**0.5
 
 
+matmul = lambda a, b: a @ b
+
+
 def layer_norm(self, normalized_shape: _Shape, eps=1e-05):
     """Applies Layer Normalization over a mini-batch of inputs"""
 
     # calculate mean/std over last dims
+    normalized_shape = (
+        list(normalized_shape)
+        if isinstance(normalized_shape, tuple)
+        else [normalized_shape]
+    )
     ns_l = len(normalized_shape)
     assert (
         self.dim >= ns_l
@@ -497,6 +506,10 @@ def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
 
 
 fill = pg.fill
+
+
+def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device=device.cpu):
+    return Tensor(np.arange(start, end, step).astype(dtypetonp[dtype]), device=device)
 
 
 def local_response_norm(

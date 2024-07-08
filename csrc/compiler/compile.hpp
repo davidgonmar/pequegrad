@@ -14,8 +14,12 @@ static BroadcastTo &get_broadcast(Tensor &tensor) {
   return dynamic_cast<BroadcastTo &>(*tensor.ad_node()->primitive().get());
 }
 
-static void remove_useless_broadcast(Tensor &out) {
+static void remove_useless_broadcast(Tensor &out, std::set<int> &visited) {
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   for (Tensor &node : out.ad_node()->children()) {
+    visited.insert(out.id);
     if (is_broadcast(node)) {
       auto &broadcast = get_broadcast(node);
       // useless broadcast
@@ -30,23 +34,27 @@ static void remove_useless_broadcast(Tensor &out) {
 
   // now, recursively call remove_useless_broadcast for each children
   for (Tensor &node : out.ad_node()->children()) {
-    remove_useless_broadcast(node);
+    remove_useless_broadcast(node, visited);
   }
 }
 
-static void rec_schedule(Tensor &out) {
+static void rec_schedule(Tensor &out, std::set<int> &visited) {
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
+  visited.insert(out.id);
   schedule(out);
   for (int i = 0; i < out.ad_node()->children().size(); i++) {
     if (i < out.ad_node()->children().size()) {
-      rec_schedule(out.ad_node()->children()[i]);
+      rec_schedule(out.ad_node()->children()[i], visited);
     }
   }
 }
 
 static void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
-  remove_useless_broadcast(out);
+  remove_useless_broadcast(out, std::set<int>());
   // Second -> schedule (fuse)
-  rec_schedule(out);
+  rec_schedule(out, std::set<int>());
 }
 } // namespace pg
