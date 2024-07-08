@@ -1,11 +1,11 @@
-from pequegrad.backend.c import compile, clone_graph, Tensor, grads  # noqa
-
+from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
 
 
 def flatten_tree(tree):
     if isinstance(tree, (tuple, list)):
         return sum([flatten_tree(x) for x in tree], [])
     return [tree]
+
 
 def reconstruct_tree(flat, example):
     if isinstance(example, (tuple, list)):
@@ -27,7 +27,7 @@ class jit:
     def __init__(self, f, externals=[], aot_grads=False):
         self.f = f
         self.aot_grads = aot_grads
-        self.cache = None
+        self.cache = dict()
         self.outsistuple = False
         self.externals = externals  # might be things like model parameters
 
@@ -36,8 +36,8 @@ class jit:
 
     def __call__(self, *args):
         f = self.f
-
-        if self.cache is None:
+        inpshapes = tuple(tuple((tuple(x.shape), x.dtype)) for x in flatten_tree(args))
+        if self.cache.get(inpshapes) is None:
             outs = f(*args)
             self.example_outs = outs
             outs = flatten_tree(outs)
@@ -47,19 +47,17 @@ class jit:
             ), "Only Tensors are supported. Functions must be pure, got {}".format(
                 [type(x) for x in inputs]
             )
-            outs, inps = clone_graph(
-                outs, list(inputs) + list(self.get_externals())
-            )
+            outs, inps = clone_graph(outs, list(inputs) + list(self.get_externals()))
 
             c = {"outs": outs, "inps": inps}
 
-            self.cache = c
+            self.cache[inpshapes] = c
 
             for out in outs:
                 compile(out)
         # now clone c and feed data
         outs, inps = clone_graph(
-            self.cache["outs"], self.cache["inps"]
+            self.cache[inpshapes]["outs"], self.cache[inpshapes]["inps"]
         )  # inps already contains externals
 
         i = 0
@@ -72,7 +70,3 @@ class jit:
             inp.assign(arg)
 
         return reconstruct_tree(outs, self.example_outs)
-
-    def get_grads_graph(self, out, wrt):
-        grad_graph = grads(wrt, out)
-        return grad_graph

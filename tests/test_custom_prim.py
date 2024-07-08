@@ -3,6 +3,7 @@ from pequegrad import custom_prim, Tensor, grads, device
 import numpy as np
 from functools import partial
 
+
 @custom_prim
 def myfunction(x, y):
     return x + y
@@ -64,6 +65,7 @@ def myfunction2_compiled_vjp(primals, tangents, outputs):
     outg = tangents[0]
     return x * 2 * out + outg, y * x, y.log() * outg, z * 2 + out * outg.log()
 
+
 @custom_prim
 def myfunction2(x, y, z, w):
     return (x.log() + y.exp() / z).relu() * w
@@ -75,6 +77,7 @@ def myfunction2_vjp(primals, tangents, outputs):
     x, y, z, w = primals
     outg = tangents[0]
     return x * 2 * out + outg, y * x, y.log() * outg, z * 2 + out * outg.log()
+
 
 @pytest.mark.parametrize("shape", [(3, 4), (5, 6)])
 @pytest.mark.parametrize("compiled", [True, False])
@@ -95,10 +98,11 @@ def test_myfunction2(shape, compiled):
         np.maximum(0, np.log(x.numpy()) + np.exp(y.numpy()) / z.numpy()) * w.numpy()
     )
     assert np.allclose(c.numpy(), cnumpy)
-    np.testing.assert_allclose(g[0].numpy(), 2 * x.numpy() * c.numpy() + tan.numpy(), rtol=1e-5)
+    np.testing.assert_allclose(
+        g[0].numpy(), 2 * x.numpy() * c.numpy() + tan.numpy(), rtol=1e-5
+    )
     np.testing.assert_allclose(g[1].numpy(), x.numpy() * y.numpy(), rtol=1e-5)
     np.testing.assert_allclose(g[2].numpy(), np.log(y.numpy()) * tan.numpy(), rtol=1e-5)
     np.testing.assert_allclose(
-        g[3].numpy(), 2 * z.numpy() + c.numpy() * np.log(tan.numpy())
-        , rtol=1e-5
+        g[3].numpy(), 2 * z.numpy() + c.numpy() * np.log(tan.numpy()), rtol=1e-5
     )

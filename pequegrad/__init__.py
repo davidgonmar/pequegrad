@@ -27,6 +27,6 @@ def custom_prim(f, compile_jit=False):
     if compile_jit:
         p.vjp = lambda f: p.setvjp(jit(f))
     else:
-        p.vjp =  lambda f: p.setvjp(f)
-    
+        p.vjp = lambda f: p.setvjp(f)
+
     return p
