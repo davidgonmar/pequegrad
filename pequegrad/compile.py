@@ -1,6 +1,28 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, grads  # noqa
 
 
+
+def flatten_tree(tree):
+    if isinstance(tree, (tuple, list)):
+        return sum([flatten_tree(x) for x in tree], [])
+    return [tree]
+
+def reconstruct_tree(flat, example):
+    if isinstance(example, (tuple, list)):
+        out = []
+        i = 0
+        for x in example:
+            if isinstance(x, (tuple, list)):
+                l = len(x)
+                out.append(reconstruct_tree(flat[i : i + l], x))
+                i += l
+            else:
+                out.append(flat[i])
+                i += 1
+        return tuple(out) if isinstance(example, tuple) else out
+    return flat[0]
+
+
 class jit:
     def __init__(self, f, externals=[], aot_grads=False):
         self.f = f
@@ -17,31 +39,31 @@ class jit:
 
         if self.cache is None:
             outs = f(*args)
-            # get grads before compiling
-            self.outsistuple = isinstance(outs, (tuple, list))
-            outs = outs if isinstance(outs, (tuple, list)) else [outs]
-            inputs = args
+            self.example_outs = outs
+            outs = flatten_tree(outs)
+            inputs = flatten_tree(args)
             assert all(
                 isinstance(x, Tensor) for x in inputs
             ), "Only Tensors are supported. Functions must be pure, got {}".format(
                 [type(x) for x in inputs]
             )
-            outs, inps, _ = clone_graph(
-                outs, list(inputs) + list(self.get_externals()), []
+            outs, inps = clone_graph(
+                outs, list(inputs) + list(self.get_externals())
             )
 
-            c = {"outs": outs, "grads": grads, "inps": inps}
+            c = {"outs": outs, "inps": inps}
 
             self.cache = c
 
             for out in outs:
                 compile(out)
         # now clone c and feed data
-        outs, inps, _ = clone_graph(
-            self.cache["outs"], self.cache["inps"], []
+        outs, inps = clone_graph(
+            self.cache["outs"], self.cache["inps"]
         )  # inps already contains externals
 
         i = 0
+        args = flatten_tree(args)
         for inp, arg in zip(inps, args):
             inp.assign(arg)
             i += 1
@@ -49,7 +71,7 @@ class jit:
         for inp, arg in zip(inps[i:], self.get_externals()):
             inp.assign(arg)
 
-        return outs if self.outsistuple else outs[0]
+        return reconstruct_tree(outs, self.example_outs)
 
     def get_grads_graph(self, out, wrt):
         grad_graph = grads(wrt, out)

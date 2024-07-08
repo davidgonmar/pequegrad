@@ -24,9 +24,9 @@ def custom_prim(f, compile_jit=False):
     p = _custom_prim(ff)
 
     # not supported yet
-    """ if compile_jit:
+    if compile_jit:
         p.vjp = lambda f: p.setvjp(jit(f))
     else:
         p.vjp =  lambda f: p.setvjp(f)
-    """
+    
     return p

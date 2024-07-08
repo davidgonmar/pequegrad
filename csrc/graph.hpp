@@ -3,9 +3,9 @@
 
 namespace pg {
 
-std::tuple<std::vector<Tensor>, std::vector<Tensor>, std::vector<Tensor>>
-clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
-            std::vector<Tensor> &externals) {
+
+std::tuple<std::vector<Tensor>, std::vector<Tensor>>
+clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
   std::vector<Tensor> new_outputs;
   std::vector<Tensor> new_inputs;
 
@@ -68,11 +68,14 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs,
   }
   for (Tensor &t : inputs) {
     if (old_to_new.find(t) == old_to_new.end()) {
-      throw std::runtime_error("Input not found in old_to_new: " + t.str());
+      //throw std::runtime_error("Input not found in old_to_new: " + t.str());
+      // TODO -- maybe something cleaner
+      new_inputs.push_back(t.copy_graph(std::vector<Tensor>(), std::make_shared<JitBoundary>()));
+      continue; // means the output does not depend on this input
     }
     new_inputs.push_back(old_to_new.at(t));
   }
-  auto x = std::make_tuple(new_outputs, new_inputs, externals);
+  auto x = std::make_tuple(new_outputs, new_inputs);
 
   return x;
 }

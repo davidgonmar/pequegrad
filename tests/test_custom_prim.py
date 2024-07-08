@@ -1,7 +1,7 @@
 import pytest
-from pequegrad import custom_prim, Tensor, grads
+from pequegrad import custom_prim, Tensor, grads, device
 import numpy as np
-
+from functools import partial
 
 @custom_prim
 def myfunction(x, y):
@@ -52,6 +52,18 @@ def test_myfunction(a_values, b_values, expected_c, expected_g0, expected_g1):
     assert np.allclose(g[1].numpy(), expected_g1)
 
 
+@partial(custom_prim, compile_jit=True)
+def myfunction2_compiled(x, y, z, w):
+    return (x.log() + y.exp() / z).relu() * w
+
+
+@myfunction2_compiled.vjp
+def myfunction2_compiled_vjp(primals, tangents, outputs):
+    out = outputs[0]
+    x, y, z, w = primals
+    outg = tangents[0]
+    return x * 2 * out + outg, y * x, y.log() * outg, z * 2 + out * outg.log()
+
 @custom_prim
 def myfunction2(x, y, z, w):
     return (x.log() + y.exp() / z).relu() * w
@@ -64,17 +76,17 @@ def myfunction2_vjp(primals, tangents, outputs):
     outg = tangents[0]
     return x * 2 * out + outg, y * x, y.log() * outg, z * 2 + out * outg.log()
 
-
 @pytest.mark.parametrize("shape", [(3, 4), (5, 6)])
-def test_myfunction2(shape):
-    x = Tensor(np.random.rand(*shape))
-    y = Tensor(np.random.rand(*shape))
-    z = Tensor(np.random.rand(*shape))
-    w = Tensor(np.random.rand(*shape))
+@pytest.mark.parametrize("compiled", [True, False])
+def test_myfunction2(shape, compiled):
+    x = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
+    y = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
+    z = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
+    w = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
 
-    tan = Tensor(np.random.rand(*shape))
+    tan = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
 
-    c = myfunction2(x, y, z, w)
+    c = myfunction2(x, y, z, w) if not compiled else myfunction2_compiled(x, y, z, w)
     print("c", c)
 
     g = grads([x, y, z, w], c, tan)
@@ -83,9 +95,10 @@ def test_myfunction2(shape):
         np.maximum(0, np.log(x.numpy()) + np.exp(y.numpy()) / z.numpy()) * w.numpy()
     )
     assert np.allclose(c.numpy(), cnumpy)
-    np.testing.assert_allclose(g[0].numpy(), 2 * x.numpy() * c.numpy() + tan.numpy())
-    np.testing.assert_allclose(g[1].numpy(), x.numpy() * y.numpy())
-    np.testing.assert_allclose(g[2].numpy(), np.log(y.numpy()) * tan.numpy())
+    np.testing.assert_allclose(g[0].numpy(), 2 * x.numpy() * c.numpy() + tan.numpy(), rtol=1e-5)
+    np.testing.assert_allclose(g[1].numpy(), x.numpy() * y.numpy(), rtol=1e-5)
+    np.testing.assert_allclose(g[2].numpy(), np.log(y.numpy()) * tan.numpy(), rtol=1e-5)
     np.testing.assert_allclose(
         g[3].numpy(), 2 * z.numpy() + c.numpy() * np.log(tan.numpy())
+        , rtol=1e-5
     )
