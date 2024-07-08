@@ -58,6 +58,68 @@ public:
   explicit JitBoundary() {}
 };
 
+class FromFunctions : public ADPrimitive {
+
+  std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>
+      _forward_fn;
+  std::function<std::vector<Tensor>(const std::vector<Tensor> &primals,
+                                    const std::vector<Tensor> &tangents,
+                                    const std::vector<Tensor> &outputs)>
+      _backward_fn;
+
+public:
+  explicit FromFunctions(
+      std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>
+          forward_fn,
+      std::function<std::vector<Tensor>(const std::vector<Tensor> &primals,
+                                        const std::vector<Tensor> &tangents,
+                                        const std::vector<Tensor> &outputs)>
+          backward_fn)
+      : _forward_fn(forward_fn), _backward_fn(backward_fn) {}
+
+  void dispatch_general(const std::vector<Tensor> &inputs,
+                        std::vector<Tensor> &outputs) {
+    std::vector<Tensor> outs = _forward_fn(inputs);
+
+    for (size_t i = 0; i < outs.size(); i++) {
+      outs[i].eval(false);
+    }
+    PG_CHECK_RUNTIME(outs.size() == outputs.size(), "Expected ", outputs.size(),
+                     " outputs, got ", outs.size());
+    for (size_t i = 0; i < outs.size(); i++) {
+      outputs[i].assign(outs[i]);
+    }
+  }
+
+  void dispatch_cpu(const std::vector<Tensor> &inputs,
+                    std::vector<Tensor> &outputs) override {
+    dispatch_general(inputs, outputs);
+  }
+
+  void dispatch_cuda(const std::vector<Tensor> &inputs,
+                     std::vector<Tensor> &outputs) override {
+    dispatch_general(inputs, outputs);
+  }
+
+  std::vector<Tensor> backward(const std::vector<Tensor> &primals,
+                               const std::vector<Tensor> &tangents,
+                               const std::vector<Tensor> &outputs) override {
+    return _backward_fn(primals, tangents, outputs);
+  }
+
+  std::vector<View> precompute(const std::vector<Tensor> &inputs) override {
+    auto outs = _forward_fn(inputs);
+    std::vector<View> views;
+    views.reserve(outs.size());
+    for (auto &out : outs) {
+      views.push_back(out.view());
+    }
+
+    return views;
+  }
+
+  DEFINE_STR_NAME(FromFunctions)
+};
 class UnaryPrimitive : public ADPrimitive {};
 
 class FromNumpy : public ADPrimitive {

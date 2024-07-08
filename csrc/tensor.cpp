@@ -34,7 +34,7 @@ View::View(const std::shared_ptr<void> &ptr, const size_t nbytes,
 
 ADNode::ADNode(std::shared_ptr<ADPrimitive> primitive,
                std::vector<Tensor> children)
-    : _primitive(std::move(primitive)), _children(std::move(children)) {}
+    : _primitive(primitive), _children(children) {}
 
 ADNode ADNode::create_leaf() { return ADNode(); }
 
@@ -66,6 +66,7 @@ ViewOptions &ViewOptions::like_natural(const Tensor &t) {
   _strides_set = true;
   return *this;
 }
+typedef void (*FunPtr)();
 
 std::vector<Tensor> &ADNode::children() { return _children; }
 Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
@@ -90,7 +91,7 @@ Tensor Tensor::eval(bool detach) {
     }
     return *this;
   }
-  ADPrimitive *primitive = (_ad_node->primitive().get());
+  auto primitive = _ad_node->primitive();
   const device::DeviceKind this_device = this->device();
   std::vector<Tensor> &children = _ad_node->children();
   for (Tensor &child : children) {
@@ -134,7 +135,9 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
   };
 
   if (tangent.shape() != output.shape()) {
-    throw std::runtime_error("Tangent shape does not match tensor shape");
+    throw std::runtime_error(
+        "Tangent shape does not match tensor shape, got: " + tangent.str() +
+        " and " + output.str());
   }
   std::map<Tensor, Tensor, decltype(tensorComparator)> tangents_map(
       tensorComparator);
@@ -162,7 +165,7 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
         }
         return flattened_tangents;
       };
-  if (output.ad_node().is_leaf()) {
+  if (output.ad_node()->is_leaf()) {
     return flatten_tangents(tangents_map);
   }
 
@@ -171,7 +174,7 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
 
   std::function<void(Tensor)> toposort = [&](Tensor t) -> void {
     visited.insert(t);
-    for (auto child : t.ad_node().children()) {
+    for (auto child : t.ad_node()->children()) {
       if (!visited.count(child)) {
         // Calling the lambda function recursively
         toposort(child);
@@ -184,11 +187,11 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
 
   auto nodes_reversed = std::vector<Tensor>(nodes.rbegin(), nodes.rend());
   for (auto node : nodes_reversed) {
-    if (node.ad_node().is_leaf()) {
+    if (node.ad_node()->is_leaf()) {
       continue;
     }
-    ADPrimitive *primitive = node.ad_node().primitive().get();
-    std::vector<Tensor> children = node.ad_node().children();
+    ADPrimitive *primitive = node.ad_node()->primitive().get();
+    std::vector<Tensor> children = node.ad_node()->children();
     std::vector<Tensor> outputs = {node};
     PG_CHECK_RUNTIME(tangents_map.count(node) == 1,
                      "Tangent not found for node: ", node.str());
@@ -235,6 +238,11 @@ Tensor::copy_graph(std::vector<Tensor> &inputs,
   return copy;
 }
 
+Tensor::Tensor(Tensor &&other) {
+  _view = std::move(other._view);
+  _ad_node = std::move(other._ad_node);
+  id = other.id;
+}
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
                std::vector<Tensor> inputs,
                std::optional<device::DeviceKind> _device) {
@@ -256,7 +264,9 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
   // this->_view->set_dtype(primitive_ptr->infer_output_dtypes(inputs)[0]);
 }
 
-ADNode &Tensor::ad_node() const { return *_ad_node; }
+std::shared_ptr<ADNode> Tensor::ad_node() const {
+  return _ad_node == nullptr ? std::make_shared<ADNode>() : _ad_node;
+}
 void ADNode::set_children(const std::vector<Tensor> &children) {
   _children = children;
 }

@@ -1,3 +1,4 @@
+#define PYBIND11_DETAILED_ERROR_MESSAGES
 #include "compiler/compile.hpp"
 #include "dtype.hpp"
 #include "graph.hpp"
@@ -162,6 +163,145 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def(#pyname, py::overload_cast<const Tensor &, double>(&pg::op))        \
       .def(#pyname, py::overload_cast<double, const Tensor &>(&pg::op))
 
+  class PyADPrimitive : public ADPrimitive {
+  public:
+    using ADPrimitive::ADPrimitive; // Inherit constructors
+
+    virtual bool eager() override {
+      PYBIND11_OVERRIDE(
+          bool,        // Return type
+          ADPrimitive, // Parent class
+          eager        // Name of the method in C++ (must match Python name)
+      );
+    }
+
+    virtual void dispatch_cpu(const std::vector<Tensor> &inputs,
+                              std::vector<Tensor> &outputs) override {
+      PYBIND11_OVERRIDE(
+          void,           // Return type
+          ADPrimitive,    // Parent class
+          dispatch_cpu,   // Name of the method in C++ (must match Python name)
+          inputs, outputs // Arguments
+      );
+    }
+
+    virtual void dispatch_cuda(const std::vector<Tensor> &inputs,
+                               std::vector<Tensor> &outputs) override {
+      PYBIND11_OVERRIDE(
+          void,           // Return type
+          ADPrimitive,    // Parent class
+          dispatch_cuda,  // Name of the method in C++ (must match Python name)
+          inputs, outputs // Arguments
+      );
+    }
+
+    virtual std::vector<Tensor>
+    backward(const std::vector<Tensor> &primals,
+             const std::vector<Tensor> &tangents,
+             const std::vector<Tensor> &outputs) override {
+      PYBIND11_OVERRIDE(
+          std::vector<Tensor>, // Return type
+          ADPrimitive,         // Parent class
+          backward, // Name of the method in C++ (must match Python name)
+          primals, tangents, outputs // Arguments
+      );
+    }
+
+    virtual std::vector<View>
+    precompute(const std::vector<Tensor> &inputs) override {
+      PYBIND11_OVERRIDE(
+          std::vector<View>, // Return type
+          ADPrimitive,       // Parent class
+          precompute, // Name of the method in C++ (must match Python name)
+          inputs      // Arguments
+      );
+    }
+
+    virtual std::string str() override {
+      PYBIND11_OVERRIDE(
+          std::string, // Return type
+          ADPrimitive, // Parent class
+          str          // Name of the method in C++ (must match Python name)
+      );
+    }
+  };
+  py::class_<ADPrimitive, PyADPrimitive, std::shared_ptr<ADPrimitive>>(
+      m, "PyADPrimitive")
+      .def(py::init([]() {
+        return std::make_shared<PyADPrimitive>();
+      })) // Constructor for multiple inheritance
+      .def("eager", &ADPrimitive::eager)
+      .def("dispatch_cpu", &ADPrimitive::dispatch_cpu)
+      .def("dispatch_cuda", &ADPrimitive::dispatch_cuda)
+      .def("backward", &ADPrimitive::backward)
+      .def("precompute", &ADPrimitive::precompute)
+      .def("str", &ADPrimitive::str)
+      .def("__copy__",
+           [](const ADPrimitive &self) { return ADPrimitive(self); })
+      .def("__deepcopy__",
+           [](const ADPrimitive &self, py::dict) { return ADPrimitive(self); });
+  py::class_<View>(m, "View").def(py::init<>());
+
+  py::class_<ADNode>(m, "ADNode")
+      .def(py::init<std::shared_ptr<ADPrimitive>, std::vector<Tensor>>())
+      .def("primitive", &ADNode::primitive)
+      .def("children", &ADNode::children)
+      .def("set_children", &ADNode::set_children)
+      .def("set_primitive", [](ADNode &node, std::shared_ptr<ADPrimitive> &p) {
+        node.set_primitive(p);
+      });
+
+  class PyCustomPrimitiveFromFn {
+  public:
+    std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>
+        basefn;
+    std::optional<std::function<std::vector<Tensor>(
+        const std::vector<Tensor> &primals, const std::vector<Tensor> &tangents,
+        const std::vector<Tensor> &outputs)>>
+        vjpfn;
+    void set_vjpfn(py::function vjpfn) {
+      this->vjpfn = [vjpfn](const std::vector<Tensor> &primals,
+                            const std::vector<Tensor> &tangents,
+                            const std::vector<Tensor> &outputs) {
+        return vjpfn(primals, tangents, outputs).cast<std::vector<Tensor>>();
+      };
+    }
+    // constructor
+    PyCustomPrimitiveFromFn(py::function basefn) {
+      this->basefn = [basefn](const std::vector<Tensor> &inputs) {
+        py::tuple args(inputs.size());
+        for (size_t i = 0; i < inputs.size(); ++i) {
+          args[i] = inputs[i];
+        }
+        auto res = basefn(*args);
+        // assert res returned a tuple py::tuple
+        std::vector<Tensor> out;
+        PG_CHECK_RUNTIME(py::isinstance<py::tuple>(res),
+                         "Custom primitive must return a tuple");
+        auto castedres = res.cast<py::tuple>();
+        for (size_t i = 0; i < castedres.size(); ++i) {
+          out.push_back(castedres[i].cast<Tensor>());
+        }
+        return out;
+      };
+    }
+  };
+
+  py::class_<PyCustomPrimitiveFromFn>(m, "custom_prim")
+      .def(py::init<py::function>())
+      .def("vjp", &PyCustomPrimitiveFromFn::set_vjpfn)
+      .def("__call__", [](PyCustomPrimitiveFromFn &self, py::args args) {
+        std::vector<Tensor> inputs;
+        for (auto arg : args) {
+          inputs.push_back(arg.cast<Tensor>());
+        }
+        PG_CHECK_RUNTIME(self.vjpfn.has_value(),
+                         "Custom primitive must have a vjp function");
+        FromFunctions prim = FromFunctions(self.basefn, self.vjpfn.value());
+        return Tensor::from_primitive(std::make_shared<FromFunctions>(prim),
+                                      inputs);
+      });
+
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def_property_readonly("ndim", &Tensor::ndim)
@@ -170,8 +310,20 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
       .def("children", &Tensor::children)
+      .def(
+          "from_primitive",
+          [](const std::shared_ptr<ADPrimitive> &primitive,
+             std::vector<Tensor> inputs,
+             std::optional<device::DeviceKind> device) {
+            return Tensor::from_primitive(primitive, inputs, device);
+          },
+          py::return_value_policy::reference)
+      .def("set_primitive",
+           [](Tensor &t, std::shared_ptr<ADPrimitive> &p) {
+             t.ad_node()->set_primitive(p);
+           })
       .def("ad_context",
-           [](const Tensor &t) { return t.ad_node().primitive()->str(); })
+           [](const Tensor &t) { return t.ad_node()->primitive()->str(); })
       .def("to", &Tensor::to)
       .def("from_numpy",
            [](py::array_t<float> np_array) {
@@ -326,5 +478,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
                 _tuple, arr.shape(), arr.device());
             return pg::select(arr, parsed);
           },
-          py::arg("item").noconvert());
+          py::arg("item").noconvert())
+      .def("view", [](const Tensor &t) { return t.view(); })
+      .def("primitive",
+           [](const Tensor &t) { return t.ad_node()->primitive(); })
+      .def("ad_node", [](const Tensor &t) { return t.ad_node(); });
 };

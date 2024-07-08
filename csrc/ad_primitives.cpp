@@ -18,7 +18,7 @@ void ADPrimitive::dispatch_cpu(const std::vector<Tensor> &inputs,
 
 void ADPrimitive::dispatch_cuda(const std::vector<Tensor> &inputs,
                                 std::vector<Tensor> &outputs) {
-  throw std::runtime_error("dispatch_cuda not implemented" + str());
+  throw std::runtime_error("dispatch_cuda not implemented for " + str());
 }
 
 std::vector<Tensor> Add::backward(const std::vector<Tensor> &primals,

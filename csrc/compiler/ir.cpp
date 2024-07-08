@@ -88,7 +88,7 @@ std::shared_ptr<BaseExpr>
 graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
                   IrBuilderContext &ctx,
                   const std::vector<Tensor> &orig_inputs) {
-  auto prim = out.ad_node().primitive();
+  auto prim = out.ad_node()->primitive();
   // first detect constants, then args, then binary ops, then unary ops
   if (is<Fill>(prim)) {
     auto fill = std::make_shared<ImmExpr>();
@@ -369,15 +369,15 @@ static std::pair<ir_t, ir_t> render_local_idxs(
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
 graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
-  PG_CHECK_RUNTIME(is_reduce_op(out.ad_node().primitive()),
+  PG_CHECK_RUNTIME(is_reduce_op(out.ad_node()->primitive()),
                    "graph_to_ir_reduce can only be called with a reduce op");
 
   std::shared_ptr<Reduce> reduce =
-      std::dynamic_pointer_cast<Reduce>(out.ad_node().primitive());
+      std::dynamic_pointer_cast<Reduce>(out.ad_node()->primitive());
   axes_t axes = reduce->axes();
   for (int xx = 0; xx < axes.size(); xx++) {
-    axes[xx] =
-        axes[xx] < 0 ? out.ad_node().children()[0].ndim() + axes[xx] : axes[xx];
+    axes[xx] = axes[xx] < 0 ? out.ad_node()->children()[0].ndim() + axes[xx]
+                            : axes[xx];
   }
   auto is_reduced = [&axes](int i) {
     return std::find(axes.begin(), axes.end(), i) != axes.end();
@@ -440,7 +440,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   int i = 0;
   std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node().primitive())) {
+    if (is<Fill>(input.ad_node()->primitive())) {
       i++;
       // will be replaced by a constant
       continue;
@@ -502,8 +502,8 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // first, render the accumulator (imm value of 0)
   auto acc = std::make_shared<ImmExpr>();
-  acc->value = (is<Sum>(out.ad_node().primitive()) ||
-                is<Mean>(out.ad_node().primitive()))
+  acc->value = (is<Sum>(out.ad_node()->primitive()) ||
+                is<Mean>(out.ad_node()->primitive()))
                    ? 0
                    : std::numeric_limits<float>::lowest();
   acc->dtype = out.dtype();
@@ -536,7 +536,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // here, render the missing input idxs based on the reduce idx for each input
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node().primitive())) {
+    if (is<Fill>(input.ad_node()->primitive())) {
       i++;
       continue;
     }
@@ -563,12 +563,12 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   }
 
   // render inner
-  graph_to_ir_inner(out.ad_node().children()[0], ir, ctx, inputs);
+  graph_to_ir_inner(out.ad_node()->children()[0], ir, ctx, inputs);
 
   // acc += inner_ir[-1]
 
   auto acc_binop = std::make_shared<AccumExpr>();
-  auto prim = out.ad_node().primitive();
+  auto prim = out.ad_node()->primitive();
   acc_binop->op =
       (is<Sum>(prim) || is<Mean>(prim)) ? AccumOpKind::Add : AccumOpKind::Max;
   acc_binop->lhs = acc;
@@ -614,7 +614,7 @@ std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
 graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // out = reduce(fn(inputs), axis=...)
-  if (is_reduce_op(out.ad_node().primitive())) {
+  if (is_reduce_op(out.ad_node()->primitive())) {
     return graph_to_ir_reduce(out, inputs);
   }
   // the result will be a linear IR
@@ -653,7 +653,7 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   int i = 0;
   std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node().primitive())) {
+    if (is<Fill>(input.ad_node()->primitive())) {
       i++;
       // will be replaced by a constant
       continue;

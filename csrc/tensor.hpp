@@ -357,21 +357,34 @@ public:
   void detach_() {
     // remove children
     _children.clear();
-    // remove primitive
-    _primitive = nullptr;
+    set_primitive(nullptr);
   }
   // Copy and move constructors
   ADNode(const ADNode &other) {
-    _primitive = other._primitive;
+    set_primitive(other.primitive());
     _children = other._children;
 
     _inferred_shape = other._inferred_shape;
   }
 
   ADNode(ADNode &&other) {
-    _primitive = std::move(other._primitive);
+    set_primitive(std::move(other.primitive()));
     _children = std::move(other._children);
     _inferred_shape = std::move(other._inferred_shape);
+  }
+
+  ADNode &operator=(const ADNode &other) {
+    set_primitive(other.primitive());
+    _children = other._children;
+    _inferred_shape = other._inferred_shape;
+    return *this;
+  }
+
+  ADNode &operator=(ADNode &&other) {
+    set_primitive(std::move(other.primitive()));
+    _children = std::move(other._children);
+    _inferred_shape = std::move(other._inferred_shape);
+    return *this;
   }
 
   void set_primitive(std::shared_ptr<ADPrimitive> &primitive);
@@ -394,7 +407,7 @@ class Tensor {
 public:
   Tensor astype(DType dtype) const { return pg::astype(*this, dtype); }
   std::vector<Tensor> &children() const { return _ad_node->children(); }
-  ADNode &ad_node() const;
+  std::shared_ptr<ADNode> ad_node() const;
   void assign(Tensor other) {
     if (!other.is_evaled()) {
       other.eval();
@@ -504,11 +517,7 @@ public:
     id = other.id;
   }
 
-  Tensor(Tensor &&other) {
-    _view = std::move(other._view);
-    _ad_node = std::move(other._ad_node);
-    id = other.id;
-  }
+  Tensor(Tensor &&other);
 
   Tensor &operator=(const Tensor &other) {
     _view = other._view;
