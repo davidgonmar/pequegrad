@@ -300,7 +300,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
         PG_CHECK_RUNTIME(self.vjpfn.has_value(),
                          "Custom primitive must have a vjp function");
         FromFunctions prim = FromFunctions(self.basefn, self.vjpfn.value());
-        return Tensor::from_primitive(std::make_shared<FromFunctions>(prim),
+        return Tensor::from_primitive_one(std::make_shared<FromFunctions>(prim),
                                       inputs);
       });
 
@@ -317,7 +317,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
           [](const std::shared_ptr<ADPrimitive> &primitive,
              std::vector<Tensor> inputs,
              std::optional<device::DeviceKind> device) {
-            return Tensor::from_primitive(primitive, inputs, device);
+            return Tensor::from_primitive_one(primitive, inputs, device);
           },
           py::return_value_policy::reference)
       .def("set_primitive",

@@ -69,21 +69,77 @@ ViewOptions &ViewOptions::like_natural(const Tensor &t) {
 typedef void (*FunPtr)();
 
 std::vector<Tensor> &ADNode::children() { return _children; }
-Tensor Tensor::from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
+Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
                               std::vector<Tensor> inputs,
-                              std::optional<device::DeviceKind> device) {
+                              std::optional<device::DeviceKind> _device) {
   if (inputs.size() == 0) {
-    PG_CHECK_ARG(device.has_value(),
+    PG_CHECK_ARG(_device.has_value(),
                  "Device must be specified for leaf nodes.");
   }
 
-  Tensor t = Tensor(primitive, inputs, device);
+  device::DeviceKind device =
+      _device.has_value() ? _device.value() : inputs[0].device();
+  Tensor t = Tensor(primitive, inputs, 0, device);
+   
+  for (const Tensor &input : inputs) {
+    PG_CHECK_ARG(input.device() == device,
+                 "All inputs to a primitive must be on the same device, got ",
+                 device_to_string(input.device()), " and ",
+                 device_to_string(device));
+  }
+  
+  ADPrimitive *primitive_ptr = primitive.get();
+  std::vector<View> vs = primitive_ptr->precompute(inputs);
+  PG_CHECK_RUNTIME(vs.size() == 1, "precompute must return a single view");
+  t.set_view(vs[0]);
+  t.view_ptr()->set_device(device);
   // check if primitive is marked as eager
   if (primitive->eager()) {
     t.eval(false);
   }
   return t;
 }
+
+std::vector<Tensor> Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
+                                      std::vector<Tensor> inputs,
+                                      std::optional<device::DeviceKind> _device) {
+  if (inputs.size() == 0) {
+    PG_CHECK_ARG(_device.has_value(),
+                 "Device must be specified for leaf nodes.");
+  }
+
+  device::DeviceKind device =
+      _device.has_value() ? _device.value() : inputs[0].device();
+  std::vector<View> vs = primitive->precompute(inputs);
+  int nouts = vs.size();
+  std::vector<Tensor> tensors;
+  for (int i = 0; i < nouts; i++) {
+    Tensor t = Tensor(primitive, inputs, i, device);
+    for (const Tensor &input : inputs) {
+      PG_CHECK_ARG(input.device() == device,
+                   "All inputs to a primitive must be on the same device, got ",
+                   device_to_string(input.device()), " and ",
+                   device_to_string(device));
+    }
+    t.set_view(vs[i]);
+    t.view_ptr()->set_device(device);
+    // check if primitive is marked as eager
+    if (primitive->eager()) {
+      t.eval(false);
+    }
+    tensors.push_back(t);
+  }
+
+  // for each tensor, set siblings to be the other tensors
+  for (int i = 0; i < nouts; i++) {
+    // copy the tensors list
+    std::vector<Tensor> siblings = tensors;
+    // remove the current tensor
+    siblings.erase(siblings.begin() + i);
+    tensors[i].ad_node()->set_siblings(siblings);
+  }
+}
+
 Tensor Tensor::eval(bool detach) {
   if (is_evaled()) {
     if (detach) {
@@ -99,15 +155,18 @@ Tensor Tensor::eval(bool detach) {
                      "All children must be on the same device");
     child.eval(detach);
   }
-  // outputs is just `this` tensor
-  std::vector<Tensor> outputs = {*this};
+  // outputs is just `this` tensor and the siblings (ordered by position)
+  std::vector<Tensor> outputs = this->ad_node()->siblings();
+  outputs.insert(outputs.begin(), *this);
+  // sort by position
+  std::sort(outputs.begin(), outputs.end(),
+            [](const Tensor &a, const Tensor &b) { return a.ad_node()->position() < b.ad_node()->position(); });
   // assert all children are on the same device
   for (Tensor &child : children) {
     PG_CHECK_RUNTIME(child.device() == this_device,
                      "All children must be on the same device");
   }
   switch (this_device) {
-
   case device::DeviceKind::CPU:
     primitive->dispatch_cpu(children, outputs);
     break;
@@ -244,25 +303,11 @@ Tensor::Tensor(Tensor &&other) {
   id = other.id;
 }
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-               std::vector<Tensor> inputs,
+               std::vector<Tensor> inputs, int position,
                std::optional<device::DeviceKind> _device) {
   _ad_node = std::make_shared<ADNode>(primitive, inputs);
-  device::DeviceKind device =
-      _device.has_value() ? _device.value() : inputs[0].device();
-  for (const Tensor &input : inputs) {
-    PG_CHECK_ARG(input.device() == device,
-                 "All inputs to a primitive must be on the same device, got ",
-                 device_to_string(input.device()), " and ",
-                 device_to_string(device));
-  }
-  this->_view->set_device(device);
-  ADPrimitive *primitive_ptr = primitive.get();
-  View v = primitive_ptr->precompute(inputs)[0];
-  this->_view = std::make_shared<View>(v);
-  this->_view->set_device(device);
-  // this->_view->set_shape(shape[0]);
-  // this->_view->set_dtype(primitive_ptr->infer_output_dtypes(inputs)[0]);
-}
+               }
+ 
 
 std::shared_ptr<ADNode> Tensor::ad_node() const {
   return _ad_node == nullptr ? std::make_shared<ADNode>() : _ad_node;

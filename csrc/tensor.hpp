@@ -392,11 +392,17 @@ public:
   void set_primitive(std::shared_ptr<ADPrimitive> &&primitive);
   void set_children(const std::vector<Tensor> &children);
   void replace_child(const Tensor &old_child, const Tensor &new_child);
-
+  void set_position(int position) { _position = position; }
+  void set_siblings(const std::vector<Tensor> &siblings) { _siblings = siblings; }
+  std::vector<Tensor> &siblings() { return _siblings; }
+  
+  int position() const { return _position; }
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children = std::vector<Tensor>();
+  std::vector<Tensor> _siblings = std::vector<Tensor>();
   shape_t _inferred_shape;
+  int _position = 0;
 };
 
 // forward declaration
@@ -534,7 +540,8 @@ public:
   }
 
   View view() const { return *_view; }
-
+  void set_view(const View &view) { _view = std::make_shared<View>(view); }
+  void set_view(const std::shared_ptr<View> &view) { _view = view; }
   std::shared_ptr<View> view_ptr() const { return _view; }
 
   void init_view(std::shared_ptr<View> view) { _view->init_view(view); }
@@ -592,7 +599,7 @@ public:
     }
 
     DType dtype = dtype_from_pytype<T>();
-    Tensor a = Tensor::from_primitive(
+    Tensor a = Tensor::from_primitive_one(
         std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr,
                                     size, device),
         {}, device);
@@ -697,7 +704,11 @@ public:
   }
 
   static Tensor
-  from_primitive(const std::shared_ptr<ADPrimitive> &primitive,
+  from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
+                 std::vector<Tensor> inputs,
+                 std::optional<device::DeviceKind> device = std::nullopt);
+  static std::vector<Tensor>
+  from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
                  std::vector<Tensor> inputs,
                  std::optional<device::DeviceKind> device = std::nullopt);
   Tensor eval(bool detach = true);
@@ -734,7 +745,7 @@ private:
       std::make_shared<ADNode>(); // creates a leaf node by default
 
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-         std::vector<Tensor> inputs,
+         std::vector<Tensor> inputs,  int position,
          std::optional<device::DeviceKind> device = std::nullopt);
 };
 
