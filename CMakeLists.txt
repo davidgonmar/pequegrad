@@ -110,6 +110,11 @@ else()
     endif()
 endif()
 
+if (MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8380")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /STACK:8388")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /STACK:8388")
+endif()
 
 target_compile_options(pequegrad_c PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>)
 target_compile_options(pequegrad_c PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${cu_flags}>)

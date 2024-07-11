@@ -10,17 +10,26 @@ def viz(tensor_or_tensors, viz=True, name="graph"):
             node_name = tensor.id
             G.add_node(
                 node_name,
-                label=f"{node_name}\n({tensor.ad_context()}), shape: {tensor.shape}, evaled: {tensor.is_evaled()}",
+                label=f"{node_name}\n({tensor.ad_context() + str(tensor.position)}), shape: {tensor.shape}, evaled: {tensor.is_evaled()}",
             )
             seen.add(tensor)
             for child in tensor.children():
                 child_name = child.id
                 G.add_node(
                     child_name,
-                    label=f"{child_name}\n({child.ad_context()}), shape: {child.shape}, evaled: {child.is_evaled()}",
+                    label=f"{child_name}\n({child.ad_context() + str(child.position)}), shape: {child.shape}, evaled: {child.is_evaled()}",
                 )
-                G.add_edge(child_name, node_name)
+                G.add_edge(child_name, node_name, relation="child")
                 add_node(child)
+
+            for sibling in tensor.siblings():
+                sibling_name = sibling.id
+                G.add_node(
+                    sibling_name,
+                    label=f"{sibling_name}\n({sibling.ad_context() + str(sibling.position)}), shape: {sibling.shape}, evaled: {sibling.is_evaled()}",
+                )
+                G.add_edge(sibling_name, node_name, relation="sibling")
+                add_node(sibling)
 
     seen = set()
     for tensor in (
@@ -37,8 +46,17 @@ def viz(tensor_or_tensors, viz=True, name="graph"):
             net.add_node(
                 node, label=data["label"], title=data["label"], shape="ellipse"
             )
-        for source, target in G.edges():
-            net.add_edge(source, target, arrows="to")
+
+        for source, target, data in G.edges(data=True):
+            edge_options = {"arrows": "to"}
+            if data.get("relation") == "child":
+                edge_options["color"] = {"color": "blue"}
+                edge_options["dashes"] = False
+            elif data.get("relation") == "sibling":
+                edge_options["color"] = {"color": "red"}
+                edge_options["dashes"] = True
+
+            net.add_edge(source, target, **edge_options)
 
         net.set_options(
             """

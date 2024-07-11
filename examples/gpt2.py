@@ -158,7 +158,7 @@ print(input_ids)
 
 
 @functools.partial(
-    pg.jit, externals=model.parameters(), enabled=False
+    pg.jit, externals=model.parameters(), enabled=True
 )  # slower than no jit :(
 def sample(inputs):
     return model(inputs)

@@ -1,5 +1,4 @@
 #pragma once
-#include "common/view_helpers.hpp"
 #include "shape.hpp"
 #include "tensor.hpp"
 #include <stdexcept>

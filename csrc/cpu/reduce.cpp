@@ -1,5 +1,6 @@
 #include "reduce.hpp"
 #include "ad_primitives.hpp"
+#include "common/view_helpers.hpp"
 #include "dispatch.hpp"
 
 #define FUNCTOR_FOR_OP_KIND(OP)                                                \

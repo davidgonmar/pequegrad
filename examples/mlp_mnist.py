@@ -77,7 +77,7 @@ def test_model(model, ds):
     correct = 0
     total = 0
     loader = DataLoader(ds, batch_size=4096)
-    step = model.forward
+    step = jit(model.forward, externals=model.parameters())
     start = None
     i = 0
     for i in range(1):

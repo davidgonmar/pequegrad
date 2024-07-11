@@ -1,6 +1,7 @@
 #include "./binary.cuh"
 #include "./unary.cuh"
 #include "ad_primitives.hpp"
+#include "common/view_helpers.hpp"
 #include "cuda_utils.cuh"
 #include "random.cuh"
 #include "tensor.hpp"

@@ -1,6 +1,7 @@
 #pragma once
 #include "dtype.hpp"
 #include "shape.hpp"
+#include <cmath>
 #include <functional>
 #include <vector>
 

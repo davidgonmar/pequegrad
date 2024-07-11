@@ -301,7 +301,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
                          "Custom primitive must have a vjp function");
         FromFunctions prim = FromFunctions(self.basefn, self.vjpfn.value());
         return Tensor::from_primitive_one(std::make_shared<FromFunctions>(prim),
-                                      inputs);
+                                          inputs);
       });
 
   // module classes
@@ -312,6 +312,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
       .def("children", &Tensor::children)
+      .def("siblings",
+           [](Tensor &t) {
+             std::vector<Tensor> sibs = t.ad_node()->siblings();
+             return sibs;
+           })
       .def(
           "from_primitive",
           [](const std::shared_ptr<ADPrimitive> &primitive,
@@ -389,6 +394,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("is_evaled", &Tensor::is_evaled)
       .def("__hash__", [](const Tensor &t) { return t.id; })
       .def_property_readonly("id", [](const Tensor &t) { return t.id; })
+      .def_property_readonly(
+          "position", [](const Tensor &t) { return t.ad_node()->position(); })
       .def("numpy",
            [](Tensor &arr) -> NpArrayVariant {
              if (!arr.is_evaled())

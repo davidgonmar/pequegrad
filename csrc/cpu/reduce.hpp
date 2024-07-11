@@ -2,6 +2,7 @@
 
 #include "dtype.hpp"
 #include "shape.hpp"
+#include <limits>
 #include <vector>
 
 namespace pg {
@@ -66,11 +67,11 @@ template <typename T> struct MaxOp {
   // depending on the type, we might want to use the smallest possible value
   T initial_value() {
     if (std::is_same<T, float>::value) {
-      return -INFINITY;
+      return std::numeric_limits<float>::lowest();
     } else if (std::is_same<T, double>::value) {
-      return -INFINITY;
+      return std::numeric_limits<double>::lowest();
     } else if (std::is_same<T, int>::value) {
-      return INT_MIN;
+      return std::numeric_limits<int>::lowest();
     } else {
       return 0;
     }

@@ -274,7 +274,8 @@ void AssignAt::dispatch_cuda(const std::vector<Tensor> &inputs,
   std::vector<Tensor> _inputs = {outputs[0]};
 
   _inputs.insert(_inputs.end(), idxs.begin(), idxs.end());
-  cuda::select(_inputs, std::vector<Tensor>{tmp}, _items);
+  std::vector<Tensor> outs = {tmp};
+  cuda::select(_inputs, outs, _items);
 
   // Now copy the values from src to the sliced output
   cuda::view::copy(src.view(), tmp.view());

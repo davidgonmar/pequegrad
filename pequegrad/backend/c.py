@@ -1,6 +1,10 @@
 import os
 import sys
 
+# set stack size to 64MB
+import sys
+
+sys.setrecursionlimit(10**6)
 # todo -- it cannot find the CUDA dlls for nvrtc if I don't add the path here
 paths = [
     "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v10.2/bin",

@@ -34,7 +34,6 @@ void Binomial::dispatch_cpu(const std::vector<Tensor> &inputs,
     std::default_random_engine generator;
     std::binomial_distribution<int> distribution(1, _p);
     scalar_t *data = outputs[0].get_casted_base_ptr<scalar_t>();
-    __pragma(omp parallel for)
     for (long i = 0; i < outputs[0].numel(); i++) {
       data[i] = distribution(generator) == 1 ? 1 : 0;
     }

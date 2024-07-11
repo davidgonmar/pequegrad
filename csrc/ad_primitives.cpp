@@ -1,4 +1,5 @@
 #include "ad_primitives.hpp"
+#include "common/view_helpers.hpp"
 #include "ops.hpp"
 #include "tensor.hpp"
 #include "utils.hpp"

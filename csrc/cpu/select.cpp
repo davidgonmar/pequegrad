@@ -186,7 +186,8 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
       outputs[0].init_view(
           std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));
       // copy dst into outputs[0]
-      cpu::view::copy_data(dst.view(), outputs[0].view());
+      View out_view = outputs[0].view();
+      cpu::view::copy_data(dst.view(), out_view);
       return _assign_with_array(outputs[0], src, _items, idxs);
     }
   }
@@ -194,16 +195,19 @@ void AssignAt::dispatch_cpu(const std::vector<Tensor> &inputs,
   outputs[0].init_view(
       std::make_shared<View>(dst.shape(), dst.dtype(), dst.device()));
   // copy dst into outputs[0]
-  cpu::view::copy_data(dst.view(), outputs[0].view());
+  View out_view = outputs[0].view();
+  cpu::view::copy_data(dst.view(), out_view);
   // Now select from out into tmp
   Tensor tmp = Tensor();
   std::vector<Tensor> _inputs = {outputs[0]};
 
   _inputs.insert(_inputs.end(), idxs.begin(), idxs.end());
-  select(_inputs, std::vector<Tensor>{tmp}, _items);
+  std::vector<Tensor> _outputs = {tmp};
+  select(_inputs, _outputs, _items);
 
   // Now copy the values from src to the sliced output
-  cpu::view::copy_data(src.view(), tmp.view());
+  View tmp_view = tmp.view();
+  cpu::view::copy_data(src.view(), tmp_view);
 }
 
 void Select::dispatch_cpu(const std::vector<Tensor> &inputs,

@@ -1,4 +1,5 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
+from pequegrad.viz import viz as v  # noqa
 
 
 def flatten_tree(tree):
@@ -57,11 +58,12 @@ class jit:
 
             for out in outs:
                 compile(out)
+
         # now clone c and feed data
+
         outs, inps = clone_graph(
             self.cache[inpshapes]["outs"], self.cache[inpshapes]["inps"]
         )  # inps already contains externals
-
         i = 0
         args = flatten_tree(args)
         for inp, arg in zip(inps, args):

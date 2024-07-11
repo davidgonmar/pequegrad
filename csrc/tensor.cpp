@@ -70,8 +70,8 @@ typedef void (*FunPtr)();
 
 std::vector<Tensor> &ADNode::children() { return _children; }
 Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
-                              std::vector<Tensor> inputs,
-                              std::optional<device::DeviceKind> _device) {
+                                  std::vector<Tensor> inputs,
+                                  std::optional<device::DeviceKind> _device) {
   if (inputs.size() == 0) {
     PG_CHECK_ARG(_device.has_value(),
                  "Device must be specified for leaf nodes.");
@@ -80,14 +80,14 @@ Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
   device::DeviceKind device =
       _device.has_value() ? _device.value() : inputs[0].device();
   Tensor t = Tensor(primitive, inputs, 0, device);
-   
+
   for (const Tensor &input : inputs) {
     PG_CHECK_ARG(input.device() == device,
                  "All inputs to a primitive must be on the same device, got ",
                  device_to_string(input.device()), " and ",
                  device_to_string(device));
   }
-  
+
   ADPrimitive *primitive_ptr = primitive.get();
   std::vector<View> vs = primitive_ptr->precompute(inputs);
   PG_CHECK_RUNTIME(vs.size() == 1, "precompute must return a single view");
@@ -100,9 +100,21 @@ Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
   return t;
 }
 
-std::vector<Tensor> Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
-                                      std::vector<Tensor> inputs,
-                                      std::optional<device::DeviceKind> _device) {
+Tensor Tensor::from_primitive_numpy(const shape_t &shape, DType dtype,
+                                    const strides_t &strides,
+                                    const py::buffer_info &buffer_info,
+                                    const size_t size,
+                                    device::DeviceKind device) {
+  Tensor a = Tensor::from_primitive_one(
+      std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr, size,
+                                  device),
+      {}, device);
+  return a;
+}
+std::vector<Tensor>
+Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
+                                std::vector<Tensor> inputs,
+                                std::optional<device::DeviceKind> _device) {
   if (inputs.size() == 0) {
     PG_CHECK_ARG(_device.has_value(),
                  "Device must be specified for leaf nodes.");
@@ -152,7 +164,8 @@ Tensor Tensor::eval(bool detach) {
   std::vector<Tensor> &children = _ad_node->children();
   for (Tensor &child : children) {
     PG_CHECK_RUNTIME(child.device() == this_device,
-                     "All children must be on the same device");
+                     "All children must be on the same device, got child: ",
+                     child.str(), " and parent: ", this->str());
     child.eval(detach);
   }
   // outputs is just `this` tensor and the siblings (ordered by position)
@@ -160,7 +173,9 @@ Tensor Tensor::eval(bool detach) {
   outputs.insert(outputs.begin(), *this);
   // sort by position
   std::sort(outputs.begin(), outputs.end(),
-            [](const Tensor &a, const Tensor &b) { return a.ad_node()->position() < b.ad_node()->position(); });
+            [](const Tensor &a, const Tensor &b) {
+              return a.ad_node()->position() < b.ad_node()->position();
+            });
   // assert all children are on the same device
   for (Tensor &child : children) {
     PG_CHECK_RUNTIME(child.device() == this_device,
@@ -274,7 +289,7 @@ std::string Tensor::str() const {
      << ", dtype=" << dtype_to_string(dtype()) << ", device=" << device()
      << ", evaled=" << is_evaled()
      << ", primitive=" << _ad_node->primitive()->str() << ", id=" << this->id
-     << ")";
+     << ", position=" << _ad_node->position() << ")";
   return ss.str();
 }
 DType Tensor::dtype() const {
@@ -297,6 +312,21 @@ Tensor::copy_graph(std::vector<Tensor> &inputs,
   return copy;
 }
 
+void ADNode::set_siblings(const std::vector<Tensor> &siblings) {
+  // check that all siblings have same shape
+  _siblings = siblings;
+  std::sort(_siblings.begin(), _siblings.end(),
+            [](const Tensor &a, const Tensor &b) {
+              return a.ad_node()->position() < b.ad_node()->position();
+            });
+  // filter to make sure self is not marked as sibling
+  _siblings.erase(std::remove_if(_siblings.begin(), _siblings.end(),
+                                 [this](const Tensor &t) {
+                                   return t.ad_node()->position() == _position;
+                                 }),
+                  _siblings.end());
+}
+
 Tensor::Tensor(Tensor &&other) {
   _view = std::move(other._view);
   _ad_node = std::move(other._ad_node);
@@ -306,14 +336,19 @@ Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
                std::vector<Tensor> inputs, int position,
                std::optional<device::DeviceKind> _device) {
   _ad_node = std::make_shared<ADNode>(primitive, inputs);
-               }
- 
+}
 
 std::shared_ptr<ADNode> Tensor::ad_node() const {
   return _ad_node == nullptr ? std::make_shared<ADNode>() : _ad_node;
 }
-void ADNode::set_children(const std::vector<Tensor> &children) {
+void ADNode::set_children(const std::vector<Tensor> &children, bool prop) {
   _children = children;
+  // also set for each sibling
+  if (!prop)
+    return;
+  for (Tensor &sibling : _siblings) {
+    sibling.ad_node()->set_children(children, false);
+  }
 }
 
 void ADNode::replace_child(const Tensor &old_child, const Tensor &new_child) {

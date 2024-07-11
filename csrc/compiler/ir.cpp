@@ -85,7 +85,8 @@ static bool is_reduce_op(std::shared_ptr<ADPrimitive> prim) {
 }
 
 std::shared_ptr<BaseExpr>
-graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
+graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
+                  std::vector<std::shared_ptr<BaseExpr>> &ir,
                   IrBuilderContext &ctx,
                   const std::vector<Tensor> &orig_inputs) {
   auto prim = out.ad_node()->primitive();
@@ -120,7 +121,7 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
   // first recursively the input tensors
   std::vector<std::shared_ptr<BaseExpr>> inputs;
   for (auto &input : out.children()) {
-    auto ir_ = graph_to_ir_inner(input, ir, ctx, orig_inputs);
+    auto ir_ = graph_to_ir_inner(input, marked_as_out, ir, ctx, orig_inputs);
     inputs.push_back(ir_);
   }
 
@@ -131,6 +132,16 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     binop->lhs = inputs[0];
     binop->rhs = inputs[1];
     ir.push_back(binop);
+    // if it is marked as output, we need to store it
+    if (std::find_if(marked_as_out.begin(), marked_as_out.end(),
+                     [&out](const Tensor &t) { return t.id == out.id; }) !=
+        marked_as_out.end()) {
+      auto arg = ctx.tid_to_arg.at(out.id);
+      auto strides = ctx.arg_to_strides.at(arg);
+      auto store_ir = render_store_idxs_for_expr(
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, binop);
+      ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    }
     return binop;
   }
   if (is_unary_op(prim)) {
@@ -138,6 +149,15 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     unop->op = op_to_unaryop_kind(prim);
     unop->child = inputs[0];
     ir.push_back(unop);
+    if (std::find_if(marked_as_out.begin(), marked_as_out.end(),
+                     [&out](const Tensor &t) { return t.id == out.id; }) !=
+        marked_as_out.end()) {
+      auto arg = ctx.tid_to_arg.at(out.id);
+      auto strides = ctx.arg_to_strides.at(arg);
+      auto store_ir = render_store_idxs_for_expr(
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, unop);
+      ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    }
     return unop;
   }
   if (is_ternary_op(prim)) {
@@ -147,6 +167,15 @@ graph_to_ir_inner(Tensor &out, std::vector<std::shared_ptr<BaseExpr>> &ir,
     ternop->second = inputs[1];
     ternop->third = inputs[2];
     ir.push_back(ternop);
+    if (std::find_if(marked_as_out.begin(), marked_as_out.end(),
+                     [&out](const Tensor &t) { return t.id == out.id; }) !=
+        marked_as_out.end()) {
+      auto arg = ctx.tid_to_arg.at(out.id);
+      auto strides = ctx.arg_to_strides.at(arg);
+      auto store_ir = render_store_idxs_for_expr(
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, ternop);
+      ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    }
     return ternop;
   }
   throw std::runtime_error(
@@ -563,7 +592,8 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   }
 
   // render inner
-  graph_to_ir_inner(out.ad_node()->children()[0], ir, ctx, inputs);
+  std::vector<Tensor> x;
+  graph_to_ir_inner(out.ad_node()->children()[0], x, ir, ctx, inputs);
 
   // acc += inner_ir[-1]
 
@@ -611,8 +641,8 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
-graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
-
+graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
+            const std::vector<Tensor> &inputs) {
   // out = reduce(fn(inputs), axis=...)
   if (is_reduce_op(out.ad_node()->primitive())) {
     return graph_to_ir_reduce(out, inputs);
@@ -687,8 +717,44 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
     i++;
   }
 
+  // same for the marked_as_out
+  for (auto &input : marked_as_out) {
+    if (is<Fill>(input.ad_node()->primitive())) {
+      i++;
+      // will be replaced by a constant
+      continue;
+    }
+    auto arg = std::make_shared<ArgExpr>();
+    arg->name = "out" + std::to_string(i);
+    arg->dtype = input.dtype();
+    ir.push_back(arg);
+    ctx.tid_to_arg[input.id] = arg;
+    // add to ctx.tid_to_shape and tid_to_strides
+    ctx.arg_to_shape[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_strides[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_idxs_to_load[arg] = std::vector<std::shared_ptr<BaseExpr>>();
+    ctx.arg_to_idxs_to_load[arg].resize(input.ndim());
+    for (int j = 0; j < input.ndim(); j++) {
+      auto shape = std::make_shared<ImmExpr>();
+      shape->value = input.shape()[j];
+      ir.push_back(shape);
+      ctx.arg_to_shape.at(arg).push_back(shape);
+      auto stride = std::make_shared<ImmExpr>();
+      stride->value = input.strides()[j] /
+                      dtype_to_size(input.dtype()); // stride is in bytes
+      ir.push_back(stride);
+      ctx.arg_to_strides.at(arg).push_back(stride);
+    }
+    auto [local_idxs, only_loads] =
+        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
+    ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
+    ctx.arg_to_idxs_to_load[arg] = only_loads;
+    i++;
+  }
+
   // now same but for the output tensor
-  auto arg = std::make_shared<ArgExpr>();
+  /*auto arg = std::make_shared<ArgExpr>();
+  arg->name = "out" + std::to_string(i);
   arg->dtype = out.dtype();
   ir.push_back(arg);
   ctx.tid_to_arg[out.id] = arg;
@@ -710,16 +776,26 @@ graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs) {
   auto [local_idxs, only_loads] =
       render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
   ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
-  ctx.arg_to_idxs_to_load[arg] = only_loads;
+  ctx.arg_to_idxs_to_load[arg] = only_loads; */
 
-  graph_to_ir_inner(out, ir, ctx, inputs);
+  graph_to_ir_inner(out, marked_as_out, ir, ctx, inputs);
 
   // now, at the end, add a store operation
+  // we need to get the last ir item that is not a store
+  /*std::shared_ptr<BaseExpr> last_ir_item;
+  for (int i = ir.size() - 1; i >= 0; i--) {
+    if (!is<StoreExpr>(ir[i])) {
+      last_ir_item = ir[i];
+      break;
+    }
+  }
   auto store_ir =
       render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(arg),
-                                 ctx.arg_to_strides.at(arg), arg, ir.back());
+                                 ctx.arg_to_strides.at(arg), arg, last_ir_item);
 
-  ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+
+  ir.insert(ir.end(), store_ir.begin(), store_ir.end());*/
+
   // optim_ir_implace(ir);
   return {ir, ctx, used_inputs};
 }
@@ -973,9 +1049,6 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
   // first, we need to gather ir
   using namespace ir;
-
-  auto out = outputs[0];
-
   if (this->cached_fn == nullptr) {
 
     // firsts
@@ -1028,8 +1101,10 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     delete[] ptx;
     this->cached_fn = function_ptr;
   }
-
-  outputs[0].view_ptr()->allocate();
+  // allocate each output
+  for (auto &output : outputs) {
+    output.view_ptr()->allocate();
+  }
   // Prepare kernel arguments
   // Prepare grid and block dimensions
   dim3 threads_per_block(256, 1, 1);
@@ -1041,8 +1116,11 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     void *in_data = input.get_base_ptr();
     kernel_args.push_back(in_data);
   }
-  void *out_data = outputs[0].get_base_ptr();
-  kernel_args.push_back(out_data);
+  for (auto &output : outputs) {
+
+    void *out_data = output.get_base_ptr();
+    kernel_args.push_back(out_data);
+  }
 
   // Convert to array of pointers
   std::vector<void *> kernel_args_ptrs;

@@ -335,7 +335,8 @@ public:
 
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
-graph_to_ir(Tensor &out, const std::vector<Tensor> &inputs);
+graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
+            const std::vector<Tensor> &inputs);
 
 std::string ir_to_string(ir_t &ir);
 std::string ir_to_cuda(ir_t &ir);

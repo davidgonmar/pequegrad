@@ -363,7 +363,8 @@ public:
   ADNode(const ADNode &other) {
     set_primitive(other.primitive());
     _children = other._children;
-
+    _siblings = other._siblings;
+    _position = other._position;
     _inferred_shape = other._inferred_shape;
   }
 
@@ -371,12 +372,16 @@ public:
     set_primitive(std::move(other.primitive()));
     _children = std::move(other._children);
     _inferred_shape = std::move(other._inferred_shape);
+    _position = other._position;
+    _siblings = std::move(other._siblings);
   }
 
   ADNode &operator=(const ADNode &other) {
     set_primitive(other.primitive());
     _children = other._children;
     _inferred_shape = other._inferred_shape;
+    _position = other._position;
+    _siblings = other._siblings;
     return *this;
   }
 
@@ -384,19 +389,22 @@ public:
     set_primitive(std::move(other.primitive()));
     _children = std::move(other._children);
     _inferred_shape = std::move(other._inferred_shape);
+    _position = other._position;
+    _siblings = std::move(other._siblings);
     return *this;
   }
 
   void set_primitive(std::shared_ptr<ADPrimitive> &primitive);
   void set_primitive(const ADPrimitive &primitive);
   void set_primitive(std::shared_ptr<ADPrimitive> &&primitive);
-  void set_children(const std::vector<Tensor> &children);
+  void set_children(const std::vector<Tensor> &children, bool prop = true);
   void replace_child(const Tensor &old_child, const Tensor &new_child);
   void set_position(int position) { _position = position; }
-  void set_siblings(const std::vector<Tensor> &siblings) { _siblings = siblings; }
+  void set_siblings(const std::vector<Tensor> &siblings);
   std::vector<Tensor> &siblings() { return _siblings; }
-  
+
   int position() const { return _position; }
+
 private:
   std::shared_ptr<ADPrimitive> _primitive = nullptr;
   std::vector<Tensor> _children = std::vector<Tensor>();
@@ -412,7 +420,10 @@ class Tensor {
 
 public:
   Tensor astype(DType dtype) const { return pg::astype(*this, dtype); }
-  std::vector<Tensor> &children() const { return _ad_node->children(); }
+  std::vector<Tensor> &children() const {
+    PG_CHECK_RUNTIME(_ad_node != nullptr, "_ad_node == nullptr.");
+    return _ad_node->children();
+  }
   std::shared_ptr<ADNode> ad_node() const;
   void assign(Tensor other) {
     if (!other.is_evaled()) {
@@ -492,7 +503,7 @@ public:
   }
 
   size_t ndim() const { return shape().size(); }
-  bool Tensor::is_contiguous() const {
+  bool is_contiguous() const {
     if (offset() != 0) {
       return false;
     }
@@ -579,6 +590,13 @@ public:
     }
     return static_cast<T *>(view().get_base_ptr());
   }
+
+  static Tensor from_primitive_numpy(const shape_t &shape, DType dtype,
+                                     const strides_t &strides,
+                                     const py::buffer_info &buffer_info,
+                                     const size_t size,
+                                     device::DeviceKind device);
+
   template <typename T>
   static Tensor
   from_numpy(py::array_t<T> np_array,
@@ -599,11 +617,8 @@ public:
     }
 
     DType dtype = dtype_from_pytype<T>();
-    Tensor a = Tensor::from_primitive_one(
-        std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr,
-                                    size, device),
-        {}, device);
-    return a;
+    return from_primitive_numpy(shape, dtype, strides, buffer_info, size,
+                                device);
   }
 
   bool is_dense() const {
@@ -705,12 +720,11 @@ public:
 
   static Tensor
   from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
-                 std::vector<Tensor> inputs,
-                 std::optional<device::DeviceKind> device = std::nullopt);
-  static std::vector<Tensor>
-  from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
-                 std::vector<Tensor> inputs,
-                 std::optional<device::DeviceKind> device = std::nullopt);
+                     std::vector<Tensor> inputs,
+                     std::optional<device::DeviceKind> device = std::nullopt);
+  static std::vector<Tensor> from_primitive_multiple(
+      const std::shared_ptr<ADPrimitive> &primitive, std::vector<Tensor> inputs,
+      std::optional<device::DeviceKind> device = std::nullopt);
   Tensor eval(bool detach = true);
 
   Tensor() {}
@@ -745,7 +759,7 @@ private:
       std::make_shared<ADNode>(); // creates a leaf node by default
 
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
-         std::vector<Tensor> inputs,  int position,
+         std::vector<Tensor> inputs, int position,
          std::optional<device::DeviceKind> device = std::nullopt);
 };
 

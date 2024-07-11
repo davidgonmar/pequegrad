@@ -1,4 +1,5 @@
 #include "ad_primitives.hpp"
+#include "common/view_helpers.hpp"
 #include "cuda_utils.cuh"
 #include "dispatch.hpp"
 #include "dtype.hpp"

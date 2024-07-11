@@ -3,11 +3,13 @@ import numpy as np
 
 
 def get_indices_sequential(bs: int, batch_size: int, curr_step: int) -> np.ndarray:
-    return np.arange(curr_step * bs, (curr_step + 1) * bs) % batch_size
+    return (np.arange(curr_step * bs, (curr_step + 1) * bs) % batch_size).astype(
+        np.int32
+    )
 
 
 def get_indices_random(bs: int, batch_size: int, curr_step: int) -> np.ndarray:
-    return np.random.randint(0, batch_size, bs)
+    return np.random.randint(0, batch_size, bs).astype(np.int32)
 
 
 class DataLoader:

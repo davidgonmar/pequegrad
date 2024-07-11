@@ -8,8 +8,8 @@ namespace pg {
 
 Tensor fill(const shape_t &shape, DType dtype, double value,
             device::DeviceKind device) {
-  return Tensor::from_primitive_one(std::make_shared<Fill>(value, dtype, shape), {},
-                                device);
+  return Tensor::from_primitive_one(std::make_shared<Fill>(value, dtype, shape),
+                                    {}, device);
 }
 
 Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
@@ -86,61 +86,61 @@ static std::vector<Tensor> broadcast_tensors(const Tensor &a, const Tensor &b) {
 
 Tensor add(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Add>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(add)
 
 Tensor mul(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Mul>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(mul)
 
 Tensor sub(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Sub>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(sub)
 
 Tensor div(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Div>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(div)
 
 Tensor gt(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Gt>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(gt)
 
 Tensor lt(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Lt>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(lt)
 
 Tensor eq(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Eq>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(eq)
 
 Tensor neq(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Neq>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(neq)
 
 Tensor pow(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Pow>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(pow)
 
 Tensor max(const Tensor &a, const Tensor &b) {
   return Tensor::from_primitive_one(std::make_shared<Max>(),
-                                broadcast_tensors(a, b));
+                                    broadcast_tensors(a, b));
 }
 DEFINE_BINOP_SCALAR_OVERLOAD(max)
 
@@ -155,19 +155,19 @@ Tensor neg(const Tensor &a) {
 
 #define DEFINE_REDUCE_OP(op_name, functor)                                     \
   Tensor op_name(const Tensor &a, const axes_t &axes, bool keepdims) {         \
-    return Tensor::from_primitive_one(std::make_shared<functor>(axes, keepdims),   \
-                                  {a});                                        \
+    return Tensor::from_primitive_one(                                         \
+        std::make_shared<functor>(axes, keepdims), {a});                       \
   }                                                                            \
   Tensor op_name(const Tensor &a, bool keepdims) {                             \
     axes_t axes(a.shape().size());                                             \
     std::iota(axes.begin(), axes.end(), 0);                                    \
-    return Tensor::from_primitive_one(std::make_shared<functor>(axes, keepdims),   \
-                                  {a});                                        \
+    return Tensor::from_primitive_one(                                         \
+        std::make_shared<functor>(axes, keepdims), {a});                       \
   }                                                                            \
   Tensor op_name(const Tensor &a, axis_t axis, bool keepdims) {                \
     axes_t axes = {axis};                                                      \
-    return Tensor::from_primitive_one(std::make_shared<functor>(axes, keepdims),   \
-                                  {a});                                        \
+    return Tensor::from_primitive_one(                                         \
+        std::make_shared<functor>(axes, keepdims), {a});                       \
   }
 
 DEFINE_REDUCE_OP(sum, Sum)
@@ -201,7 +201,8 @@ Tensor unsqueeze(const Tensor &a, const axes_t &axes) {
 }
 
 Tensor unsqueeze(const Tensor &a, axis_t axis) {
-  return Tensor::from_primitive_one(std::make_shared<Unsqueeze>(axes_t{axis}), {a});
+  return Tensor::from_primitive_one(std::make_shared<Unsqueeze>(axes_t{axis}),
+                                    {a});
 }
 
 Tensor expand_dims(const Tensor &a, axis_t axis) { return unsqueeze(a, axis); }
@@ -317,7 +318,8 @@ Tensor matmul(const Tensor &a, const Tensor &b) {
 }
 
 Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b) {
-  return Tensor::from_primitive_one(std::make_shared<Where>(), {condition, a, b});
+  return Tensor::from_primitive_one(std::make_shared<Where>(),
+                                    {condition, a, b});
 }
 
 Tensor exp(const Tensor &a) {
@@ -334,10 +336,10 @@ Tensor im2col(const Tensor &a, const shape_t &kernel_shape,
 Tensor col2im(const Tensor &a, const shape_t &output_shape,
               const shape_t &kernel_shape, const shape_t &stride,
               const shape_t &padding, const shape_t &dilation) {
-  return Tensor::from_primitive_one(std::make_shared<Col2Im>(output_shape,
-                                                         kernel_shape, stride,
-                                                         padding, dilation),
-                                {a});
+  return Tensor::from_primitive_one(
+      std::make_shared<Col2Im>(output_shape, kernel_shape, stride, padding,
+                               dilation),
+      {a});
 }
 
 // We can allow negative shapes like (-1, 2) to mean "2" and "whatever is left"
@@ -447,7 +449,7 @@ Tensor add_inplace(Tensor &dst, const Tensor &other) {
 
 Tensor binomial(const double p, const shape_t &shape, const DType dtype,
                 const device::DeviceKind device) {
-  return Tensor::from_primitive_one(std::make_shared<Binomial>(p, shape, dtype), {},
-                                device);
+  return Tensor::from_primitive_one(std::make_shared<Binomial>(p, shape, dtype),
+                                    {}, device);
 }
 } // namespace pg
