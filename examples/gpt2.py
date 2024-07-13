@@ -1,175 +1,492 @@
-import pequegrad.modules as nn
-import pequegrad as pg
+"""
+Partially from https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
+"""
+
+import torch
+
+import math
+
+import os
+import sys
+import json
+import random
+from ast import literal_eval
+
 import numpy as np
-import time
-import functools
+import pequegrad as pg  # noqa
+import pequegrad.modules as pnn  # noqa
+
+# -----------------------------------------------------------------------------
 
 
-class GPT2Config:
-    def __init__(
-        self,
-        vocab_size=50257,
-        n_positions=1024,
-        n_ctx=1024,
-        n_embd=768,
-        n_layer=12,
-        n_head=12,
-    ):
-        self.vocab_size = vocab_size
-        self.n_positions = n_positions
-        self.n_ctx = n_ctx
-        self.n_embd = n_embd
-        self.n_layer = n_layer
-        self.n_head = n_head
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
-class GPT2Attention(nn.StatefulModule):
+def setup_logging(config):
+    """monotonous bookkeeping"""
+    work_dir = config.system.work_dir
+    # create the work directory if it doesn't already exist
+    os.makedirs(work_dir, exist_ok=True)
+    # log the args (if any)
+    with open(os.path.join(work_dir, "args.txt"), "w") as f:
+        f.write(" ".join(sys.argv))
+    # log the config itself
+    with open(os.path.join(work_dir, "config.json"), "w") as f:
+        f.write(json.dumps(config.to_dict(), indent=4))
+
+
+def assertnotnan(x):
+    x = x.numpy() if isinstance(x, pg.Tensor) else x
+    assert not np.isnan(x).any(), "found nan in tensor"
+
+
+class CfgNode:
+    """a lightweight configuration class inspired by yacs"""
+
+    # TODO: convert to subclass from a dict like in yacs?
+    # TODO: implement freezing to prevent shooting of own foot
+    # TODO: additional existence/override checks when reading/writing params?
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    def __str__(self):
+        return self._str_helper(0)
+
+    def _str_helper(self, indent):
+        """need to have a helper to support nested indentation for pretty printing"""
+        parts = []
+        for k, v in self.__dict__.items():
+            if isinstance(v, CfgNode):
+                parts.append("%s:\n" % k)
+                parts.append(v._str_helper(indent + 1))
+            else:
+                parts.append("%s: %s\n" % (k, v))
+        parts = [" " * (indent * 4) + p for p in parts]
+        return "".join(parts)
+
+    def to_dict(self):
+        """return a dict representation of the config"""
+        return {
+            k: v.to_dict() if isinstance(v, CfgNode) else v
+            for k, v in self.__dict__.items()
+        }
+
+    def merge_from_dict(self, d):
+        self.__dict__.update(d)
+
+    def merge_from_args(self, args):
+        """
+        update the configuration from a list of strings that is expected
+        to come from the command line, i.e. sys.argv[1:].
+
+        The arguments are expected to be in the form of `--arg=value`, and
+        the arg can use . to denote nested sub-attributes. Example:
+
+        --model.n_layer=10 --trainer.batch_size=32
+        """
+        for arg in args:
+            keyval = arg.split("=")
+            assert len(keyval) == 2, (
+                "expecting each override arg to be of form --arg=value, got %s" % arg
+            )
+            key, val = keyval  # unpack
+
+            # first translate val into a python object
+            try:
+                val = literal_eval(val)
+                """
+                need some explanation here.
+                - if val is simply a string, literal_eval will throw a ValueError
+                - if val represents a thing (like an 3, 3.14, [1,2,3], False, None, etc.) it will get created
+                """
+            except ValueError:
+                pass
+
+            # find the appropriate object to insert the attribute into
+            assert key[:2] == "--"
+            key = key[2:]  # strip the '--'
+            keys = key.split(".")
+            obj = self
+            for k in keys[:-1]:
+                obj = getattr(obj, k)
+            leaf_key = keys[-1]
+
+            # ensure that this attribute exists
+            assert hasattr(
+                obj, leaf_key
+            ), f"{key} is not an attribute that exists in the config"
+
+            # overwrite the attribute
+            print("command line overwriting config attribute %s with %s" % (key, val))
+            setattr(obj, leaf_key, val)
+
+
+# -----------------------------------------------------------------------------
+
+
+class CausalSelfAttention(pnn.Module):
+    """
+    A vanilla multi-head masked self-attention layer with a projection at the end.
+    It is possible to use nn.MultiheadAttention here but I am including an
+    explicit implementation here to show that there is nothing too scary here.
+    """
+
     def __init__(self, config):
         super().__init__()
-        self.n_head = config.n_head
-        self.split_size = config.n_embd
-        self.scale = True
-
-        self.c_attn = nn.Linear(config.n_embd, config.n_embd * 3)
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
-        self.attn_dropout = nn.Dropout(0.1)
-        self.resid_dropout = nn.Dropout(0.1)
-
-    def _attn(self, q, k, v):
-        w = q @ k.transpose(-2, -1)
-        if self.scale:
-            w = w / (float(v.size(-1)) ** 0.5)
-        w = pg.softmax(w, dim=-1)
-        w = self.attn_dropout(w)
-        a = pg.matmul(w, v)
-        return a
-
-    def split_heads(self, x, k=False):
-        new_x_shape = x.size()[:-1] + [self.n_head, x.size(-1) // self.n_head]
-        x = x.reshape(new_x_shape)
-        if k:
-            return x.permute(1, 0, 2)
-        else:
-            return x.permute(1, 0, 2)
-
-    def merge_heads(self, x):
-        x = x.permute(1, 0, 2)
-        new_x_shape = x.size()[:-2] + [
-            x.size(-2) * x.size(-1),
-        ]
-        return x.reshape(new_x_shape)
-
-    def forward(self, x):
-        x = self.c_attn(x)
-        query, key, value = (
-            x[:, : self.split_size],
-            x[:, self.split_size : 2 * self.split_size],
-            x[:, -self.split_size :],
+        assert config.n_embd % config.n_head == 0
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = pnn.Linear(config.n_embd, 3 * config.n_embd)
+        # output projection
+        self.c_proj = pnn.Linear(config.n_embd, config.n_embd)
+        # regularization
+        self.attn_dropout = pnn.Dropout(config.attn_pdrop)
+        self.resid_dropout = pnn.Dropout(config.resid_pdrop)
+        self.bias = (
+            torch.tril(torch.ones(config.block_size, config.block_size))
+            .reshape((1, config.block_size, config.block_size))
+            .numpy()
         )
-        query = self.split_heads(query)
-        key = self.split_heads(key, k=True)
-        value = self.split_heads(value)
-        a = self._attn(query, key, value)
-        a = self.merge_heads(a)
-        a = self.c_proj(a)
-        a = self.resid_dropout(a)
-        return a
+        self.bias = pg.Tensor(self.bias).to(device)
 
-
-class GPT2MLP(nn.StatefulModule):
-    def __init__(self, n_state, config):
-        super().__init__()
-        nx = config.n_embd
-        self.c_fc = nn.Linear(nx, n_state)
-        self.c_proj = nn.Linear(n_state, nx)
-        self.act = pg.gelu
-        self.dropout = nn.Dropout(0.1)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
 
     def forward(self, x):
-        h = self.act(self.c_fc(x))
-        h2 = self.c_proj(h)
-        return self.dropout(h2)
+        T, C = x.size()  # sequence length, embedding dimensionality (n_embd)
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=1)
+
+        # compute attention in torch to assert close
+        k = k.reshape((T, self.n_head, C // self.n_head)).transpose(
+            0, 1
+        )  # (B, nh, T, hs)
+        q = q.reshape((T, self.n_head, C // self.n_head)).transpose(
+            0, 1
+        )  # (B, nh, T, hs)
+        v = v.reshape((T, self.n_head, C // self.n_head)).transpose(
+            0, 1
+        )  # (B, nh, T, hs)
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        # att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+        att = pg.where(
+            pg.broadcast_to(self.bias[:, :T, :T] == 0, att.shape),
+            pg.broadcast_to(pg.Tensor([float("-inf")]), att.shape)
+            .eval()
+            .to(att.device),
+            att,
+        )
+        att = pg.softmax(att, dim=-1)
+        att = self.attn_dropout(att)
+        y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = y.transpose(0, 1).reshape(
+            (T, C)
+        )  # re-assemble all head outputs side by side
+        # output projection
+        y = self.resid_dropout(self.c_proj(y))
+
+        return y
 
 
-class GPT2Block(nn.StatefulModule):
+class Block(pnn.Module):
+    """an unassuming Transformer block"""
+
     def __init__(self, config):
         super().__init__()
-        nx = config.n_embd
-        self.ln_1 = nn.LayerNorm(nx, eps=1e-5)
-        self.attn = GPT2Attention(config)
-        self.ln_2 = nn.LayerNorm(nx, eps=1e-5)
-        self.mlp = GPT2MLP(4 * nx, config)
+        self.ln_1 = pnn.LayerNorm(config.n_embd)
+        self.attn = CausalSelfAttention(config)
+        self.ln_2 = pnn.LayerNorm(config.n_embd)
+        self.mlp = pnn.ModuleDict(
+            dict(
+                c_fc=pnn.Linear(config.n_embd, 4 * config.n_embd),
+                c_proj=pnn.Linear(4 * config.n_embd, config.n_embd),
+                act=pnn.GELU(),
+                dropout=pnn.Dropout(config.resid_pdrop),
+            )
+        )
+        m = self.mlp
+        self.mlpf = lambda x: m.dropout(m.c_proj(m.act(m.c_fc(x))))  # MLP forward
 
     def forward(self, x):
-        a = self.attn(self.ln_1(x))
-        x = x + a
-        m = self.mlp(self.ln_2(x))
-        x = x + m
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlpf(self.ln_2(x))
         return x
 
 
-class GPT2Model(nn.StatefulModule):
+class GPT(pnn.Module):
+    """GPT Language Model"""
+
+    @staticmethod
+    def get_default_config():
+        C = CfgNode()
+        # either model_type or (n_layer, n_head, n_embd) must be given in the config
+        C.model_type = "gpt"
+        C.n_layer = None
+        C.n_head = None
+        C.n_embd = None
+        # these options must be filled in externally
+        C.vocab_size = None
+        C.block_size = None
+        # dropout hyperparameters
+        C.embd_pdrop = 0.1
+        C.resid_pdrop = 0.1
+        C.attn_pdrop = 0.1
+        return C
+
     def __init__(self, config):
         super().__init__()
-        self.wte = nn.Embedding(config.vocab_size, config.n_embd)
-        self.wpe = nn.Embedding(config.n_positions, config.n_embd)
-        self.drop = nn.Dropout(0.1)
-        self.h = [GPT2Block(config) for _ in range(config.n_layer)]
-        self.ln_f = nn.LayerNorm(config.n_embd, eps=1e-5)
+        assert config.vocab_size is not None
+        assert config.block_size is not None
+        self.block_size = config.block_size
 
-    def forward(self, input_ids):
-        input_shape = input_ids.size()
-        inputs_embeds = self.wte(input_ids)
-        position_ids = pg.arange(
-            0, input_shape[-1], dtype=pg.dt.int32, device=input_ids.device
+        type_given = config.model_type is not None
+        params_given = all(
+            [
+                config.n_layer is not None,
+                config.n_head is not None,
+                config.n_embd is not None,
+            ]
         )
-        position_ids = position_ids.unsqueeze(0).reshape((input_shape[-1],))
-        position_embeds = self.wpe(position_ids)
-        hidden_states = inputs_embeds + position_embeds
-        hidden_states = self.drop(hidden_states)
+        assert type_given ^ params_given  # exactly one of these (XOR)
+        if type_given:
+            # translate from model_type to detailed configuration
+            config.merge_from_dict(
+                {
+                    # names follow the huggingface naming conventions
+                    # GPT-1
+                    "openai-gpt": dict(
+                        n_layer=12, n_head=12, n_embd=768
+                    ),  # 117M params
+                    # GPT-2 configs
+                    "gpt2": dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
+                    "gpt2-medium": dict(
+                        n_layer=24, n_head=16, n_embd=1024
+                    ),  # 350M params
+                    "gpt2-large": dict(
+                        n_layer=36, n_head=20, n_embd=1280
+                    ),  # 774M params
+                    "gpt2-xl": dict(n_layer=48, n_head=25, n_embd=1600),  # 1558M params
+                    # Gophers
+                    "gopher-44m": dict(n_layer=8, n_head=16, n_embd=512),
+                    # (there are a number more...)
+                    # I made these tiny models up
+                    "gpt-mini": dict(n_layer=6, n_head=6, n_embd=192),
+                    "gpt-micro": dict(n_layer=4, n_head=4, n_embd=128),
+                    "gpt-nano": dict(n_layer=3, n_head=3, n_embd=48),
+                }[config.model_type]
+            )
 
-        for block in self.h:
-            hidden_states = block(hidden_states)
+        self.transformer = pnn.ModuleDict(
+            dict(
+                wte=pnn.Embedding(config.vocab_size, config.n_embd),
+                wpe=pnn.Embedding(config.block_size, config.n_embd),
+                drop=pnn.Dropout(config.embd_pdrop),
+                h=pnn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+                ln_f=pnn.LayerNorm(config.n_embd),
+            )
+        )
+        self.lm_head = pnn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # report number of parameters (note we don't count the decoder parameters in lm_head)
+        print(
+            "number of parameters: %.2fM"
+            % (sum(p.numel() for p in self.parameters()) / 1e6)
+        )
 
-        hidden_states = self.ln_f(hidden_states)
-        return hidden_states
+    @classmethod
+    def from_pretrained(cls, model_type):
+        """
+        Initialize a pretrained GPT model by copying over the weights
+        from a huggingface/transformers checkpoint.
+        """
+        assert model_type in {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"}
+        from transformers import GPT2LMHeadModel
+
+        # create a from-scratch initialized minGPT model
+        config = cls.get_default_config()
+        config.model_type = model_type
+        config.vocab_size = 50257  # openai's model vocabulary
+        config.block_size = 1024  # openai's model block_size
+        model = GPT(config)
+
+        # init a huggingface/transformers model
+        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
+        sd_hf = model_hf.state_dict()
+
+        # copy while ensuring all of the parameters are aligned and match in names and shapes
+        keys = [k for k in sd_hf if not k.endswith("attn.masked_bias")]  # ignore these
+        transposed = [
+            "attn.c_attn.weight",
+            "attn.c_proj.weight",
+            "mlp.c_fc.weight",
+            "mlp.c_proj.weight",
+        ]
+        # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla pnn.Linear.
+        # this means that we have to transpose these weights when we import them
+        # assert len(keys) == len(sd)
+        print("n of params in hf model: ", len(keys))
+        print("n of params in minGPT model: ", sum([1 for _ in model.parameters()]))
+        for k in keys:
+            # excepction, lm_head
+            if k == "lm_head.weight":
+                with torch.no_grad():
+                    mm = sd_hf[k].t().contiguous()
+                    assert list(model.lm_head.weight.shape) == list(
+                        mm.shape
+                    ), f"shape mismatch: {model.lm_head.weight.shape} != {mm.shape} for {k}"
+                    model.lm_head.weight.assign(pg.Tensor(mm.cpu().numpy()))
+                continue
+            if any(k.endswith(w) for w in transposed):
+                # special treatment for the Conv1D weights we need to transpose
+                with torch.no_grad():
+                    # need to find sublayers in self and manually assign
+
+                    def get_sublayer(key: str):
+                        parts = key.split(".")
+                        obj = model
+                        for p in parts:
+                            obj = getattr(obj, p)
+                        return obj
+
+                    self_w = get_sublayer(k)
+                    mm = sd_hf[k].contiguous()
+                    assert list(self_w.shape) == list(
+                        mm.shape
+                    ), f"shape mismatch: {self_w.shape} != {mm.shape} for {k}"
+                    self_w.assign(pg.Tensor(mm.cpu().numpy()))
+
+            else:
+                # vanilla copy over the other parameters
+                with torch.no_grad():
+
+                    def get_sublayer(key: str):
+                        parts = key.split(".")
+                        obj = model
+                        for p in parts:
+                            obj = getattr(obj, p)
+                        return obj
+
+                    self_w = get_sublayer(k)
+                    mm = sd_hf[k]
+                    assert list(self_w.shape) == list(
+                        mm.shape
+                    ), f"shape mismatch: {self_w.shape} != {mm.shape} for {k}"
+                    self_w.assign(pg.Tensor(mm.cpu().numpy()))
+
+        return model
+
+    def forward(self, idx):
+        (t,) = idx.size()
+        assert (
+            t <= self.block_size
+        ), f"Cannot forward sequence of length {t}, block size is only {self.block_size}"
+        # forward the GPT model itself
+        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.transformer.wpe.weight[
+            0:t
+        ]  # position embeddings of shape (1, t, n_embd)
+        x = self.transformer.drop(tok_emb + pos_emb)
+        for block in self.transformer.h:
+            x = block(x)
+        x = self.transformer.ln_f(x)
+        logits = self.lm_head(x)
+        return logits, None
+
+    def generate(
+        self,
+        idx,
+        max_new_tokens,
+        temperature=1.0,
+        do_sample=False,
+        top_k=None,
+        tokenizer=None,
+    ):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+        """
+        idx = idx.numpy()
+        assert idx.dtype == np.int32
+        previous_text = tokenizer.decode(idx)
+        print(previous_text, end="", flush=True)
+        for _ in range(max_new_tokens):
+            # if the sequence context is growing too long we must crop it at block_size
+            idx_cond = (
+                idx if idx.shape[0] <= self.block_size else idx[-self.block_size :]
+            )  # takes the last block_size elements
+            idx = pg.Tensor(idx_cond).to(device)
+            # forward the model to get the logits for the index in the sequence
+            logits, _ = self(idx.astype(pg.dt.int32).eval().detach())
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[logits.size(0) - 1] / temperature  # no neg indexing yet
+            # optionally crop the logits to only the top k options
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = pg.softmax(logits, dim=-1).numpy()
+            # sample from the distribution
+            idx_next = np.random.choice(probs.shape[0], p=probs)
+            # append sampled index to the running sequence and continue
+            idx = np.concatenate([idx.numpy(), [idx_next]], axis=0)
+
+            current_text = tokenizer.decode(idx)
+            # print only the new text generated
+            print(current_text[len(previous_text) :], end="", flush=True)
+            previous_text = current_text
+
+            # if the last idx is an eos token, we're done
+            if idx_next == tokenizer.encode("<|endoftext|>")[0]:
+                print("found eos token, stopping")
+                break
+        return idx
 
 
-class GPT2LMHeadModel(nn.StatefulModule):
-    def __init__(self, config):
-        super().__init__()
-        self.transformer = GPT2Model(config)
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
-    def forward(self, input_ids):
-        hidden_states = self.transformer(input_ids)
-        logits = self.lm_head(hidden_states)
-        return logits
+use_mingpt = True  # use minGPT or huggingface/transformers model?
+model_type = "gpt2"
+device = pg.device.cuda
 
+if use_mingpt:
+    model = GPT.from_pretrained(model_type)
+else:
+    model = GPT2LMHeadModel.from_pretrained(model_type)
+    model.config.pad_token_id = model.config.eos_token_id  # suppress a warning
 
-import time
-
-config = GPT2Config()
-model = GPT2LMHeadModel(config).to(pg.device.cuda)
-input_ids = pg.Tensor(
-    np.random.randint(0, config.vocab_size, (1024,)).astype(np.int32)
-).to(pg.device.cuda)
-print(input_ids)
+# ship model to device and set to eval mode
+model.to(device)
+model.eval()
 
 
-@functools.partial(
-    pg.jit, externals=model.parameters(), enabled=True
-)  # slower than no jit :(
-def sample(inputs):
-    return model(inputs)
+def generate(prompt="", num_samples=10, steps=10000, do_sample=True):
+    tokenizer = GPT2Tokenizer.from_pretrained(model_type)
+    if prompt == "":
+        # to create unconditional samples...
+        # huggingface/transformers tokenizer special cases these strings
+        prompt = "<|endoftext|>"
+    encoded_input = np.array(tokenizer.encode(prompt))
+    encoded_input = (
+        pg.Tensor(encoded_input).to(device.cuda).astype(pg.dt.int32).eval().detach()
+    )
+    x = encoded_input
+
+    # we'll process all desired num_samples in a batch, so expand out the batch dim
+    x = x.reshape((-1,))
+
+    # forward the model `steps` times to get samples, in a batch
+    y = model.generate(
+        x, max_new_tokens=steps, do_sample=do_sample, top_k=40, tokenizer=tokenizer
+    )
+
+    out = tokenizer.decode(y.squeeze())
+    print(out)
 
 
-logits = sample(input_ids)
-logits = sample(input_ids)
-# warmed up
-
-for i in range(10):
-    start = time.time()
-    logits = sample(input_ids)
-    logits.eval()
-    print("Time taken: ", time.time() - start)
+generate(
+    prompt="How can the net amount of entropy of the universe be massively decreased?",
+    num_samples=10,
+    steps=10000,
+)

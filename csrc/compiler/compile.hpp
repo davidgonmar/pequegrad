@@ -61,6 +61,7 @@ static void rec_schedule(Tensor &root, Tensor &out, std::set<int> &visited) {
     return;
   }
   visited.insert(out.id);
+
   schedule(out, root, dependents);
   for (int i = 0; i < out.ad_node()->children().size(); i++) {
     if (i < out.ad_node()->children().size()) {

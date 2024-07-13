@@ -4,7 +4,6 @@ from typing import Optional, Tuple, Union, List
 import pequegrad.backend.c as pg
 import math
 
-
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
@@ -68,7 +67,10 @@ def gelu(self, approximate: str = None):
         return (
             0.5
             * self
-            * (1 + pg.tanh(math.sqrt(2 / math.pi) * (self + 0.044715 * (self**3))))
+            * (
+                1.0
+                + pg.tanh(math.sqrt(2 / math.pi) * (self + 0.044715 * (self**3.0)))
+            )
         )
 
 
@@ -95,6 +97,8 @@ def mse_loss(self, target: "Tensor") -> "Tensor":
 
 pg.abs = lambda x: (x**2) ** 0.5  # TODO -- I am lazy
 
+where = lambda condition, x, y: pg.where(condition, x, y)
+
 
 def sigmoid(self):
     return 1 / (1 + pg.exp(-self))
@@ -103,6 +107,14 @@ def sigmoid(self):
 def tanh(self):
     # compute it manually
     return (pg.exp(self) - pg.exp(-self)) / (pg.exp(self) + pg.exp(-self))
+
+
+def safetanh(self):
+    # 2 / (1 + torch.exp(-2 * x)) - 1
+    return 2 / (1 + pg.exp(-2 * self)) - 1
+
+
+tanh = safetanh
 
 
 def one_hot(
@@ -436,7 +448,7 @@ def sqrt(self):
 matmul = lambda a, b: a @ b
 
 
-def layer_norm(self, normalized_shape: _Shape, eps=1e-05):
+def layer_norm(self, normalized_shape: _Shape, eps=1e-05, weight=None, bias=None):
     """Applies Layer Normalization over a mini-batch of inputs"""
 
     # calculate mean/std over last dims
@@ -462,10 +474,35 @@ def layer_norm(self, normalized_shape: _Shape, eps=1e-05):
     # for numerical stability, we add eps before sqrt
     std = (variance + eps).sqrt()
 
-    return (self - mean) / std
+    # apply normalization
+    x = (self - mean) / std
+
+    # apply weight and bias
+    if weight is not None:
+        x = x * weight
+
+    if bias is not None:
+        x = x + bias
+
+    return x
 
 
 pg.layer_norm = layer_norm
+
+
+def split(self, split_size: int, dim: int = 0) -> List["Tensor"]:
+    """
+    Splits the tensor into chunks of the given size along a given dimension
+    """
+    assert (
+        self.shape[dim] % split_size == 0
+    ), "tensor must be divisible by the split size"
+    slices_for_getdim = [slice(None) for _ in range(self.dim)]
+    splits = []
+    for i in range(0, self.shape[dim], split_size):
+        slices_for_getdim[dim] = slice(i, i + split_size)
+        splits.append(self[tuple(slices_for_getdim)])
+    return splits
 
 
 def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
@@ -577,7 +614,9 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
 
     assert all(
         tensors[0].shape == t.shape for t in tensors[1:]
-    ), "all input tensors must have the same shape"
+    ), "all input tensors must have the same shape, got {}".format(
+        [t.shape for t in tensors]
+    )
 
     new_shape = list(tensors[0].shape)
 

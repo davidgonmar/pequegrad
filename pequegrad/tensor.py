@@ -28,6 +28,7 @@ from .ops import (
     erf,
     gelu,
     silu,
+    split,
 )
 
 
@@ -47,6 +48,12 @@ bind_method(
     Tensor,
     "ones",
     classmethod(lambda cls, shape, **kwargs: cls(np.ones(shape), **kwargs)),
+)
+
+bind_method(
+    Tensor,
+    "split",
+    split,
 )
 
 

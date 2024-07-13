@@ -1,4 +1,4 @@
-from pequegrad.backend.c import Tensor
+from pequegrad.backend.c import Tensor, device
 import numpy as np
 from typing import List, Union
 import pickle
@@ -60,6 +60,8 @@ class StatefulModule:
                 p.assign(Tensor(p_loaded, device=device))
 
     def to(self, backend):
+        d = {"cpu": device.cpu, "cuda": device.cuda}
+        backend = d[backend] if backend in d else backend
         for p in self.__dict__.values():
             if isinstance(p, StatefulModule) or isinstance(p, NonStatefulModule):
                 p.to(backend)
@@ -114,11 +116,11 @@ class StatefulModule:
 class Linear(StatefulModule):
     def __init__(self, in_features, out_features, bias=True):
         super().__init__()
-        self.weights = kaiming_init((in_features, out_features))
+        self.weight = kaiming_init((in_features, out_features))
         self.bias = ModuleParam.zeros(out_features) if bias else None
 
     def forward(self, input):
-        a = input @ self.weights
+        a = input @ self.weight
         if self.bias is not None:
             a += self.bias
         return a
@@ -225,13 +227,62 @@ class Embedding(StatefulModule):
     def forward(self, input: Tensor) -> Tensor:
         return self.weight[input]
 
+    def with_slices(self, start: int, end: int, stride: int = 1):
+        return self.weight[start:end:stride]
+
 
 class LayerNorm(StatefulModule):
     def __init__(self, normalized_shape, eps=1e-5):
         self.normalized_shape = normalized_shape
         self.eps = eps
-        # self.weight = ModuleParam.ones(normalized_shape)
-        # self.bias = ModuleParam.zeros(normalized_shape)
+        self.weight = kaiming_init(
+            normalized_shape
+            if isinstance(normalized_shape, (tuple, list))
+            else (normalized_shape,)
+        )
+        self.bias = ModuleParam.zeros(normalized_shape)
 
     def forward(self, input: Tensor) -> Tensor:
-        return input.layer_norm(self.normalized_shape, self.eps)
+        return input.layer_norm(self.normalized_shape, self.eps, self.weight, self.bias)
+
+
+class GELU(StatefulModule):
+    def forward(self, input: Tensor) -> Tensor:
+        return input.gelu()
+
+
+class ModuleList(StatefulModule):
+    def __init__(self, modules):
+        for i, module in enumerate(modules):
+            setattr(self, str(i), module)
+        self.keys = [str(i) for i in range(len(modules))]
+
+    # iter and getitem
+    def __iter__(self):
+        for key in self.keys:
+            yield getattr(self, key)
+
+    def __getitem__(self, idx):
+        return getattr(self, self.keys[idx])
+
+    def __len__(self):
+        return len(self.keys)
+
+    # forward
+    def forward(self, input: Tensor) -> Tensor:
+        for key in self.keys:
+            input = getattr(self, key)(input)
+        return input
+
+
+# like pytorch
+class ModuleDict(StatefulModule):
+    def __init__(self, dict):
+        for k, v in dict.items():
+            setattr(self, k, v)
+
+    def forward(self, input: Tensor) -> Tensor:
+        raise NotImplementedError
+
+
+Module = StatefulModule

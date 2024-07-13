@@ -216,9 +216,7 @@ void schedule(
         ids.insert(t.id);
       }
     }
-
     marked_as_out = marked_as_out_unique;
-
     // now check for cycles
     // if there is a cycle, we cannot compile, we just return
     // being a children of a node means the parent depends on the child
@@ -252,143 +250,20 @@ void schedule(
             }
           }
         }
-        /*// remove the leaf instead, and add as leafs all its dependents in the
-        subgraph if (tout.id == node.id) { std::cout << "Cycle detected with
-        node and orig_node " << tout.str() << " " << orig_node.str() <<
-        std::endl;
-          // so we found a leaf that is a (maybe direct, maybe not direct) child
-        of a node marked as out
-          // what we do now is recurse the output, see which are its leafs, and
-        remove them using recurse_t = std::function<void(Tensor &)>; recurse_t
-        recurse = [&](Tensor &node) {
-            // check if we reached leaves (leafs)
-            for (Tensor &leaf : leafs_copy) {
-              if (node.id == leaf.id) {
-                // remove leaf
-                std::cout << "Removing leaf " << node.str() << std::endl;
-                std::vector<Tensor> removed;
-                for (int i = 0; i < leafs_copy.size(); i++) {
-                  if (leafs_copy[i].id == node.id) {
-                    removed.push_back(leafs_copy[i]);
-                    leafs_copy.erase(leafs_copy.begin() + i);
-                    break;
-                  }
-                }
-                // now we need to add as leafs the dependents (parents) of the
-        removed leaf that are in the subgraph auto deps =
-        dependents.at(node.id); for (int dep : deps) { for (Tensor &t :
-        linearized_subgraph) { if (t.id == dep) {
-                      // if not in
-                      bool found = false;
-                      for (Tensor &t2 : leafs_copy) {
-                        if (t2.id == t.id) {
-                          found = true;
-                          break;
-                        }
-                      }
-                      if (!found) {
-                        leafs_copy.push_back(t);
-                        std::cout << "Adding leaf " << t.str() << std::endl;
-                        // check if added leaf is tout marked_as_out exactly, if
-        so, remove it (we transformed out as a leaf, since it was not fusable)
-                        if (t.id == tout.id) {
-                          for (int i = 0; i < marked_as_out.size(); i++) {
-                            if (marked_as_out[i].id == t.id) {
-                              std::cout << "Removing out " << t.str() <<
-        std::endl; marked_as_out.erase(marked_as_out.begin() + i); break;
-                            }
-                          }
-                        }
-
-                      }
-
-                    }
-                  }
-                }
-                // print leafs
-                std::cout << "Leafs: ";
-                for (Tensor &t : leafs_copy) {
-                  std::cout << t.str() << "\n";
-                }
-              }
-            }
-            // continue recursing
-            for (Tensor &child : node.ad_node()->children()) {
-              recurse(child);
-            }
-          };
-
-          recurse(tout);
-        }
-        */
       }
     };
 
     for (Tensor &t : leafs) {
       check(t, t);
     }
-
-    // lambda to check if two records are  equal
-    /*auto equal = [](leaf_record_t &a, leaf_record_t &b) {
-      if (a.size() != b.size()) {
-        return false;
-      }
-      for (Tensor &t : a) {
-        bool found = false;
-        for (Tensor &t2 : b) {
-          if (t.id == t2.id) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          return false;
-        }
-      }
-      return true;
-    };
-
-
-    int i = 0;
-    while (true) {
-      visited.clear();
-      if (i >= leafs_copy.size()) {
-        break;
-      }
-      check(leafs_copy[i], leafs_copy[i]);
-      if (equal(leafs_copy, leafs_copy_copy)) {
-        i++;
-      } else {
-        i = 0;
-        leafs_copy_copy = leafs_copy;
-      }
-    }
-
-    leafs = leafs_copy;
-    // print leafs
-    std::cout << "Leafs: ";
-    for (Tensor &t : leafs) {
-      std::cout << t.str() << "\n";
-    }
-
-    std::cout << "Marked as out: ";
-    for (Tensor &t : marked_as_out) {
-      std::cout << t.str() << "\n";
-    }
-
-    std::cout << "out: " << out.str() << "\n";
-    */
   }
-
   // if marked_as_out is empty, we failed to schedule and just return early
   if (marked_as_out.size() == 0) {
     return;
   }
-
   // now, we have inputs and out
   Compiled compnode;
   auto [ir, ctx, inputs_to_use] = graph_to_ir(out, marked_as_out, leafs);
-  // std::cout << ir_to_cuda(ir) << std::endl;
   compnode.ir = ir;
   out.ad_node()->set_primitive(std::make_shared<Compiled>(compnode));
   std::vector<Tensor> tensors_to_use;
