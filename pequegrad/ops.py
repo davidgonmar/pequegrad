@@ -505,6 +505,16 @@ def split(self, split_size: int, dim: int = 0) -> List["Tensor"]:
     return splits
 
 
+def tril(self, diagonal: int = 0) -> "Tensor":
+    """
+    Returns the lower triangular part of the tensor
+    """
+    row_indices = arange(0, self.size(-2)).reshape((-1, 1))
+    col_indices = arange(0, self.size(-1)).reshape((1, -1))
+    mask = (row_indices >= (col_indices - diagonal)).astype(self.dtype)
+    return self * mask
+
+
 def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
     pad = list(pad)  # for a 1d pad on last dim, it will be (padleft, padright)
     new_shape = list(x.shape)

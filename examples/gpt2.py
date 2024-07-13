@@ -2,14 +2,11 @@
 Partially from https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
 """
 
-import torch
-
 import math
 
 import os
 import sys
 import json
-import random
 from ast import literal_eval
 
 import numpy as np
@@ -17,13 +14,6 @@ import pequegrad as pg  # noqa
 import pequegrad.modules as pnn  # noqa
 
 # -----------------------------------------------------------------------------
-
-
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 
 def setup_logging(config):
@@ -147,11 +137,17 @@ class CausalSelfAttention(pnn.Module):
         self.attn_dropout = pnn.Dropout(config.attn_pdrop)
         self.resid_dropout = pnn.Dropout(config.resid_pdrop)
         self.bias = (
-            torch.tril(torch.ones(config.block_size, config.block_size))
-            .reshape((1, config.block_size, config.block_size))
-            .numpy()
+            (
+                pg.tril(pg.Tensor.ones((config.block_size, config.block_size))).reshape(
+                    (1, config.block_size, config.block_size)
+                )
+            )
+            .astype(pg.dt.float32)
+            .eval()
+            .to(device)
         )
-        self.bias = pg.Tensor(self.bias).to(device)
+
+        print(self.bias.numpy())
 
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -333,49 +329,46 @@ class GPT(pnn.Module):
         for k in keys:
             # excepction, lm_head
             if k == "lm_head.weight":
-                with torch.no_grad():
-                    mm = sd_hf[k].t().contiguous()
-                    assert list(model.lm_head.weight.shape) == list(
-                        mm.shape
-                    ), f"shape mismatch: {model.lm_head.weight.shape} != {mm.shape} for {k}"
-                    model.lm_head.weight.assign(pg.Tensor(mm.cpu().numpy()))
+                mm = sd_hf[k].t().contiguous()
+                assert list(model.lm_head.weight.shape) == list(
+                    mm.shape
+                ), f"shape mismatch: {model.lm_head.weight.shape} != {mm.shape} for {k}"
+                model.lm_head.weight.assign(pg.Tensor(mm.cpu().numpy()))
                 continue
             if any(k.endswith(w) for w in transposed):
                 # special treatment for the Conv1D weights we need to transpose
-                with torch.no_grad():
-                    # need to find sublayers in self and manually assign
+                # need to find sublayers in self and manually assign
 
-                    def get_sublayer(key: str):
-                        parts = key.split(".")
-                        obj = model
-                        for p in parts:
-                            obj = getattr(obj, p)
-                        return obj
+                def get_sublayer(key: str):
+                    parts = key.split(".")
+                    obj = model
+                    for p in parts:
+                        obj = getattr(obj, p)
+                    return obj
 
-                    self_w = get_sublayer(k)
-                    mm = sd_hf[k].contiguous()
-                    assert list(self_w.shape) == list(
-                        mm.shape
-                    ), f"shape mismatch: {self_w.shape} != {mm.shape} for {k}"
-                    self_w.assign(pg.Tensor(mm.cpu().numpy()))
+                self_w = get_sublayer(k)
+                mm = sd_hf[k].contiguous()
+                assert list(self_w.shape) == list(
+                    mm.shape
+                ), f"shape mismatch: {self_w.shape} != {mm.shape} for {k}"
+                self_w.assign(pg.Tensor(mm.cpu().numpy()))
 
             else:
                 # vanilla copy over the other parameters
-                with torch.no_grad():
 
-                    def get_sublayer(key: str):
-                        parts = key.split(".")
-                        obj = model
-                        for p in parts:
-                            obj = getattr(obj, p)
-                        return obj
+                def get_sublayer(key: str):
+                    parts = key.split(".")
+                    obj = model
+                    for p in parts:
+                        obj = getattr(obj, p)
+                    return obj
 
-                    self_w = get_sublayer(k)
-                    mm = sd_hf[k]
-                    assert list(self_w.shape) == list(
-                        mm.shape
-                    ), f"shape mismatch: {self_w.shape} != {mm.shape} for {k}"
-                    self_w.assign(pg.Tensor(mm.cpu().numpy()))
+                self_w = get_sublayer(k)
+                mm = sd_hf[k]
+                assert list(self_w.shape) == list(
+                    mm.shape
+                ), f"shape mismatch: {self_w.shape} != {mm.shape} for {k}"
+                self_w.assign(pg.Tensor(mm.cpu().numpy()))
 
         return model
 

@@ -57,6 +57,19 @@ bind_method(
 )
 
 
+def ge(self, other):
+    # Check if self is greater than or equal to other
+    return pg.max(other - self, 0) == 0
+
+
+# greater than or equal to
+bind_method(
+    Tensor,
+    "__ge__",
+    lambda self, other: ge(self, other),
+)
+
+
 def size(self, dim=None):
     return self.shape[dim] if dim is not None else self.shape
 
