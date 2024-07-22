@@ -117,6 +117,35 @@ Maybe<Conv2dPatternMatcherResult> conv2d_pattern_matcher(Tensor &out) {
   return Conv2dPatternMatcherResult{input, filter};
 }
 
+struct Pooling2dPatternMatcherResult {
+  Tensor input;
+  std::string reduce_type;
+  shape_t stride;
+  shape_t kernel_size;
+};
+
+Maybe<Pooling2dPatternMatcherResult> pooling2d_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Reshape");
+  auto &unreshaped = out.ad_node()->children()[0];
+  // now it can be MaxReduce or Mean
+  std::string reduce_type = "";
+  if (unreshaped.ad_node()->primitive()->str() == "MaxReduce") {
+    reduce_type = "MaxReduce";
+  } else if (unreshaped.ad_node()->primitive()->str() == "Mean") {
+    reduce_type = "Mean";
+  } else {
+    return std::nullopt;
+  }
+  auto &unreduced = unreshaped.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(unreduced, "Im2Col");
+  auto &input = unreduced.ad_node()->children()[0];
+  auto &im2col =
+      dynamic_cast<Im2Col &>(*unreduced.ad_node()->primitive().get());
+  auto stride = im2col.strides();
+  auto kernel_size = im2col.kernel_shape();
+  return Pooling2dPatternMatcherResult{input, reduce_type, stride, kernel_size};
+}
+
 bool try_convert_conv2d(Tensor &out) {
   auto maybe_result = conv2d_pattern_matcher(out);
   if (!maybe_result.has_value()) {
@@ -130,6 +159,19 @@ bool try_convert_conv2d(Tensor &out) {
   return true;
 }
 
+bool try_convert_pooling2d(Tensor &out) {
+  auto maybe_result = pooling2d_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  auto &input = result.input;
+  out.ad_node()->set_primitive(std::make_shared<CudnnPooling2D>(
+      result.kernel_size, result.stride, result.reduce_type));
+  out.ad_node()->set_children({input});
+  return true;
+}
+
 void recursive_conv2d(Tensor &out) {
   if (out.device() != device::CUDA) {
     return;
@@ -140,13 +182,25 @@ void recursive_conv2d(Tensor &out) {
   }
 }
 
+void recursive_pooling2d(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_pooling2d(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_pooling2d(node);
+  }
+}
+
 static void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   std::set<int> visited;
   remove_useless_broadcast(out, visited);
   // Second pass -> conv2d pattern matching
   recursive_conv2d(out);
-  // Second -> schedule (fuse)
+  // Third pass -> pooling2d pattern matching
+  recursive_pooling2d(out);
+  // Last pass -> schedule and fuse
   std::set<int> visited2;
   rec_schedule(out, out, visited2);
 }

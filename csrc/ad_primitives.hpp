@@ -61,6 +61,18 @@ class CudnnConv2D : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
 };
 
+class CudnnPooling2D : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+public:
+  shape_t kernel_shape;
+  shape_t strides;
+  std::string reduce_type;
+
+  CudnnPooling2D(shape_t kernel_shape, shape_t strides, std::string reduce_type)
+      : kernel_shape(kernel_shape), strides(strides), reduce_type(reduce_type) {
+  }
+};
+
 class FromFunctions : public ADPrimitive {
 
   std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>

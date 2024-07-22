@@ -210,4 +210,65 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudaDeviceSynchronize();
 }
 
+void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
+                                   std::vector<Tensor> &outputs) {
+  PG_CHECK_ARG(inputs.size() == 1, "CudnnPooling2d expects 1 input, got ",
+               inputs.size());
+  PG_CHECK_ARG(outputs.size() == 1, "CudnnPooling2d expects 1 output, got ",
+               outputs.size());
+  auto &input = pg::cuda::view::as_contiguous(inputs[0].view());
+  auto &output = outputs[0].view_ptr();
+  output->allocate();
+  PG_CHECK_ARG(input.ndim() == 4, "Input tensor must have 4 dimensions, got ",
+               input.ndim());
+  PG_CHECK_ARG(output->ndim() == 4,
+               "Output tensor must have 4 dimensions, got ", output->ndim());
+  PG_CHECK_RUNTIME(input.dtype() == DType::Float32,
+                   "Input tensor must have dtype float32");
+
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc, output_desc;
+  cudnnPoolingDescriptor_t pooling_desc;
+
+  PG_CHECK_CUDNN(cudnnCreate(&handle));
+  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
+  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
+  PG_CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
+
+  int batch_size = input.shape()[0];
+  int in_channels = input.shape()[1];
+  int in_h = input.shape()[2];
+  int in_w = input.shape()[3];
+  int out_h = output->shape()[2];
+  int out_w = output->shape()[3];
+
+  // pads are always 0
+  shape_t strides = this->strides;
+  shape_t kernel_shape = this->kernel_shape;
+
+  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
+                                            CUDNN_DATA_FLOAT, batch_size,
+                                            in_channels, in_h, in_w));
+  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
+                                            CUDNN_DATA_FLOAT, batch_size,
+                                            in_channels, out_h, out_w));
+  PG_CHECK_CUDNN(cudnnSetPooling2dDescriptor(
+      pooling_desc, CUDNN_POOLING_MAX, CUDNN_PROPAGATE_NAN, kernel_shape[0],
+      kernel_shape[1], 0, 0, strides[0], strides[1]));
+
+  float alpha = 1.0f, beta = 0.0f;
+  PG_CHECK_CUDNN(cudnnPoolingForward(handle, pooling_desc, &alpha, input_desc,
+                                     input.get_base_ptr(), &beta, output_desc,
+                                     output->get_base_ptr()));
+
+  // Cleanup
+  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_desc));
+  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_desc));
+  PG_CHECK_CUDNN(cudnnDestroyPoolingDescriptor(pooling_desc));
+  PG_CHECK_CUDNN(cudnnDestroy(handle));
+
+  // Sync
+  cudaDeviceSynchronize();
+}
+
 } // namespace pg
