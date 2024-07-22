@@ -80,6 +80,9 @@ template <typename T> using Maybe = std::optional<T>;
 struct Conv2dPatternMatcherResult {
   Tensor input;
   Tensor filter;
+  shape_t stride;
+  shape_t dilation;
+  shape_t padding;
 };
 
 Maybe<Conv2dPatternMatcherResult> conv2d_pattern_matcher(Tensor &out) {
@@ -105,16 +108,89 @@ Maybe<Conv2dPatternMatcherResult> conv2d_pattern_matcher(Tensor &out) {
       filter_permuted2.ad_node()->children()[0].ad_node()->children()[0];
   // now try to get input
   RETURN_FALSE_IF_PRIM_IS_NOT(unfolded_input, "Im2Col");
+
+  Im2Col &im2col =
+      dynamic_cast<Im2Col &>(*unfolded_input.ad_node()->primitive().get());
+  auto &input = unfolded_input.ad_node()->children()[0];
+  // if input primitive is assign_at, it is padding!
+  shape_t padding = {0, 0};
+  /* PADDING IS IMPLEMENTED LIKE
+    out = pg.fill(
+        new_shape,
+        x.dtype,
+        constant,
+        x.device,
+    )
+    slices = [slice(int(pad[0]), int(-pad[1])) for pad in padpairs]
+
+    for i, _slice in enumerate(slices):
+        if _slice.start == 0 and _slice.stop == 0:
+            slices[i] = slice(None, None, None)  # same as a[:]
+
+    slices = tuple(slices)
+
+    out = pg.assign_at(out, x, slices)*/
+  // try to fuse padding
+  if (input.ad_node()->primitive()->str() == "AssignAt" &&
+      input.ad_node()->children().size() == 2) {
+    auto &assign_at_dest = input.ad_node()->children()[0];
+    auto &assign_at_src = input.ad_node()->children()[1];
+    try {
+      if (assign_at_dest.ad_node()->primitive()->str() == "Fill") {
+
+        PG_CHECK_RUNTIME(assign_at_src.shape().size() == 4,
+                         "AssignAt src should be 4D, got " +
+                             std::to_string(assign_at_src.shape().size()));
+        PG_CHECK_RUNTIME(assign_at_dest.shape().size() == 4,
+                         "AssignAt dest should be 4D, got " +
+                             assign_at_dest.str());
+        // now padding is the difference between the shapes in the last 2
+        // dimensions (H, W)
+        // TODO -- WILL NOT WORK WITH ASYMMETRIC PADDING
+        padding = {(assign_at_dest.shape()[2] - assign_at_src.shape()[2]) / 2,
+                   (assign_at_dest.shape()[3] - assign_at_src.shape()[3]) / 2};
+        input = assign_at_src;
+      }
+    } catch (std::exception &e) {
+    }
+  }
+
+  return Conv2dPatternMatcherResult{input, filter, im2col.strides(),
+                                    im2col.dilation(), padding};
+}
+
+Maybe<Conv2dPatternMatcherResult> conv2d_backward_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Col2Im");
+  auto &foldchild = out.ad_node()->children()[0];
+  // In conv, the folded output has 2 children: processed input and kernel
+  RETURN_FALSE_IF_PRIM_IS_NOT(foldchild, "MatMul");
+  auto &unfolded_input = foldchild.ad_node()->children()[1];
+  auto &filter_permuted0 = foldchild.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted0,
+                              "Permute"); // broadcasted filter
+  auto &filter_permuted1 =
+      filter_permuted0.ad_node()->children()[0]; // the actual permuted filter
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted1, "Broadcast");
+  // now try to get filter
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted1.ad_node()->children()[0],
+                              "Permute");
+  auto &filter_permuted2 = filter_permuted1.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted2.ad_node()->children()[0],
+                              "Permute");
+  auto &filterpermuted3 =
+      filter_permuted2.ad_node()->children()[0].ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filterpermuted3, "Reshape");
+  auto &filter = filterpermuted3.ad_node()->children()[0];
+
+  // now try to get input
+  RETURN_FALSE_IF_PRIM_IS_NOT(unfolded_input, "Im2Col");
   // another requisite is that unfolded input stride, padding, dilation is one
   Im2Col &im2col =
       dynamic_cast<Im2Col &>(*unfolded_input.ad_node()->primitive().get());
-  shape_t needed = {1, 1};
-  if (im2col.strides() != needed || im2col.dilation() != needed) {
-    return std::nullopt;
-  }
   auto &input = unfolded_input.ad_node()->children()[0];
 
-  return Conv2dPatternMatcherResult{input, filter};
+  return Conv2dPatternMatcherResult{input, filter, im2col.strides(),
+                                    im2col.dilation()};
 }
 
 struct Pooling2dPatternMatcherResult {
@@ -154,7 +230,9 @@ bool try_convert_conv2d(Tensor &out) {
   auto result = maybe_result.value();
   auto &input = result.input;
   auto &filter = result.filter;
-  out.ad_node()->set_primitive(std::make_shared<CudnnConv2D>());
+  auto kernel_size = shape_t{filter.shape()[2], filter.shape()[3]};
+  out.ad_node()->set_primitive(std::make_shared<CudnnConv2D>(
+      result.stride, result.dilation, kernel_size, result.padding));
   out.ad_node()->set_children({input, filter});
   return true;
 }

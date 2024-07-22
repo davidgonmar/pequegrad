@@ -59,9 +59,22 @@ public:
 
 class CudnnConv2D : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnConv2D)
+
+public:
+  shape_t kernel_shape;
+  shape_t strides;
+  shape_t dilation;
+  shape_t padding;
+
+  CudnnConv2D(shape_t strides, shape_t dilation, shape_t kernel_shape,
+              shape_t padding)
+      : kernel_shape(kernel_shape), strides(strides), dilation(dilation),
+        padding(padding) {}
 };
 
 class CudnnPooling2D : public ADPrimitive {
+  std::string str() { return "CudnnPooling2D<" + reduce_type + ">"; }
   DEFINE_DISPATCH_CUDA
 public:
   shape_t kernel_shape;

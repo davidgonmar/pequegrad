@@ -40,10 +40,6 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
     std::vector<Tensor> siblings = {t};
     for (Tensor &sib : t.ad_node()->siblings()) {
       siblings.push_back(sib);
-    }
-
-    // Mark tensors as visited
-    for (Tensor &sib : siblings) {
       visited.insert(sib.id);
     }
 

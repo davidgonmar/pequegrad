@@ -160,6 +160,9 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   int out_h = output->shape()[2];
   int out_w = output->shape()[3];
 
+  shape_t dilation = this->dilation;
+  shape_t strides = this->strides;
+  shape_t padding = this->padding;
   PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
                                             CUDNN_DATA_FLOAT, batch_size,
                                             in_channels, in_h, in_w));
@@ -170,10 +173,10 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
                                             CUDNN_DATA_FLOAT, batch_size,
                                             out_channels, out_h, out_w));
   PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
-      conv_desc, 0, 0, 1, 1, 1, 1, CUDNN_CROSS_CORRELATION,
+      conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
+      dilation[1], CUDNN_CROSS_CORRELATION,
       CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
                           // frameworks is actually cross-correlation
-
   // Select an algorithm for convolution
   int returned_algo_count = 0;
   cudnnConvolutionFwdAlgoPerf_t perfResults;
@@ -190,7 +193,6 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
 
   // Allocate workspace
   cudaMalloc(&workspace, workspace_size);
-
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionForward(
       handle, &alpha, input_desc, input.get_base_ptr(), filter_desc,
@@ -245,6 +247,7 @@ void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   // pads are always 0
   shape_t strides = this->strides;
   shape_t kernel_shape = this->kernel_shape;
+  shape_t padding = {0, 0};
 
   PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
                                             CUDNN_DATA_FLOAT, batch_size,
@@ -254,7 +257,7 @@ void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
                                             in_channels, out_h, out_w));
   PG_CHECK_CUDNN(cudnnSetPooling2dDescriptor(
       pooling_desc, CUDNN_POOLING_MAX, CUDNN_PROPAGATE_NAN, kernel_shape[0],
-      kernel_shape[1], 0, 0, strides[0], strides[1]));
+      kernel_shape[1], padding[0], padding[1], strides[0], strides[1]));
 
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnPoolingForward(handle, pooling_desc, &alpha, input_desc,
