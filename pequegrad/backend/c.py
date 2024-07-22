@@ -11,6 +11,8 @@ paths = [
     "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.7/bin",
     "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.1/bin",
     "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.0/bin",
+    # cudnn
+    "C:/Program Files/NVIDIA/CUDNN/v9.2/bin/12.5",
 ]
 
 for path in paths:

@@ -116,6 +116,19 @@ if (MSVC)
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /STACK:8388")
 endif()
 
+# CUDNN
+# Manually specify paths for cuDNN
+set(CUDNN_INCLUDE_DIR "C:\\Program Files\\NVIDIA\\CUDNN\\v9.2\\include\\12.5")
+set(CUDNN_LIB "C:\\Program Files\\NVIDIA\\CUDNN\\v9.2\\lib\\12.5\\x64\\cudnn.lib")
+
+
+
+# Add include directories for cuDNN
+include_directories(${CUDNN_INCLUDE_DIR})
+
+# Link cuDNN library with your target
+target_link_libraries(pequegrad_c PRIVATE ${CUDNN_LIB})
+
 target_compile_options(pequegrad_c PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>)
 target_compile_options(pequegrad_c PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:${cu_flags}>)
 

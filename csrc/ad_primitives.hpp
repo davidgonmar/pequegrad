@@ -57,6 +57,10 @@ public:
   explicit JitBoundary() {}
 };
 
+class CudnnConv2D : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+};
+
 class FromFunctions : public ADPrimitive {
 
   std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>
@@ -444,6 +448,11 @@ public:
 
   DEFINE_BACKWARD
   DEFINE_PRECOMPUTE
+
+  shape_t kernel_shape() { return _kernel_shape; }
+  shape_t strides() { return _strides; }
+  shape_t padding() { return _padding; }
+  shape_t dilation() { return _dilation; }
 };
 
 class Col2Im : public ADPrimitive {
