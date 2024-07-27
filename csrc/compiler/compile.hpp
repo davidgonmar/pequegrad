@@ -299,6 +299,131 @@ Maybe<Pooling2dPatternMatcherResult> pooling2d_pattern_matcher(Tensor &out) {
   return Pooling2dPatternMatcherResult{input, reduce_type, stride, kernel_size};
 }
 
+class LocalResponseNormalizationPatternMatcherResult {
+public:
+  Tensor input;
+  int size;
+  float alpha;
+  float beta;
+  float k;
+};
+
+// define a 'tree' to pattern match
+
+Maybe<LocalResponseNormalizationPatternMatcherResult>
+local_response_normalization_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Div");
+  auto &div = out.ad_node()->children()[1];
+  // -----------------
+  RETURN_FALSE_IF_PRIM_IS_NOT(div, "Broadcast");
+  auto &broadcast = div.ad_node()->children()[0];
+  // -----------------
+  RETURN_FALSE_IF_PRIM_IS_NOT(broadcast, "Pow");
+  auto &pow0 = broadcast.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(pow0, "Add");
+
+  auto &add0 = pow0.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(add0, "Mul");
+
+  auto &mul0 = add0.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(mul0, "Mean");
+  auto &mean = mul0.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(mean, "Pow");
+  auto &pow2 = mean.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(pow2, "Reshape");
+  auto &reshape = pow2.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(reshape, "Im2Col");
+  auto &inputprv = reshape.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(inputprv, "AssignAt"); // this handles the padding
+  auto &input = inputprv.ad_node()->children()[1];
+  //   nn.LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75),
+  // now we have the input
+  return LocalResponseNormalizationPatternMatcherResult{input, 5, 1e-4, 0.75,
+                                                        2};
+}
+
+bool try_convert_local_response_normalization(Tensor &out) {
+  auto maybe_result = local_response_normalization_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  std::cout << "Converting LRN" << std::endl;
+  auto result = maybe_result.value();
+  out.ad_node()->set_primitive(std::make_shared<CudnnLRN>(
+      result.size, result.alpha, result.beta, result.k));
+  out.ad_node()->set_children({result.input});
+  return true;
+}
+
+void recursive_local_response_normalization(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_local_response_normalization(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_local_response_normalization(node);
+  }
+}
+
+class LRNVjpInputPatternMatcherResult {
+public:
+  Tensor out_grad;
+  Tensor input;
+  Tensor out; // the output of the forward
+  int size;
+  float alpha;
+  float beta;
+  float k;
+};
+
+Maybe<LRNVjpInputPatternMatcherResult>
+lrn_vjp_input_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Add");
+  RETURN_FALSE_IF_PRIM_IS_NOT(out.ad_node()->children()[1], "CudnnLRN");
+  auto &x0 = out.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x0, "Select");
+  auto &x1 = x0.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x1, "Col2Im");
+  auto &x2 = x1.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x2, "Reshape");
+  auto &x3 = x2.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x3, "Mul");
+  auto &x4 = x3.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x4, "Mul");
+  auto &grad_out = x4.ad_node()->children()[0];
+
+  // now get input from out.ad_node()->children()[1]
+  auto &input = out.ad_node()->children()[1].ad_node()->children()[0];
+  auto &lrn_out = out.ad_node()->children()[1];
+  auto &lrn = dynamic_cast<CudnnLRN &>(
+      *out.ad_node()->children()[1].ad_node()->primitive().get());
+
+  return LRNVjpInputPatternMatcherResult{grad_out, input, lrn_out, 5,
+                                         1e-4,     0.75,  2};
+}
+
+bool try_convert_lrn_vjp_input(Tensor &out) {
+  auto maybe_result = lrn_vjp_input_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  out.ad_node()->set_primitive(std::make_shared<CudnnLRNVjpInput>(
+      result.size, result.alpha, result.beta, result.k));
+  out.ad_node()->set_children({result.out, result.out_grad, result.input});
+  return true;
+}
+
+void recursive_lrn_vjp_input(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_lrn_vjp_input(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_lrn_vjp_input(node);
+  }
+}
+
 bool try_convert_conv2d(Tensor &out) {
   auto maybe_result = conv2d_pattern_matcher(out);
   if (!maybe_result.has_value()) {
@@ -370,6 +495,12 @@ static void compile(Tensor &out) {
 
   // Fifth pass -> conv2d vjp input pattern matching
   recursive_conv2d_vjp_input(out);
+
+  // Sixth pass -> local response normalization
+  recursive_local_response_normalization(out);
+
+  // Seventh pass -> lrn vjp input
+  recursive_lrn_vjp_input(out);
 
   // Last pass -> schedule and fuse
   std::set<int> visited2;

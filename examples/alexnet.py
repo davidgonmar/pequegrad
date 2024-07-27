@@ -1,6 +1,6 @@
 from pequegrad import Tensor, device, grads
 import pequegrad.modules as nn
-from pequegrad.optim import Adam, JittedAdam
+from pequegrad.optim import SGD, Adam, JittedAdam, JittedSGD
 import argparse
 import numpy as np
 import pequegrad.transforms as transforms
@@ -139,12 +139,21 @@ print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1
 if args.checkpoint is not None:
     model.load(args.checkpoint)
 
+use_sgd = True
+optims = {
+    "compiled": {
+        "adam": JittedAdam,
+        "sgd": JittedSGD,
+    },
+    "uncompiled": {
+        "adam": Adam,
+        "sgd": SGD,
+    },
+}
 if not args.test:
-    optim = (
-        Adam(model.parameters(), lr=args.lr)
-        if not args.jit
-        else JittedAdam(model.parameters(), lr=args.lr)
-    )
+    str1 = "compiled" if args.jit else "uncompiled"
+    str2 = "adam" if use_sgd else "sgd"
+    optim = optims[str1][str2](model.parameters(), lr=args.lr)
 
     def train_step(x, y):
         outs = model(x)
@@ -176,6 +185,8 @@ if not args.test:
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
+            if i == 10:
+                raise Exception("stop")
             if i % 100 == 0:
                 model.save("alexnet_checkpoint.pkl")
 

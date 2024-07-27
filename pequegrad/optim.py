@@ -31,6 +31,45 @@ class SGD:
         del g
 
 
+class JittedSGD:
+    def __init__(
+        self,
+        parameters: List[Tensor],
+        lr: float = 0.1,
+        weight_decay: float = 0.0,
+        momentum: float = 0.0,
+    ):
+        self.params = parameters
+        self.device = parameters[0].device
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.vt_last = [Tensor.zeros(p.shape).to(self.device) for p in parameters]
+        self.momentum = momentum
+
+        self.jitted_steps = [
+            jit(
+                self.one_param_step,
+            )
+            for _ in range(len(parameters))
+        ]
+
+    def one_param_step(self, p, gt, vt):
+        if self.weight_decay != 0:
+            gt += self.weight_decay * p
+        vt = self.momentum * vt + gt
+        newp = p - self.lr * vt
+        return vt, newp
+
+    def step(self, g):
+        assert len(g) == len(self.params)
+        for i, (p, gt) in enumerate(zip(self.params, g)):
+            vt = self.vt_last[i]
+            vt, newp = self.jitted_steps[i](p, gt, vt)
+            self.vt_last[i] = vt.eval().detach()
+            p.assign(newp)
+        del g
+
+
 class Adam:
     def __init__(
         self, parameters: List[Tensor], lr: float = 0.001, b1=0.9, b2=0.999, eps=1e-08

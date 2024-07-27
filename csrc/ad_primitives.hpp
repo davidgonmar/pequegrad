@@ -117,6 +117,32 @@ public:
         padding(padding) {}
 };
 
+class CudnnLRN : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnLRN)
+public:
+  int size;
+  double alpha;
+  double beta;
+  double k;
+
+  CudnnLRN(int size, double alpha, double beta, double k)
+      : size(size), alpha(alpha), beta(beta), k(k) {}
+};
+
+class CudnnLRNVjpInput : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnLRN)
+public:
+  int size;
+  double alpha;
+  double beta;
+  double k;
+
+  CudnnLRNVjpInput(int size, double alpha, double beta, double k)
+      : size(size), alpha(alpha), beta(beta), k(k) {}
+};
+
 class FromFunctions : public ADPrimitive {
 
   std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>

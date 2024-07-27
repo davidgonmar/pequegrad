@@ -128,15 +128,22 @@ class Linear(StatefulModule):
 
 class Conv2d(StatefulModule):
     def __init__(
-        self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        bias=True,
     ):
         super().__init__()
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )
-        self.bias = ModuleParam.zeros(out_channels)
+        self.bias = ModuleParam.zeros(out_channels) if bias else None
         assert isinstance(self.kernel, ModuleParam)
-        assert isinstance(self.bias, ModuleParam)
+        assert isinstance(self.bias, ModuleParam) or self.bias is None
         self.stride = stride
         self.padding = padding
         self.dilation = dilation

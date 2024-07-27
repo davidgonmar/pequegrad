@@ -72,9 +72,12 @@ cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
                             [](T *ptr) { CHECK_CUDA(cudaFree(ptr)); });
 }
 
+#define SHOULD_SYNC 1
 #define PG_CUDA_KERNEL_END                                                     \
   do {                                                                         \
-    CHECK_CUDA(cudaDeviceSynchronize());                                       \
+    if (SHOULD_SYNC) {                                                         \
+      CHECK_CUDA(cudaDeviceSynchronize());                                     \
+    }                                                                          \
     CHECK_CUDA(cudaGetLastError());                                            \
                                                                                \
   } while (0)
