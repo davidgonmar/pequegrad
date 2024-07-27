@@ -246,6 +246,7 @@ def conv2d(
 
     if p_y > 0 or p_x > 0:
         self = self.pad_constant((p_y, p_x, p_y, p_x))
+        print("padded: ", self)
 
     inp_unf = self.unfold(
         filter.shape[-2:], stride=(s_y, s_x), dilation=(d_y, d_x)

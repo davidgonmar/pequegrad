@@ -249,9 +249,9 @@ std::vector<Tensor> Pow::backward(const std::vector<Tensor> &primals,
   Tensor tangent = tangents[0];
   Tensor x = primals[0];
   Tensor y = primals[1];
-  return {mul(mul(y, pow(x, sub(y, fill(y.shape(), y.dtype(), 1, x.device())))),
-              tangent),
-          mul(log(x), mul(pow(x, y), tangent))};
+  return {
+      mul(mul(y, pow(x, sub(y, fill({}, y.dtype(), 1, x.device())))), tangent),
+      mul(log(x), mul(pow(x, y), tangent))};
 }
 static Tensor zeros_like(const Tensor &t) {
   return fill(t.shape(), t.dtype(), 0, t.device());
@@ -302,14 +302,14 @@ std::vector<Tensor> Mean::backward(const std::vector<Tensor> &primals,
   }
   if (!_keepdims && _axes.size() != primals[0].shape().size()) {
     Tensor g = broadcast_to(unsqueeze(tangents[0], _axes), primals[0].shape());
-    return {broadcast_to(
-        div(g, fill(g.shape(), g.dtype(), total_els_reduced, g.device())),
-        primals[0].shape())};
+    return {
+        broadcast_to(div(g, fill({}, g.dtype(), total_els_reduced, g.device())),
+                     primals[0].shape())};
   }
   Tensor g = broadcast_to(tangents[0], primals[0].shape());
-  return {broadcast_to(
-      div(g, fill(g.shape(), g.dtype(), total_els_reduced, g.device())),
-      primals[0].shape())};
+  return {
+      broadcast_to(div(g, fill({}, g.dtype(), total_els_reduced, g.device())),
+                   primals[0].shape())};
 }
 
 std::vector<Tensor> Log::backward(const std::vector<Tensor> &primals,

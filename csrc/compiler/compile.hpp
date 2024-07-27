@@ -111,7 +111,7 @@ Maybe<Conv2dPatternMatcherResult> conv2d_pattern_matcher(Tensor &out) {
 
   Im2Col &im2col =
       dynamic_cast<Im2Col &>(*unfolded_input.ad_node()->primitive().get());
-  auto &input = unfolded_input.ad_node()->children()[0];
+  auto input = unfolded_input.ad_node()->children()[0];
   // if input primitive is assign_at, it is padding!
   shape_t padding = {0, 0};
   /* PADDING IS IMPLEMENTED LIKE
@@ -159,40 +159,117 @@ Maybe<Conv2dPatternMatcherResult> conv2d_pattern_matcher(Tensor &out) {
                                     im2col.dilation(), padding};
 }
 
-Maybe<Conv2dPatternMatcherResult> conv2d_backward_pattern_matcher(Tensor &out) {
-  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Col2Im");
-  auto &foldchild = out.ad_node()->children()[0];
-  // In conv, the folded output has 2 children: processed input and kernel
-  RETURN_FALSE_IF_PRIM_IS_NOT(foldchild, "MatMul");
-  auto &unfolded_input = foldchild.ad_node()->children()[1];
-  auto &filter_permuted0 = foldchild.ad_node()->children()[0];
-  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted0,
-                              "Permute"); // broadcasted filter
-  auto &filter_permuted1 =
-      filter_permuted0.ad_node()->children()[0]; // the actual permuted filter
-  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted1, "Broadcast");
-  // now try to get filter
-  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted1.ad_node()->children()[0],
-                              "Permute");
-  auto &filter_permuted2 = filter_permuted1.ad_node()->children()[0];
-  RETURN_FALSE_IF_PRIM_IS_NOT(filter_permuted2.ad_node()->children()[0],
-                              "Permute");
-  auto &filterpermuted3 =
-      filter_permuted2.ad_node()->children()[0].ad_node()->children()[0];
-  RETURN_FALSE_IF_PRIM_IS_NOT(filterpermuted3, "Reshape");
-  auto &filter = filterpermuted3.ad_node()->children()[0];
+class Conv2dVjpWeightMatcherResult {
+public:
+  Tensor out_grad;
+  Tensor input;
+  shape_t stride;
+  shape_t dilation;
+  shape_t padding;
+};
 
-  // now try to get input
-  RETURN_FALSE_IF_PRIM_IS_NOT(unfolded_input, "Im2Col");
-  // another requisite is that unfolded input stride, padding, dilation is one
-  Im2Col &im2col =
-      dynamic_cast<Im2Col &>(*unfolded_input.ad_node()->primitive().get());
-  auto &input = unfolded_input.ad_node()->children()[0];
+Maybe<Conv2dVjpWeightMatcherResult>
+conv2d_vjp_weight_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Reshape");
+  auto &out1 = out.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(out1, "Permute");
+  auto &out2 = out1.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(out2, "Permute");
+  auto &out3 = out2.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(out3, "Sum");
+  auto &out4 = out3.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(out4, "MatMul");
+  auto &out_grad0 = out4.ad_node()->children()[0];
+  auto &input = out4.ad_node()->children()[1];
+  // OUT GRAD
+  RETURN_FALSE_IF_PRIM_IS_NOT(out_grad0, "Im2Col");
+  auto &out_grad = out_grad0.ad_node()->children()[0];
 
-  return Conv2dPatternMatcherResult{input, filter, im2col.strides(),
-                                    im2col.dilation()};
+  // INPUT
+  RETURN_FALSE_IF_PRIM_IS_NOT(input, "Permute");
+  auto &input0 = input.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(input0, "Im2Col");
+  auto &input1 = input0.ad_node()->children()[0];
+  auto &im2col = dynamic_cast<Im2Col &>(*input0.ad_node()->primitive().get());
+  return Conv2dVjpWeightMatcherResult{
+      out_grad, input1, im2col.strides(), im2col.dilation(), {0, 0}};
 }
 
+class Conv2dVjpInputMatcherResult {
+public:
+  Tensor out_grad;
+  Tensor filter;
+  shape_t stride;
+  shape_t dilation;
+  shape_t padding;
+};
+
+Maybe<Conv2dVjpInputMatcherResult>
+conv2d_vjp_input_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Col2Im");
+  auto &out1 = out.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(out1, "MatMul");
+  auto &filter0 = out1.ad_node()->children()[0];
+  auto &out_grad0 = out1.ad_node()->children()[1];
+  // OUT GRAD
+  RETURN_FALSE_IF_PRIM_IS_NOT(out_grad0, "Im2Col");
+  auto &out_grad = out_grad0.ad_node()->children()[0];
+  // FILTER
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter0, "Permute");
+  auto &filter1 = filter0.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter1, "Broadcast");
+  auto &filter2 = filter1.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter2, "Permute");
+  auto &filter = filter2.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter, "Permute");
+  auto &filter3 = filter.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(filter3, "Reshape");
+  auto &filter4 = filter3.ad_node()->children()[0];
+
+  auto &col2im = dynamic_cast<Col2Im &>(*out.ad_node()->primitive().get());
+  return Conv2dVjpInputMatcherResult{
+      out_grad, filter4, col2im.strides(), col2im.dilation(), {0, 0}};
+}
+
+bool try_convert_conv2d_vjp_input(Tensor &out) {
+  auto maybe_result = conv2d_vjp_input_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  auto &input = result.filter;
+  auto &out_grad = result.out_grad;
+  auto kernel_size = shape_t{input.shape()[2], input.shape()[3]};
+  out.ad_node()->set_primitive(std::make_shared<CudnnConv2dVjpInput>(
+      result.stride, result.dilation, kernel_size, result.padding));
+  out.ad_node()->set_children({input, out_grad});
+  return true;
+}
+
+bool try_convert_conv2d_vjp_weight(Tensor &out) {
+  auto maybe_result = conv2d_vjp_weight_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  auto &input = result.input;
+  auto &out_grad = result.out_grad;
+  auto kernel_size = shape_t{out_grad.shape()[2], out_grad.shape()[3]};
+  out.ad_node()->set_primitive(std::make_shared<CudnnConv2dVjpWeight>(
+      result.stride, result.dilation, kernel_size, result.padding));
+  out.ad_node()->set_children({input, out_grad});
+  return true;
+}
+
+void recursive_conv2d_vjp_weight(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_conv2d_vjp_weight(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_conv2d_vjp_weight(node);
+  }
+}
 struct Pooling2dPatternMatcherResult {
   Tensor input;
   std::string reduce_type;
@@ -260,6 +337,16 @@ void recursive_conv2d(Tensor &out) {
   }
 }
 
+void recursive_conv2d_vjp_input(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_conv2d_vjp_input(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_conv2d_vjp_input(node);
+  }
+}
+
 void recursive_pooling2d(Tensor &out) {
   if (out.device() != device::CUDA) {
     return;
@@ -278,6 +365,12 @@ static void compile(Tensor &out) {
   recursive_conv2d(out);
   // Third pass -> pooling2d pattern matching
   recursive_pooling2d(out);
+  // Fourth pass -> conv2d vjp weight pattern matching
+  recursive_conv2d_vjp_weight(out);
+
+  // Fifth pass -> conv2d vjp input pattern matching
+  recursive_conv2d_vjp_input(out);
+
   // Last pass -> schedule and fuse
   std::set<int> visited2;
   rec_schedule(out, out, visited2);

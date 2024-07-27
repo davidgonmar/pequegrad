@@ -86,6 +86,37 @@ public:
   }
 };
 
+// optimized backward pass for cudnn conv2d for the weight
+class CudnnConv2dVjpWeight : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnConv2dVjp)
+public:
+  shape_t kernel_shape;
+  shape_t strides;
+  shape_t dilation;
+  shape_t padding;
+
+  CudnnConv2dVjpWeight(shape_t strides, shape_t dilation, shape_t kernel_shape,
+                       shape_t padding)
+      : kernel_shape(kernel_shape), strides(strides), dilation(dilation),
+        padding(padding) {}
+};
+
+class CudnnConv2dVjpInput : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnConv2dVjp)
+public:
+  shape_t kernel_shape;
+  shape_t strides;
+  shape_t dilation;
+  shape_t padding;
+
+  CudnnConv2dVjpInput(shape_t strides, shape_t dilation, shape_t kernel_shape,
+                      shape_t padding)
+      : kernel_shape(kernel_shape), strides(strides), dilation(dilation),
+        padding(padding) {}
+};
+
 class FromFunctions : public ADPrimitive {
 
   std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>
@@ -499,6 +530,12 @@ public:
 
   DEFINE_BACKWARD
   DEFINE_PRECOMPUTE
+
+  shape_t output_shape() { return _output_shape; }
+  shape_t kernel_shape() { return _kernel_shape; }
+  shape_t strides() { return _strides; }
+  shape_t padding() { return _padding; }
+  shape_t dilation() { return _dilation; }
 };
 
 class Reshape : public ADPrimitive {

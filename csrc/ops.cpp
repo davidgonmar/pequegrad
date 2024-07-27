@@ -76,11 +76,11 @@ static std::vector<Tensor> broadcast_tensors(const Tensor &a, const Tensor &b) {
 
 #define DEFINE_BINOP_SCALAR_OVERLOAD(name)                                     \
   Tensor name(const Tensor &a, double b) {                                     \
-    Tensor t = fill(a.shape(), a.dtype(), b, a.device());                      \
+    Tensor t = fill({}, a.dtype(), b, a.device());                             \
     return name(a, t);                                                         \
   }                                                                            \
   Tensor name(double a, const Tensor &b) {                                     \
-    Tensor t = fill(b.shape(), b.dtype(), a, b.device());                      \
+    Tensor t = fill({}, b.dtype(), a, b.device());                             \
     return name(t, b);                                                         \
   }
 
@@ -149,7 +149,7 @@ Tensor log(const Tensor &a) {
 }
 
 Tensor neg(const Tensor &a) {
-  Tensor minus_one = fill(a.shape(), a.dtype(), -1.0, a.device());
+  Tensor minus_one = fill({}, a.dtype(), -1.0, a.device());
   return mul(a, minus_one);
 }
 
