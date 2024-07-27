@@ -84,6 +84,31 @@ static bool is_reduce_op(std::shared_ptr<ADPrimitive> prim) {
   return is<Sum>(prim) || is<Mean>(prim) || is<MaxReduce>(prim);
 }
 
+// we can treat f(Fill(value)) as a constant as long as f is a reshape,
+// transpose or other movement op this function gets a tensor and return null if
+// it cannot reach a Fill node, or the value of the Fill node if it can
+static std::shared_ptr<ImmExpr> get_fill_value(const Tensor &t) {
+  if (is<Fill>(t.ad_node()->primitive())) {
+    auto fill = as<Fill>(t.ad_node()->primitive());
+    auto imm = std::make_shared<ImmExpr>();
+    imm->value = fill->value();
+    imm->dtype = t.dtype();
+    return imm;
+  }
+  if (!is<Reshape>(t.ad_node()->primitive()) &&
+      !is<Permute>(t.ad_node()->primitive()) &&
+      !is<BroadcastTo>(t.ad_node()->primitive())) {
+    return nullptr;
+  }
+  for (auto &child : t.ad_node()->children()) {
+    auto res = get_fill_value(child);
+    if (res != nullptr) {
+      return res;
+    }
+  }
+  return nullptr;
+}
+
 std::shared_ptr<BaseExpr>
 graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
                   std::vector<std::shared_ptr<BaseExpr>> &ir,
@@ -97,6 +122,13 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
     fill->dtype = out.dtype();
     ir.push_back(fill);
     return fill;
+  }
+  // we can treat f(Fill(value)) as a constant as long as f is a reshape,
+  // transpose or other movement op
+  auto fill_value = get_fill_value(out);
+  if (fill_value != nullptr) {
+    ir.push_back(fill_value);
+    return fill_value;
   }
 
   auto is_in_orig_inputs = std::find_if(orig_inputs.begin(), orig_inputs.end(),
@@ -683,7 +715,8 @@ graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
   int i = 0;
   std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node()->primitive())) {
+    if (is<Fill>(input.ad_node()->primitive()) ||
+        get_fill_value(input) != nullptr) {
       i++;
       // will be replaced by a constant
       continue;
