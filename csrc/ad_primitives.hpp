@@ -103,6 +103,29 @@ public:
   }
 };
 
+class CudnnPooling2DVjp : public ADPrimitive {
+  std::string str() { return "CudnnPooling2DVjp<" + reduce_type + ">"; }
+  DEFINE_DISPATCH_CUDA
+  // CUDNN ATTRIBUTES
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t forward_input_desc;
+  cudnnTensorDescriptor_t forward_output_desc;
+  cudnnTensorDescriptor_t out_grad_desc;
+  cudnnTensorDescriptor_t in_grad_desc;
+  cudnnPoolingDescriptor_t pooling_desc;
+  int workspace_size;
+  bool initialized = false;
+
+public:
+  shape_t kernel_shape;
+  shape_t strides;
+  std::string reduce_type;
+
+  CudnnPooling2DVjp(shape_t kernel_shape, shape_t strides,
+                    std::string reduce_type)
+      : kernel_shape(kernel_shape), strides(strides), reduce_type(reduce_type) {
+  }
+};
 // optimized backward pass for cudnn conv2d for the weight
 class CudnnConv2dVjpWeight : public ADPrimitive {
   DEFINE_DISPATCH_CUDA

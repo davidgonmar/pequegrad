@@ -383,24 +383,26 @@ void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   output->allocate();
   PG_CHECK_ARG(input.ndim() == 4, "Input tensor must have 4 dimensions, got ",
                input.ndim());
-  PG_CHECK_ARG(output->ndim() == 4,
-               "Output tensor must have 4 dimensions, got ", output->ndim());
+  PG_CHECK_ARG(output->ndim() ==
+                   3, // 3 dimensions because we get the last 2 'merged'
+               "Output tensor must have 3dimensions, got ", output->ndim());
   PG_CHECK_RUNTIME(input.dtype() == DType::Float32,
                    "Input tensor must have dtype float32");
-
   if (!this->initialized) {
 
     PG_CHECK_CUDNN(cudnnCreate(&handle));
+    cudnnSetStream(handle, 0);
     PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
     PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
     PG_CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
-
     int batch_size = input.shape()[0];
     int in_channels = input.shape()[1];
     int in_h = input.shape()[2];
     int in_w = input.shape()[3];
-    int out_h = output->shape()[2];
-    int out_w = output->shape()[3];
+    int out_wxh = output->shape()[2];
+    // out_wxh = out_w * out_h. ASSUME SQUARE (TODO--make it more general)
+    int out_h = sqrt(out_wxh);
+    int out_w = out_h;
 
     // pads are always 0
     shape_t strides = this->strides;
@@ -425,6 +427,81 @@ void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CUDA_KERNEL_END;
 }
 
+void CudnnPooling2DVjp::dispatch_cuda(const std::vector<Tensor> &inputs,
+                                      std::vector<Tensor> &outputs) {
+  PG_CHECK_ARG(inputs.size() == 3, "CudnnPooling2dVjp expects 3 inputs, got ",
+               inputs.size());
+  auto &forward_output = pg::cuda::view::as_contiguous(inputs[0].view());
+  auto &output_grad = pg::cuda::view::as_contiguous(inputs[2].view());
+  auto &input = pg::cuda::view::as_contiguous(inputs[1].view());
+  auto &input_grad = outputs[0].view_ptr();
+  input_grad->allocate();
+  PG_CHECK_ARG(forward_output.ndim() == 3,
+               "Forward output tensor must have 3 dimensions, got ",
+               forward_output.ndim());
+  PG_CHECK_ARG(output_grad.ndim() == 4,
+               "Output tensor must have 3 dimensions, got ",
+               output_grad.ndim());
+  PG_CHECK_ARG(input.ndim() == 4, "Input tensor must have 4 dimensions, got ",
+               input.ndim());
+  PG_CHECK_ARG(input_grad->ndim() == 4,
+               "Input_grad tensor must have 4 dimensions, got ",
+               input_grad->ndim());
+  PG_CHECK_RUNTIME(
+      forward_output.dtype() == output_grad.dtype() &&
+          forward_output.dtype() == DType::Float32,
+      "Forward output and output_grad tensors must have dtype float32");
+
+  if (!this->initialized) {
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    cudnnSetStream(handle, 0);
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&forward_output_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&out_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&forward_input_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&in_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
+    int batch_size = input.shape()[0];
+    int in_channels = input.shape()[1];
+    int in_h = input.shape()[2];
+    int in_w = input.shape()[3];
+    int out_wxh = forward_output.shape()[2];
+    // out_wxh = out_w * out_h. ASSUME SQUARE (TODO--make it more general)
+    int out_h = sqrt(out_wxh);
+    int out_w = out_h;
+
+    // pads are always 0
+    shape_t strides = this->strides;
+    shape_t kernel_shape = this->kernel_shape;
+    shape_t padding = {0, 0};
+
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        forward_output_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        in_channels, out_h, out_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(out_grad_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, out_h, out_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        forward_input_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(in_grad_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetPooling2dDescriptor(
+        pooling_desc, CUDNN_POOLING_MAX, CUDNN_PROPAGATE_NAN, kernel_shape[0],
+        kernel_shape[1], padding[0], padding[1], strides[0], strides[1]));
+    this->initialized = true;
+  }
+
+  float alpha = 1.0f, beta = 0.0f;
+  PG_CHECK_CUDNN(cudnnPoolingBackward(
+      handle, pooling_desc, &alpha, forward_output_desc,
+      forward_output.get_base_ptr(), out_grad_desc, output_grad.get_base_ptr(),
+      forward_input_desc, input.get_base_ptr(), &beta, in_grad_desc,
+      input_grad->get_base_ptr()));
+  PG_CUDA_KERNEL_END;
+}
+
+// pads are always 0
 void CudnnLRN::dispatch_cuda(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
   PG_CHECK_ARG(inputs.size() == 1, "CudnnLRN expects 1 input, got ",

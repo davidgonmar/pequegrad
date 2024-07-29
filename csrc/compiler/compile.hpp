@@ -278,8 +278,8 @@ struct Pooling2dPatternMatcherResult {
 };
 
 Maybe<Pooling2dPatternMatcherResult> pooling2d_pattern_matcher(Tensor &out) {
-  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Reshape");
-  auto &unreshaped = out.ad_node()->children()[0];
+
+  auto &unreshaped = out;
   // now it can be MaxReduce or Mean
   std::string reduce_type = "";
   if (unreshaped.ad_node()->primitive()->str() == "MaxReduce") {
@@ -290,13 +290,76 @@ Maybe<Pooling2dPatternMatcherResult> pooling2d_pattern_matcher(Tensor &out) {
     return std::nullopt;
   }
   auto &unreduced = unreshaped.ad_node()->children()[0];
-  RETURN_FALSE_IF_PRIM_IS_NOT(unreduced, "Im2Col");
-  auto &input = unreduced.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(unreduced, "Reshape");
+  auto &inputreshaped = unreduced.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(inputreshaped, "Im2Col");
+  auto &input = inputreshaped.ad_node()->children()[0];
   auto &im2col =
-      dynamic_cast<Im2Col &>(*unreduced.ad_node()->primitive().get());
+      dynamic_cast<Im2Col &>(*inputreshaped.ad_node()->primitive().get());
   auto stride = im2col.strides();
   auto kernel_size = im2col.kernel_shape();
   return Pooling2dPatternMatcherResult{input, reduce_type, stride, kernel_size};
+}
+
+struct MaxPooling2dBackwardPatternMatcherResult {
+  Tensor forward_out;
+  Tensor input;
+  Tensor grad_out;
+  shape_t stride;
+  shape_t kernel_size;
+};
+
+Maybe<MaxPooling2dBackwardPatternMatcherResult>
+max_pooling2d_backward_pattern_matcher(Tensor &out) {
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Col2Im");
+  auto &i0 = out.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i0, "Reshape");
+  auto &i1 = i0.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i1, "Where");
+  auto &i2 = i1.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i2, "Eq");
+  auto &i3 = i2.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i3, "Broadcast");
+  auto &i4 = i3.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i4, "Unsqueeze");
+  auto &i5 = i4.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i5, "CudnnPooling2D<MaxReduce>");
+  auto &fw_out = i5;
+  auto &input = i5.ad_node()->children()[0];
+  auto &pool = dynamic_cast<CudnnPooling2D &>(*i5.ad_node()->primitive().get());
+  auto &i7 = i1.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i7, "Broadcast");
+  auto &i8 = i7.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i8, "Unsqueeze");
+  auto &i9 = i8.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(i9, "Reshape");
+  auto &grad_out = i9.ad_node()->children()[0];
+
+  return MaxPooling2dBackwardPatternMatcherResult{
+      fw_out, input, grad_out, pool.strides, pool.kernel_shape};
+}
+
+bool try_convert_max_pooling2d_backward(Tensor &out) {
+  auto maybe_result = max_pooling2d_backward_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  out.ad_node()->set_primitive(std::make_shared<CudnnPooling2DVjp>(
+      result.kernel_size, result.stride, "Max"));
+  out.ad_node()->set_children(
+      {result.forward_out, result.input, result.grad_out});
+  return true;
+}
+
+void recursive_max_pooling2d_backward(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_max_pooling2d_backward(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_max_pooling2d_backward(node);
+  }
 }
 
 class LocalResponseNormalizationPatternMatcherResult {
@@ -501,6 +564,9 @@ static void compile(Tensor &out) {
 
   // Seventh pass -> lrn vjp input
   recursive_lrn_vjp_input(out);
+
+  // Eighth pass -> max pooling 2d backward
+  recursive_max_pooling2d_backward(out);
 
   // Last pass -> schedule and fuse
   std::set<int> visited2;
