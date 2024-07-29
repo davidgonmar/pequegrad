@@ -414,6 +414,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
              }
            })
       .def_property_readonly("shape", [](const Tensor &t) { return t.shape(); })
+      .def_property_readonly("strides",
+                             [](const Tensor &t) { return t.strides(); })
       .def_property_readonly("dtype", [](const Tensor &t) { return t.dtype(); })
       .def_property_readonly("device",
                              [](const Tensor &t) { return t.device(); })

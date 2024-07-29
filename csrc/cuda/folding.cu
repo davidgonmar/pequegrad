@@ -564,9 +564,9 @@ void CudnnLRNVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
                                      std::vector<Tensor> &outputs) {
   PG_CHECK_ARG(inputs.size() == 3, "CudnnLRNVjpInput expects 2 inputs, got ",
                inputs.size());
-  auto &forward_output = pg::cuda::view::as_contiguous(inputs[0].view());
-  auto &output_grad = pg::cuda::view::as_contiguous(inputs[1].view());
-  auto &input = pg::cuda::view::as_contiguous(inputs[2].view());
+  auto &forward_output = cuda::view::as_contiguous(inputs[0].view());
+  auto &output_grad = cuda::view::as_contiguous(inputs[1].view());
+  auto &input = cuda::view::as_contiguous(inputs[2].view());
   auto &input_grad = outputs[0].view_ptr();
 
   input_grad->allocate();
@@ -617,9 +617,11 @@ void CudnnLRNVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_grad_desc, CUDNN_TENSOR_NCHW,
                                             CUDNN_DATA_FLOAT, batch_size,
                                             in_channels, in_h, in_w));
+
   PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
                                             CUDNN_DATA_FLOAT, batch_size,
                                             in_channels, in_h, in_w));
+  // input grad guaranteed contiguous
   PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_grad_desc, CUDNN_TENSOR_NCHW,
                                             CUDNN_DATA_FLOAT, batch_size,
                                             in_channels, in_h, in_w));

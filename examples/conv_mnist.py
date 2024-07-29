@@ -9,6 +9,7 @@ from pequegrad.modules import (
     Reshape,
     ReLU,
     MaxPool2d,
+    LocalResponseNorm,
 )
 from pequegrad.context import no_grad
 import argparse
@@ -32,6 +33,7 @@ class ConvNet(StatefulModule):
             ),  # shape: (28, 28) -> (26, 26)
             ReLU(),  # shape: (26, 26)
             MaxPool2d(kernel_size=(2, 2)),  # shape: (26, 26) -> (13, 13)
+            LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75),
             Conv2d(
                 in_channels=8, out_channels=16, kernel_size=3
             ),  # shape: (13, 13) -> (11, 11)
@@ -63,7 +65,7 @@ def test_model(model, ds):
 
 def train(model, ds, epochs=13, batch_size=512):
     # weights of the network printed
-    use_jit = True
+    use_jit = True and dev == device.cuda
     optimcls = JittedAdam if use_jit else Adam
     optim = optimcls(model.parameters(), lr=0.033)
 

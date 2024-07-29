@@ -83,12 +83,37 @@ __global__ void copy_kernel_5d(const stride_t instr0, const stride_t instr1,
   out[idx] = in[in_idx];
 }
 
+constexpr int WSIZE = 32;
+template <typename T>
+__global__ void fast_copy_zero_strided_to_strided(const int n, const T *in,
+                                                  T *out) {
+  const int idx = blockDim.x * blockIdx.x + threadIdx.x;
+  if (idx >= n)
+    return;
+  out[idx] = in[0];
+}
+
 namespace view {
 View as_contiguous(const View &view) {
   if (view.is_contiguous()) {
     return view;
   }
   View contiguous_view = View(view.shape(), view.dtype(), view.device());
+
+  // if the old view has all 0s in the strides, we can use a faster kernel
+  if (view.nbytes() == dtype_to_size(view.dtype())) {
+    PG_DISPATCH_ALL_TYPES(
+        view.dtype(), "fast_copy_zero_strided_to_strided", [&]() {
+          fast_copy_zero_strided_to_strided<scalar_t>
+              <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) /
+                      DEFAULT_BLOCK_SIZE),
+                 dim3(DEFAULT_BLOCK_SIZE)>>>(
+                  view.numel(), view.get_casted_base_ptr<scalar_t>(),
+                  contiguous_view.get_casted_base_ptr<scalar_t>());
+        });
+    PG_CUDA_KERNEL_END;
+    return contiguous_view;
+  }
 
   // pass strides to strides / sizeof(T)
   auto strides = strides_t(view.strides().size());

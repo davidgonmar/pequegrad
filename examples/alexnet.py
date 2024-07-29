@@ -186,8 +186,6 @@ if not args.test:
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
-            if i == 10:
-                raise Exception("stop")
             if i % 100 == 0:
                 model.save("alexnet_checkpoint.pkl")
 
