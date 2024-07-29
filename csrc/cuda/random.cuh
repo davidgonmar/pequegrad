@@ -34,10 +34,10 @@ private:
     }
     n_ = n;
     curandState *states;
-    CHECK_CUDA(cudaMalloc(&states, n * sizeof(curandState)));
+    CHECK_CUDA(cudaMallocAsync(&states, n * sizeof(curandState), 0));
     states_ = std::shared_ptr<curandState>(
-        states, [](curandState *ptr) { CHECK_CUDA(cudaFree(ptr)); });
-    setup_kernel<<<(n + 255) / 256, 256>>>(states_.get(), time(NULL), n);
+        states, [](curandState *ptr) { CHECK_CUDA(cudaFreeAsync(ptr, 0)); });
+    setup_kernel<<<(n + 255) / 1024, 1024>>>(states_.get(), time(NULL), n);
     PG_CUDA_KERNEL_END;
     initialized_ = true;
   }

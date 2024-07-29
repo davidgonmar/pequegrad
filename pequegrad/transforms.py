@@ -50,7 +50,7 @@ class ToTensor(Mod):
 
     def forward(self, x: Image):
         if isinstance(x, Tensor):
-            return x
+            return x.eval().to(self.device)
 
         if isinstance(x, np.ndarray):
             return Tensor(x, device=self.device)

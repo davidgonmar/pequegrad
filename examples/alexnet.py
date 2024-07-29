@@ -121,9 +121,10 @@ transform = transforms.Compose(
 )
 trainset = CIFAR100Dataset(train=True, transform=transform)
 
+bs = 128 if args.jit else 45
 trainloader = DataLoader(
-    trainset, batch_size=30, shuffle=True
-)  # jit allows about 30, no jit 45
+    trainset, batch_size=bs, shuffle=True
+)  #  no jit 45, jit allows 128 because of reduced memory usage
 
 testset = CIFAR100Dataset(train=False, transform=transform)
 
@@ -173,7 +174,7 @@ if not args.test:
             inputs, labels = data
 
             inputs = inputs.to(DEVICE)
-            labels = Tensor(labels, device=DEVICE)
+            labels = labels.eval()
 
             batch_y_onehot = Tensor.one_hot(100, labels, device=DEVICE)
             outs = train_step(inputs, batch_y_onehot)
@@ -185,7 +186,8 @@ if not args.test:
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
-
+            if i == 100:
+                raise Exception("stop")
             if i % 100 == 0:
                 model.save("alexnet_checkpoint.pkl")
 

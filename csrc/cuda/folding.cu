@@ -146,6 +146,9 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudnnConvolutionDescriptor_t conv_desc;
 
   PG_CHECK_CUDNN(cudnnCreate(&handle));
+
+  // set stream to 0
+  PG_CHECK_CUDNN(cudnnSetStream(handle, 0));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
   PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&filter_desc));
@@ -192,7 +195,7 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
       &workspace_size));
 
   // Allocate workspace
-  cudaMalloc(&workspace, workspace_size);
+  cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionForward(
       handle, &alpha, input_desc, input.get_base_ptr(), filter_desc,
@@ -204,7 +207,7 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_CUDNN(cudnnDestroyFilterDescriptor(filter_desc));
   PG_CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(conv_desc));
   PG_CHECK_CUDNN(cudnnDestroy(handle));
-  cudaFree(workspace);
+  cudaFreeAsync(workspace, 0);
 }
 
 // backward pass FOR THE WEIGHTS
@@ -234,6 +237,7 @@ void CudnnConv2dVjpWeight::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudnnConvolutionDescriptor_t conv_desc;
 
   PG_CHECK_CUDNN(cudnnCreate(&handle));
+  cudnnSetStream(handle, 0);
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
   PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&weight_grad_desc));
@@ -281,7 +285,7 @@ void CudnnConv2dVjpWeight::dispatch_cuda(const std::vector<Tensor> &inputs,
       perfResults.algo, &workspace_size));
 
   // Allocate workspace
-  cudaMalloc(&workspace, workspace_size);
+  cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardFilter(
       handle, &alpha, input_desc, input.get_base_ptr(), output_grad_desc,
@@ -293,7 +297,7 @@ void CudnnConv2dVjpWeight::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_CUDNN(cudnnDestroyFilterDescriptor(weight_grad_desc));
   PG_CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(conv_desc));
   PG_CHECK_CUDNN(cudnnDestroy(handle));
-  cudaFree(workspace);
+  cudaFreeAsync(workspace, 0);
 }
 
 void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
@@ -322,6 +326,7 @@ void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudnnConvolutionDescriptor_t conv_desc;
 
   PG_CHECK_CUDNN(cudnnCreate(&handle));
+  cudnnSetStream(handle, 0);
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_grad_desc));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
   PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&weight_desc));
@@ -369,7 +374,7 @@ void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
       perfResults.algo, &workspace_size));
 
   // Allocate workspace
-  cudaMalloc(&workspace, workspace_size);
+  cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardData(
       handle, &alpha, weight_desc, weight.get_base_ptr(), output_grad_desc,
@@ -382,7 +387,7 @@ void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_CUDNN(cudnnDestroyFilterDescriptor(weight_desc));
   PG_CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(conv_desc));
   PG_CHECK_CUDNN(cudnnDestroy(handle));
-  cudaFree(workspace);
+  cudaFreeAsync(workspace, 0);
 }
 
 void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
@@ -465,6 +470,7 @@ void CudnnLRN::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudnnLRNDescriptor_t lrn_desc;
 
   PG_CHECK_CUDNN(cudnnCreate(&handle));
+  cudnnSetStream(handle, 0);
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
   PG_CHECK_CUDNN(cudnnCreateLRNDescriptor(&lrn_desc));
@@ -534,6 +540,7 @@ void CudnnLRNVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudnnLRNDescriptor_t lrn_desc;
 
   PG_CHECK_CUDNN(cudnnCreate(&handle));
+  cudnnSetStream(handle, 0);
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&forward_output_desc));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
   PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));

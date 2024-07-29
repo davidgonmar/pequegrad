@@ -933,10 +933,23 @@ std::string ir_to_string(std::vector<std::shared_ptr<BaseExpr>> &ir) {
 
 // THE PREVIOUJS ONE IS FOR VISUALIZATION
 // THIS MUST OUTPUT A STRING THAT CAN BE COMPILED
-std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
+std::pair<std::string, std::string>
+ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   assign_names_to_ir(ir);
+  // TODO -- handle this better
+  bool is_reduce = false;
+  for (auto &expr : ir) {
+    if (is<AccumExpr>(expr)) {
+      is_reduce = true;
+      break;
+    }
+  }
+  std::string kernel_name = "elementwise_kernel";
+  if (is_reduce) {
+    kernel_name = "reduce_kernel";
+  }
   std::string res = render_fn_header("", ir) + "\n";
-  res = "__global__ void kernel_name(" + res + ")\n";
+  res = "__global__ void " + kernel_name + "(" + res + ")";
   res += "{\t\n";
   std::map<std::shared_ptr<BaseExpr>, std::string> r;
   std::map<std::string, bool> rendered; // used for example not to render block
@@ -1074,7 +1087,7 @@ std::string ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
     }
   }
   res += "}\n";
-  return res;
+  return {res, kernel_name};
 }
 } // namespace ir
 
@@ -1085,7 +1098,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   if (this->cached_fn == nullptr) {
 
     // firsts
-    std::string ker = ir_to_cuda(this->ir);
+    auto [ker, ker_name] = ir_to_cuda(this->ir);
     nvrtcProgram prog;
     // apend extern C
     std::string file = "extern \"C\" {\n" + ker + "\n}";
@@ -1118,12 +1131,10 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     CUresult R1 = cuModuleLoadData(&cuModule, ptx);
     PG_CHECK_RUNTIME(R1 == CUDA_SUCCESS,
                      "Failed to load data: got " + std::to_string(R1));
-    std::string kernel_name = "kernel_name";
-    CUresult R =
-        cuModuleGetFunction(&cuFunction, cuModule, kernel_name.c_str());
+    CUresult R = cuModuleGetFunction(&cuFunction, cuModule, ker_name.c_str());
     PG_CHECK_RUNTIME(R == CUDA_SUCCESS, "Failed to get function: got " +
                                             std::to_string(R) + " for kernel " +
-                                            kernel_name);
+                                            ker_name);
 
     PG_CHECK_RUNTIME(cuFunction != nullptr, "Failed to get function");
     // Store the function pointer in a void*
@@ -1133,6 +1144,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     nvrtcDestroyProgram(&prog);
     delete[] ptx;
     this->cached_fn = function_ptr;
+    this->_kername = ker_name;
   }
   // allocate each output
   for (auto &output : outputs) {
@@ -1140,7 +1152,9 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   }
   // Prepare kernel arguments
   // Prepare grid and block dimensions
-  dim3 threads_per_block(256, 1, 1);
+  cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop, 0);
+  dim3 threads_per_block(prop.maxThreadsPerBlock / 2, 1, 1);
   size_t num_elements = outputs[0].numel();
   dim3 blocks_per_grid(
       (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);
@@ -1181,8 +1195,6 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
                    "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
   }
 
-  // Synchronize to ensure kernel execution is complete
-  cudaDeviceSynchronize();
   // check error again
   cudaError_t error = cudaGetLastError();
   if (error != cudaSuccess) {

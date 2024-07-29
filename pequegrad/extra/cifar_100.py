@@ -2,6 +2,7 @@ import os
 from urllib.request import urlretrieve
 import numpy as np
 from typing import Tuple
+from pequegrad.tensor import Tensor
 
 # cifar-100 dataset
 
@@ -59,11 +60,11 @@ class CIFAR100Dataset:
         X_train, y_train, X_test, y_test = get_cifar_100_dataset()
 
         if self.train:
-            self.X = X_train
-            self.y = y_train
+            self.X = Tensor(X_train)
+            self.y = Tensor(y_train)
         else:
-            self.X = X_test
-            self.y = y_test
+            self.X = Tensor(X_test)
+            self.y = Tensor(y_test)
 
     def __len__(self):
         return len(self.X)

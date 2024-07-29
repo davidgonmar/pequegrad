@@ -42,8 +42,7 @@ __global__ void copy_kernel_3d(const stride_t instr0, const stride_t instr1,
   const int j = (idx / inshp2) % inshp1;
   const int k = idx % inshp2;
   const int in_idx = i * instr0 + j * instr1 + k * instr2;
-  const int out_idx = i * outshp1 * outshp2 + j * outshp2 + k;
-  out[out_idx] = in[in_idx];
+  out[idx] = in[in_idx];
 }
 
 // 4 and 5d
@@ -52,8 +51,6 @@ __global__ void copy_kernel_4d(const stride_t instr0, const stride_t instr1,
                                const stride_t instr2, const stride_t instr3,
                                const uint64_t inshp0, const uint64_t inshp1,
                                const uint64_t inshp2, const uint64_t inshp3,
-                               const uint64_t outshp0, const uint64_t outshp1,
-                               const uint64_t outshp2, const uint64_t outshp3,
                                const T *in, T *out) {
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (idx >= inshp0 * inshp1 * inshp2 * inshp3)
@@ -63,9 +60,7 @@ __global__ void copy_kernel_4d(const stride_t instr0, const stride_t instr1,
   const int k = (idx / inshp3) % inshp2;
   const int l = idx % inshp3;
   const int in_idx = i * instr0 + j * instr1 + k * instr2 + l * instr3;
-  const int out_idx =
-      i * outshp1 * outshp2 * outshp3 + j * outshp2 * outshp3 + k * outshp3 + l;
-  out[out_idx] = in[in_idx];
+  out[idx] = in[in_idx];
 }
 
 template <typename T>
@@ -74,9 +69,7 @@ __global__ void copy_kernel_5d(const stride_t instr0, const stride_t instr1,
                                const stride_t instr4, const uint64_t inshp0,
                                const uint64_t inshp1, const uint64_t inshp2,
                                const uint64_t inshp3, const uint64_t inshp4,
-                               const uint64_t outshp0, const uint64_t outshp1,
-                               const uint64_t outshp2, const uint64_t outshp3,
-                               const uint64_t outshp4, const T *in, T *out) {
+                               const T *in, T *out) {
   const int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if (idx >= inshp0 * inshp1 * inshp2 * inshp3 * inshp4)
     return;
@@ -87,10 +80,7 @@ __global__ void copy_kernel_5d(const stride_t instr0, const stride_t instr1,
   const int m = idx % inshp4;
   const int in_idx =
       i * instr0 + j * instr1 + k * instr2 + l * instr3 + m * instr4;
-  const int out_idx = i * outshp1 * outshp2 * outshp3 * outshp4 +
-                      j * outshp2 * outshp3 * outshp4 + k * outshp3 * outshp4 +
-                      l * outshp4 + m;
-  out[out_idx] = in[in_idx];
+  out[idx] = in[in_idx];
 }
 
 namespace view {
@@ -100,31 +90,36 @@ View as_contiguous(const View &view) {
   }
   View contiguous_view = View(view.shape(), view.dtype(), view.device());
 
+  // pass strides to strides / sizeof(T)
+  auto strides = strides_t(view.strides().size());
+  for (size_t i = 0; i < view.strides().size(); i++) {
+    strides[i] = view.strides()[i] / dtype_to_size(view.dtype());
+  }
   if (view.ndim() == 3) {
     PG_DISPATCH_ALL_TYPES(view.dtype(), "as_contiguous_3d", [&]() {
       cuda::copy_kernel_3d<scalar_t>
           <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
              dim3(DEFAULT_BLOCK_SIZE)>>>(
-              view.strides()[0], view.strides()[1], view.strides()[2],
-              view.shape()[0], view.shape()[1], view.shape()[2],
-              contiguous_view.shape()[0], contiguous_view.shape()[1],
-              contiguous_view.shape()[2], view.get_casted_base_ptr<scalar_t>(),
+              strides[0], strides[1], strides[2], view.shape()[0],
+              view.shape()[1], view.shape()[2], contiguous_view.shape()[0],
+              contiguous_view.shape()[1], contiguous_view.shape()[2],
+              view.get_casted_base_ptr<scalar_t>(),
               contiguous_view.get_casted_base_ptr<scalar_t>());
     });
     PG_CUDA_KERNEL_END;
     return contiguous_view;
   }
-
+  cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop, 0);
+  auto max_threads = prop.maxThreadsPerBlock;
   if (view.ndim() == 4) {
     PG_DISPATCH_ALL_TYPES(view.dtype(), "as_contiguous_4d", [&]() {
       cuda::copy_kernel_4d<scalar_t>
-          <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
-             dim3(DEFAULT_BLOCK_SIZE)>>>(
-              view.strides()[0], view.strides()[1], view.strides()[2],
-              view.strides()[3], view.shape()[0], view.shape()[1],
-              view.shape()[2], view.shape()[3], contiguous_view.shape()[0],
-              contiguous_view.shape()[1], contiguous_view.shape()[2],
-              contiguous_view.shape()[3], view.get_casted_base_ptr<scalar_t>(),
+          <<<dim3((view.numel() + max_threads - 1) / max_threads),
+             dim3(max_threads)>>>(
+              strides[0], strides[1], strides[2], strides[3], view.shape()[0],
+              view.shape()[1], view.shape()[2], view.shape()[3],
+              view.get_casted_base_ptr<scalar_t>(),
               contiguous_view.get_casted_base_ptr<scalar_t>());
     });
     PG_CUDA_KERNEL_END;
@@ -136,12 +131,9 @@ View as_contiguous(const View &view) {
       cuda::copy_kernel_5d<scalar_t>
           <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
              dim3(DEFAULT_BLOCK_SIZE)>>>(
-              view.strides()[0], view.strides()[1], view.strides()[2],
-              view.strides()[3], view.strides()[4], view.shape()[0],
-              view.shape()[1], view.shape()[2], view.shape()[3],
-              view.shape()[4], contiguous_view.shape()[0],
-              contiguous_view.shape()[1], contiguous_view.shape()[2],
-              contiguous_view.shape()[3], contiguous_view.shape()[4],
+              strides[0], strides[1], strides[2], strides[3], strides[4],
+              view.shape()[0], view.shape()[1], view.shape()[2],
+              view.shape()[3], view.shape()[4],
               view.get_casted_base_ptr<scalar_t>(),
               contiguous_view.get_casted_base_ptr<scalar_t>());
     });

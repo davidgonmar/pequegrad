@@ -339,7 +339,7 @@ graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
             const std::vector<Tensor> &inputs);
 
 std::string ir_to_string(ir_t &ir);
-std::string ir_to_cuda(ir_t &ir);
+std::pair<std::string, std::string> ir_to_cuda(ir_t &ir);
 
 template <typename T> bool is(BaseExpr &expr) {
   return typeid(expr) == typeid(T);
@@ -562,7 +562,8 @@ static ir_t render_store_idxs_for_expr(ir_t store_idxs, ir_t tensor_strides,
 } // namespace ir
 class Compiled : public ADPrimitive {
 public:
-  std::string str() { return "Compiled"; }
+  std::string _kername;
+  std::string str() { return "Compiled<" + _kername + ">"; }
   DEFINE_DISPATCH_CUDA
   ir::ir_t ir;
   std::map<int, std::vector<std::shared_ptr<ir::BaseExpr>>>

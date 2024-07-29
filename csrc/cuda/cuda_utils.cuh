@@ -65,14 +65,14 @@ template <typename T>
 cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
                                              const T *host_ptr) {
   T *device_ptr = nullptr;
-  CHECK_CUDA(cudaMalloc(&device_ptr, size * sizeof(T)));
-  CHECK_CUDA(cudaMemcpy(device_ptr, host_ptr, size * sizeof(T),
-                        cudaMemcpyHostToDevice));
+  CHECK_CUDA(cudaMallocAsync(&device_ptr, size * sizeof(T), 0));
+  CHECK_CUDA(cudaMemcpyAsync(device_ptr, host_ptr, size * sizeof(T),
+                             cudaMemcpyHostToDevice));
   return cuda_unique_ptr<T>(device_ptr,
-                            [](T *ptr) { CHECK_CUDA(cudaFree(ptr)); });
+                            [](T *ptr) { CHECK_CUDA(cudaFreeAsync(ptr, 0)); });
 }
 
-#define SHOULD_SYNC 1
+#define SHOULD_SYNC 0
 #define PG_CUDA_KERNEL_END                                                     \
   do {                                                                         \
     if (SHOULD_SYNC) {                                                         \
