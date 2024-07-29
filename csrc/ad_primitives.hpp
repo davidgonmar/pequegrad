@@ -1,6 +1,7 @@
 #pragma once
 #include "shape.hpp"
 #include "tensor.hpp"
+#include <cudnn.h>
 #include <stdexcept>
 #include <vector>
 
@@ -60,6 +61,14 @@ public:
 class CudnnConv2D : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(CudnnConv2D)
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_desc;
+  cudnnFilterDescriptor_t filter_desc;
+  cudnnConvolutionDescriptor_t conv_desc;
+  int workspace_size;
+  cudnnConvolutionFwdAlgo_t algo;
+  bool initialized = false;
 
 public:
   shape_t kernel_shape;
@@ -76,6 +85,14 @@ public:
 class CudnnPooling2D : public ADPrimitive {
   std::string str() { return "CudnnPooling2D<" + reduce_type + ">"; }
   DEFINE_DISPATCH_CUDA
+  // CUDNN ATTRIBUTES
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_desc;
+  cudnnPoolingDescriptor_t pooling_desc;
+  int workspace_size;
+  bool initialized = false;
+
 public:
   shape_t kernel_shape;
   shape_t strides;
@@ -90,6 +107,15 @@ public:
 class CudnnConv2dVjpWeight : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(CudnnConv2dVjp)
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_grad_desc;
+  cudnnFilterDescriptor_t weight_grad_desc;
+  cudnnConvolutionDescriptor_t conv_desc;
+  size_t workspace_size;
+  cudnnConvolutionBwdFilterAlgo_t algo;
+  bool initialized = false;
+
 public:
   shape_t kernel_shape;
   shape_t strides;
@@ -105,6 +131,15 @@ public:
 class CudnnConv2dVjpInput : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(CudnnConv2dVjp)
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_grad_desc;
+  cudnnTensorDescriptor_t output_grad_desc;
+  cudnnFilterDescriptor_t weight_desc;
+  cudnnConvolutionDescriptor_t conv_desc;
+  size_t workspace_size;
+  cudnnConvolutionBwdDataAlgo_t algo;
+  bool initialized = false;
+
 public:
   shape_t kernel_shape;
   shape_t strides;

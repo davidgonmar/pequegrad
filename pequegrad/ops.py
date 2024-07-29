@@ -354,7 +354,7 @@ def _pool2d(
     self,
     kernel_size: Tuple[int, int],
     stride: Tuple[int, int] = None,
-    pool_type: str = "max",
+    pool_type: str = "invalid",
 ) -> "Tensor":
     """Returns the 2d pooling of the tensor with the given kernel size and type"""
     assert self.dim == 4, "pool2d is only supported for tensors with 4 dimensions"

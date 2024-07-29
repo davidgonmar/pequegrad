@@ -139,74 +139,68 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_RUNTIME(input.dtype() == weight.dtype() &&
                        input.dtype() == DType::Float32,
                    "Input and weight tensors must have dtype float32");
+  if (!this->initialized) {
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    // set stream to 0
+    PG_CHECK_CUDNN(cudnnSetStream(handle, 0));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
+    PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&filter_desc));
+    PG_CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&conv_desc));
+    int batch_size = input.shape()[0];
+    int in_channels = input.shape()[1];
+    int in_h = input.shape()[2];
+    int in_w = input.shape()[3];
+    int out_channels = weight.shape()[0];
+    int k_h = weight.shape()[2];
+    int k_w = weight.shape()[3];
+    int out_h = output->shape()[2];
+    int out_w = output->shape()[3];
 
-  cudnnHandle_t handle;
-  cudnnTensorDescriptor_t input_desc, output_desc;
-  cudnnFilterDescriptor_t filter_desc;
-  cudnnConvolutionDescriptor_t conv_desc;
+    shape_t dilation = this->dilation;
+    shape_t strides = this->strides;
+    shape_t padding = this->padding;
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetFilter4dDescriptor(filter_desc, CUDNN_DATA_FLOAT,
+                                              CUDNN_TENSOR_NCHW, out_channels,
+                                              in_channels, k_h, k_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              out_channels, out_h, out_w));
+    PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
+        conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
+        dilation[1], CUDNN_CROSS_CORRELATION,
+        CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
+                            // frameworks is actually cross-correlation
+    this->initialized = true;
+    // Select an algorithm for convolution
+    int returned_algo_count = 0;
+    cudnnConvolutionFwdAlgoPerf_t perfResults[CUDNN_CONVOLUTION_FWD_ALGO_COUNT];
+    PG_CHECK_CUDNN(cudnnGetConvolutionForwardAlgorithm_v7(
+        handle, input_desc, filter_desc, conv_desc, output_desc,
+        CUDNN_CONVOLUTION_FWD_ALGO_COUNT, &returned_algo_count, perfResults));
 
-  PG_CHECK_CUDNN(cudnnCreate(&handle));
+    size_t workspace_size;
 
-  // set stream to 0
-  PG_CHECK_CUDNN(cudnnSetStream(handle, 0));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
-  PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&filter_desc));
-  PG_CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&conv_desc));
-  int batch_size = input.shape()[0];
-  int in_channels = input.shape()[1];
-  int in_h = input.shape()[2];
-  int in_w = input.shape()[3];
-  int out_channels = weight.shape()[0];
-  int k_h = weight.shape()[2];
-  int k_w = weight.shape()[3];
-  int out_h = output->shape()[2];
-  int out_w = output->shape()[3];
+    // Determine workspace size
+    PG_CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(
+        handle, input_desc, filter_desc, conv_desc, output_desc,
+        perfResults[0].algo, &workspace_size));
 
-  shape_t dilation = this->dilation;
-  shape_t strides = this->strides;
-  shape_t padding = this->padding;
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetFilter4dDescriptor(filter_desc, CUDNN_DATA_FLOAT,
-                                            CUDNN_TENSOR_NCHW, out_channels,
-                                            in_channels, k_h, k_w));
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            out_channels, out_h, out_w));
-  PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
-      conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
-      dilation[1], CUDNN_CROSS_CORRELATION,
-      CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
-                          // frameworks is actually cross-correlation
-  // Select an algorithm for convolution
-  int returned_algo_count = 0;
-  cudnnConvolutionFwdAlgoPerf_t perfResults;
-  PG_CHECK_CUDNN(cudnnGetConvolutionForwardAlgorithm_v7(
-      handle, input_desc, filter_desc, conv_desc, output_desc, 1,
-      &returned_algo_count, &perfResults));
-
-  size_t workspace_size;
+    this->workspace_size = workspace_size;
+    this->algo = perfResults[0].algo;
+  }
   void *workspace;
-  // Determine workspace size
-  PG_CHECK_CUDNN(cudnnGetConvolutionForwardWorkspaceSize(
-      handle, input_desc, filter_desc, conv_desc, output_desc, perfResults.algo,
-      &workspace_size));
-
   // Allocate workspace
   cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionForward(
-      handle, &alpha, input_desc, input.get_base_ptr(), filter_desc,
-      weight.get_base_ptr(), conv_desc, perfResults.algo, workspace,
-      workspace_size, &beta, output_desc, output->get_base_ptr()));
+      this->handle, &alpha, this->input_desc, input.get_base_ptr(), filter_desc,
+      weight.get_base_ptr(), conv_desc, this->algo, workspace, workspace_size,
+      &beta, output_desc, output->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_desc));
-  PG_CHECK_CUDNN(cudnnDestroyFilterDescriptor(filter_desc));
-  PG_CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(conv_desc));
-  PG_CHECK_CUDNN(cudnnDestroy(handle));
   cudaFreeAsync(workspace, 0);
 }
 
@@ -231,72 +225,67 @@ void CudnnConv2dVjpWeight::dispatch_cuda(const std::vector<Tensor> &inputs,
                        input.dtype() == DType::Float32,
                    "Input and output_grad tensors must have dtype float32");
 
-  cudnnHandle_t handle;
-  cudnnTensorDescriptor_t input_desc, output_grad_desc;
-  cudnnFilterDescriptor_t weight_grad_desc;
-  cudnnConvolutionDescriptor_t conv_desc;
+  if (!this->initialized) {
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    cudnnSetStream(handle, 0);
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&weight_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&conv_desc));
+    int batch_size = input.shape()[0];
+    int in_channels = input.shape()[1];
+    int in_h = input.shape()[2];
+    int in_w = input.shape()[3];
+    int out_channels = output_grad.shape()[1];
+    int k_h = weight_grad->shape()[2];
+    int k_w = weight_grad->shape()[3];
+    int out_h = output_grad.shape()[2];
+    int out_w = output_grad.shape()[3];
 
-  PG_CHECK_CUDNN(cudnnCreate(&handle));
-  cudnnSetStream(handle, 0);
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
-  PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&weight_grad_desc));
-  PG_CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&conv_desc));
-  int batch_size = input.shape()[0];
-  int in_channels = input.shape()[1];
-  int in_h = input.shape()[2];
-  int in_w = input.shape()[3];
-  int out_channels = output_grad.shape()[1];
-  int k_h = weight_grad->shape()[2];
-  int k_w = weight_grad->shape()[3];
-  int out_h = output_grad.shape()[2];
-  int out_w = output_grad.shape()[3];
+    shape_t dilation = this->dilation;
+    shape_t strides = this->strides;
+    shape_t padding = this->padding;
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetFilter4dDescriptor(
+        weight_grad_desc, CUDNN_DATA_FLOAT, CUDNN_TENSOR_NCHW, out_channels,
+        in_channels, k_h, k_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        output_grad_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        out_channels, out_h, out_w));
+    PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
+        conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
+        dilation[1], CUDNN_CROSS_CORRELATION,
+        CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
+                            // frameworks is actually cross-correlation
+    // Select an algorithm for convolution
+    int returned_algo_count = 0;
+    cudnnConvolutionBwdFilterAlgoPerf_t
+        perfResults[CUDNN_CONVOLUTION_BWD_FILTER_ALGO_COUNT];
 
-  shape_t dilation = this->dilation;
-  shape_t strides = this->strides;
-  shape_t padding = this->padding;
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetFilter4dDescriptor(weight_grad_desc, CUDNN_DATA_FLOAT,
-                                            CUDNN_TENSOR_NCHW, out_channels,
-                                            in_channels, k_h, k_w));
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_grad_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            out_channels, out_h, out_w));
-  PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
-      conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
-      dilation[1], CUDNN_CROSS_CORRELATION,
-      CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
-                          // frameworks is actually cross-correlation
-  // Select an algorithm for convolution
-  int returned_algo_count = 0;
-  cudnnConvolutionBwdFilterAlgoPerf_t perfResults;
+    PG_CHECK_CUDNN(cudnnGetConvolutionBackwardFilterAlgorithm_v7(
+        handle, input_desc, output_grad_desc, conv_desc, weight_grad_desc,
+        CUDNN_CONVOLUTION_BWD_FILTER_ALGO_COUNT, &returned_algo_count,
+        perfResults));
 
-  PG_CHECK_CUDNN(cudnnGetConvolutionBackwardFilterAlgorithm_v7(
-      handle, input_desc, output_grad_desc, conv_desc, weight_grad_desc, 1,
-      &returned_algo_count, &perfResults));
+    this->algo = perfResults[0].algo;
 
-  size_t workspace_size;
-  void *workspace;
-  // Determine workspace size
-  PG_CHECK_CUDNN(cudnnGetConvolutionBackwardFilterWorkspaceSize(
-      handle, input_desc, output_grad_desc, conv_desc, weight_grad_desc,
-      perfResults.algo, &workspace_size));
-
+    this->initialized = true;
+    // Determine workspace size
+    PG_CHECK_CUDNN(cudnnGetConvolutionBackwardFilterWorkspaceSize(
+        handle, input_desc, output_grad_desc, conv_desc, weight_grad_desc, algo,
+        &workspace_size));
+  }
   // Allocate workspace
+  void *workspace;
   cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardFilter(
       handle, &alpha, input_desc, input.get_base_ptr(), output_grad_desc,
-      output_grad.get_base_ptr(), conv_desc, perfResults.algo, workspace,
-      workspace_size, &beta, weight_grad_desc, weight_grad->get_base_ptr()));
+      output_grad.get_base_ptr(), conv_desc, algo, workspace, workspace_size,
+      &beta, weight_grad_desc, weight_grad->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_grad_desc));
-  PG_CHECK_CUDNN(cudnnDestroyFilterDescriptor(weight_grad_desc));
-  PG_CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(conv_desc));
-  PG_CHECK_CUDNN(cudnnDestroy(handle));
   cudaFreeAsync(workspace, 0);
 }
 
@@ -320,73 +309,66 @@ void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
                        weight.dtype() == DType::Float32,
                    "Weight and output_grad tensors must have dtype float32");
 
-  cudnnHandle_t handle;
-  cudnnTensorDescriptor_t input_grad_desc, output_grad_desc;
-  cudnnFilterDescriptor_t weight_desc;
-  cudnnConvolutionDescriptor_t conv_desc;
+  if (!this->initialized) {
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    cudnnSetStream(handle, 0);
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&weight_desc));
+    PG_CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&conv_desc));
+    int batch_size = output_grad.shape()[0];
+    int in_channels = input_grad->shape()[1];
+    int in_h = input_grad->shape()[2];
+    int in_w = input_grad->shape()[3];
+    int out_channels = output_grad.shape()[1];
+    int k_h = weight.shape()[2];
+    int k_w = weight.shape()[3];
+    int out_h = output_grad.shape()[2];
+    int out_w = output_grad.shape()[3];
 
-  PG_CHECK_CUDNN(cudnnCreate(&handle));
-  cudnnSetStream(handle, 0);
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_grad_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
-  PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&weight_desc));
-  PG_CHECK_CUDNN(cudnnCreateConvolutionDescriptor(&conv_desc));
-  int batch_size = output_grad.shape()[0];
-  int in_channels = input_grad->shape()[1];
-  int in_h = input_grad->shape()[2];
-  int in_w = input_grad->shape()[3];
-  int out_channels = output_grad.shape()[1];
-  int k_h = weight.shape()[2];
-  int k_w = weight.shape()[3];
-  int out_h = output_grad.shape()[2];
-  int out_w = output_grad.shape()[3];
+    shape_t dilation = this->dilation;
+    shape_t strides = this->strides;
+    shape_t padding = this->padding;
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        input_grad_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetFilter4dDescriptor(weight_desc, CUDNN_DATA_FLOAT,
+                                              CUDNN_TENSOR_NCHW, out_channels,
+                                              in_channels, k_h, k_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        output_grad_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        out_channels, out_h, out_w));
+    PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
+        conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
+        dilation[1], CUDNN_CROSS_CORRELATION,
+        CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
+                            // frameworks is actually cross-correlation
+    // Select an algorithm for convolution
+    int returned_algo_count = 0;
+    cudnnConvolutionBwdDataAlgoPerf_t
+        perfResults[CUDNN_CONVOLUTION_BWD_DATA_ALGO_COUNT];
 
-  shape_t dilation = this->dilation;
-  shape_t strides = this->strides;
-  shape_t padding = this->padding;
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_grad_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetFilter4dDescriptor(weight_desc, CUDNN_DATA_FLOAT,
-                                            CUDNN_TENSOR_NCHW, out_channels,
-                                            in_channels, k_h, k_w));
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_grad_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            out_channels, out_h, out_w));
-  PG_CHECK_CUDNN(cudnnSetConvolution2dDescriptor(
-      conv_desc, padding[0], padding[1], strides[0], strides[1], dilation[0],
-      dilation[1], CUDNN_CROSS_CORRELATION,
-      CUDNN_DATA_FLOAT)); // usually what is called 'convolution' in dl
-                          // frameworks is actually cross-correlation
-  // Select an algorithm for convolution
-  int returned_algo_count = 0;
-  cudnnConvolutionBwdDataAlgoPerf_t perfResults;
+    PG_CHECK_CUDNN(cudnnGetConvolutionBackwardDataAlgorithm_v7(
+        handle, weight_desc, output_grad_desc, conv_desc, input_grad_desc,
+        CUDNN_CONVOLUTION_BWD_DATA_ALGO_COUNT, &returned_algo_count,
+        perfResults));
 
-  PG_CHECK_CUDNN(cudnnGetConvolutionBackwardDataAlgorithm_v7(
-      handle, weight_desc, output_grad_desc, conv_desc, input_grad_desc, 1,
-      &returned_algo_count, &perfResults));
-
-  size_t workspace_size;
+    this->algo = perfResults[0].algo;
+    // Determine workspace size
+    PG_CHECK_CUDNN(cudnnGetConvolutionBackwardDataWorkspaceSize(
+        handle, weight_desc, output_grad_desc, conv_desc, input_grad_desc, algo,
+        &workspace_size));
+    this->initialized = true;
+  }
   void *workspace;
-  // Determine workspace size
-  PG_CHECK_CUDNN(cudnnGetConvolutionBackwardDataWorkspaceSize(
-      handle, weight_desc, output_grad_desc, conv_desc, input_grad_desc,
-      perfResults.algo, &workspace_size));
-
   // Allocate workspace
   cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardData(
       handle, &alpha, weight_desc, weight.get_base_ptr(), output_grad_desc,
-      output_grad.get_base_ptr(), conv_desc, perfResults.algo, workspace,
-      workspace_size, &beta, input_grad_desc, input_grad->get_base_ptr()));
+      output_grad.get_base_ptr(), conv_desc, algo, workspace, workspace_size,
+      &beta, input_grad_desc, input_grad->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  // Cleanup
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_grad_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_grad_desc));
-  PG_CHECK_CUDNN(cudnnDestroyFilterDescriptor(weight_desc));
-  PG_CHECK_CUDNN(cudnnDestroyConvolutionDescriptor(conv_desc));
-  PG_CHECK_CUDNN(cudnnDestroy(handle));
   cudaFreeAsync(workspace, 0);
 }
 
@@ -406,47 +388,41 @@ void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_RUNTIME(input.dtype() == DType::Float32,
                    "Input tensor must have dtype float32");
 
-  cudnnHandle_t handle;
-  cudnnTensorDescriptor_t input_desc, output_desc;
-  cudnnPoolingDescriptor_t pooling_desc;
+  if (!this->initialized) {
 
-  PG_CHECK_CUDNN(cudnnCreate(&handle));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
-  PG_CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
+    PG_CHECK_CUDNN(cudnnCreatePoolingDescriptor(&pooling_desc));
 
-  int batch_size = input.shape()[0];
-  int in_channels = input.shape()[1];
-  int in_h = input.shape()[2];
-  int in_w = input.shape()[3];
-  int out_h = output->shape()[2];
-  int out_w = output->shape()[3];
+    int batch_size = input.shape()[0];
+    int in_channels = input.shape()[1];
+    int in_h = input.shape()[2];
+    int in_w = input.shape()[3];
+    int out_h = output->shape()[2];
+    int out_w = output->shape()[3];
 
-  // pads are always 0
-  shape_t strides = this->strides;
-  shape_t kernel_shape = this->kernel_shape;
-  shape_t padding = {0, 0};
+    // pads are always 0
+    shape_t strides = this->strides;
+    shape_t kernel_shape = this->kernel_shape;
+    shape_t padding = {0, 0};
 
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, out_h, out_w));
-  PG_CHECK_CUDNN(cudnnSetPooling2dDescriptor(
-      pooling_desc, CUDNN_POOLING_MAX, CUDNN_PROPAGATE_NAN, kernel_shape[0],
-      kernel_shape[1], padding[0], padding[1], strides[0], strides[1]));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, out_h, out_w));
+    PG_CHECK_CUDNN(cudnnSetPooling2dDescriptor(
+        pooling_desc, CUDNN_POOLING_MAX, CUDNN_PROPAGATE_NAN, kernel_shape[0],
+        kernel_shape[1], padding[0], padding[1], strides[0], strides[1]));
+  }
 
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnPoolingForward(handle, pooling_desc, &alpha, input_desc,
                                      input.get_base_ptr(), &beta, output_desc,
                                      output->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  // Cleanup
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_desc));
-  PG_CHECK_CUDNN(cudnnDestroyPoolingDescriptor(pooling_desc));
-  PG_CHECK_CUDNN(cudnnDestroy(handle));
 }
 
 void CudnnLRN::dispatch_cuda(const std::vector<Tensor> &inputs,
