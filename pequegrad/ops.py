@@ -3,10 +3,51 @@ from pequegrad.backend.c import Tensor, device, dt, permute
 from typing import Optional, Tuple, Union, List
 import pequegrad.backend.c as pg
 import math
+from pequegrad.backend.c import custom_prim as _custom_prim, custom_init as _custom_init
+from pequegrad.compile import jit
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+
+
+def custom_prim(f, compile_jit=False):
+    def ff(*args):
+        res = f(*args)
+        if isinstance(res, tuple):
+            return res
+        if isinstance(res, Tensor):
+            return (res,)
+        else:
+            raise ValueError("custom_prim must return a Tensor or a tuple of Tensors")
+
+    if compile_jit:
+        ff = jit(ff)
+
+    p = _custom_prim(ff)
+
+    if compile_jit:
+        p.vjp = lambda f: p.setvjp(jit(f))
+    else:
+        p.vjp = lambda f: p.setvjp(f)
+
+    return p
+
+
+def custom_init(f):
+    def ff(*args):
+        res = f(*args)
+        if isinstance(res, tuple):
+            return res
+        if isinstance(res, Tensor):
+            return (res,)
+        else:
+            raise ValueError("custom_init must return a Tensor or a tuple of Tensors")
+
+    ff.__name__ = f.__name__  # so we don't lose the name of the function
+    p = _custom_init(ff)
+
+    return p
 
 
 def tensordot(a: "Tensor", b: "Tensor", dims: Union[int, Tuple[List[int], List[int]]]):
@@ -555,6 +596,7 @@ def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
 fill = pg.fill
 
 
+@custom_init
 def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device=device.cpu):
     return Tensor(np.arange(start, end, step).astype(dtypetonp[dtype]), device=device)
 

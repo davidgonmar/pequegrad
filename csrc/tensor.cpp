@@ -150,6 +150,8 @@ Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
     siblings.erase(siblings.begin() + i);
     tensors[i].ad_node()->set_siblings(siblings);
   }
+
+  return tensors;
 }
 
 Tensor Tensor::eval(bool detach) {

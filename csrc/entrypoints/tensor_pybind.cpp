@@ -304,6 +304,67 @@ PYBIND11_MODULE(pequegrad_c, m) {
                                           inputs);
       });
 
+  // Custom init are functions that take no tensors and return a tuple of
+  // tensors. However, they might take other python args for example def
+  // arange(start, end, step):
+  //   return (Tensor(np.arange(start, end, step)),)
+  // so the objective is to transfer control to python to create the tensors
+  class PyCustomInitFromFn {
+  public:
+    std::string name;
+    std::function<std::vector<Tensor>(py::args)> basefn;
+    // constructor
+    PyCustomInitFromFn(py::function basefn) {
+      this->name = basefn.attr("__name__").cast<std::string>();
+      this->basefn = [basefn](py::args args) {
+        auto res = basefn(*args);
+        // assert res returned a tuple py::tuple
+        std::vector<Tensor> out;
+        PG_CHECK_RUNTIME(py::isinstance<py::tuple>(res) ||
+                             py::isinstance<py::list>(res),
+                         "Custom init must return a tuple or list, got: " +
+                             std::string(py::str(res)));
+        auto castedres = res.cast<py::tuple>();
+        for (size_t i = 0; i < castedres.size(); ++i) {
+          out.push_back(castedres[i].cast<Tensor>());
+        }
+        return out;
+      };
+    }
+
+    std::vector<Tensor> compute(py::args args) {
+      // capture args
+      auto captured_args = args;
+      // Now the thing is that we want it to be a Primitive in the computation
+      // graph so do the FromFunctions thing
+      FromFunctions prim = FromFunctions(
+          [this, captured_args](const std::vector<Tensor> &inputs)
+              -> std::vector<Tensor> { return this->basefn(captured_args); },
+          [](const std::vector<Tensor> &primals,
+             const std::vector<Tensor> &tangents,
+             const std::vector<Tensor> &outputs) -> std::vector<Tensor> {
+            throw std::runtime_error("Custom init does not support backward");
+          },
+          this->name);
+      auto x = Tensor::from_primitive_multiple(
+          std::make_shared<FromFunctions>(prim), {}, device::DeviceKind::CPU);
+      return x;
+    }
+  };
+
+  py::class_<PyCustomInitFromFn>(m, "custom_init", py::dynamic_attr())
+      .def(py::init<py::function>())
+      .def("__call__",
+           [](PyCustomInitFromFn &self,
+              py::args args) -> std::variant<Tensor, std::vector<Tensor>> {
+             auto a = self.compute(args);
+             if (a.size() == 1) {
+               return a[0];
+             } else {
+               return a;
+             }
+           });
+
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def_property_readonly("ndim", &Tensor::ndim)

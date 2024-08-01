@@ -209,6 +209,7 @@ class FromFunctions : public ADPrimitive {
                                     const std::vector<Tensor> &tangents,
                                     const std::vector<Tensor> &outputs)>
       _backward_fn;
+  std::string name;
 
 public:
   explicit FromFunctions(
@@ -217,8 +218,9 @@ public:
       std::function<std::vector<Tensor>(const std::vector<Tensor> &primals,
                                         const std::vector<Tensor> &tangents,
                                         const std::vector<Tensor> &outputs)>
-          backward_fn)
-      : _forward_fn(forward_fn), _backward_fn(backward_fn) {}
+          backward_fn,
+      std::string name = "")
+      : _forward_fn(forward_fn), _backward_fn(backward_fn), name(name) {}
 
   void dispatch_general(const std::vector<Tensor> &inputs,
                         std::vector<Tensor> &outputs) {
@@ -261,7 +263,9 @@ public:
     return views;
   }
 
-  DEFINE_STR_NAME(FromFunctions)
+  std::string str() {
+    return name == "" ? "FromFunctions" : "Custom<" + name + ">";
+  }
 };
 class UnaryPrimitive : public ADPrimitive {};
 
