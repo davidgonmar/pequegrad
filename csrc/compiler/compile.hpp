@@ -410,7 +410,6 @@ bool try_convert_local_response_normalization(Tensor &out) {
   if (!maybe_result.has_value()) {
     return false;
   }
-  std::cout << "Converting LRN" << std::endl;
   auto result = maybe_result.value();
   out.ad_node()->set_primitive(std::make_shared<CudnnLRN>(
       result.size, result.alpha, result.beta, result.k));
@@ -451,10 +450,26 @@ lrn_vjp_input_pattern_matcher(Tensor &out) {
   RETURN_FALSE_IF_PRIM_IS_NOT(x2, "Reshape");
   auto &x3 = x2.ad_node()->children()[0];
   RETURN_FALSE_IF_PRIM_IS_NOT(x3, "Mul");
-  auto &x4 = x3.ad_node()->children()[0];
-  RETURN_FALSE_IF_PRIM_IS_NOT(x4, "Mul");
-  auto &grad_out = x4.ad_node()->children()[0];
-
+  auto &x4 = x3.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x4, "Broadcast");
+  auto &x5 = x4.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x5, "Div");
+  auto &x6 = x5.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x6, "Broadcast");
+  auto &x7 = x6.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x7, "Mul");
+  auto &x8 = x7.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x8, "Mul");
+  auto &x9 = x8.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x9, "Sum");
+  auto &x10 = x9.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x10, "Div");
+  auto &x11 = x10.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x11, "Mul");
+  auto &x12 = x11.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(x12, "Mul");
+  auto &x13 = x12.ad_node()->children()[0];
+  auto grad_out = x13;
   // now get input from out.ad_node()->children()[1]
   auto &input = out.ad_node()->children()[1].ad_node()->children()[0];
   auto &lrn_out = out.ad_node()->children()[1];
@@ -559,6 +574,7 @@ static void compile(Tensor &out) {
   // Fifth pass -> conv2d vjp input pattern matching
   recursive_conv2d_vjp_input(out);
 
+  // TODO -- these are buggy
   // Sixth pass -> local response normalization
   recursive_local_response_normalization(out);
 

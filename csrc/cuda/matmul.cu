@@ -79,6 +79,8 @@ void MatMul::dispatch_cuda(const std::vector<Tensor> &inputs,
                dtype_to_string(a.dtype()), " and ", dtype_to_string(b.dtype()));
   cublasHandle_t cublas_handle;
   cublasCreate(&cublas_handle);
+  // set to stream 0
+  cublasSetStream(cublas_handle, 0);
   int B = 1;
   for (size_t i = 0; i < a.ndim() - 2; i++) {
     PG_CHECK_ARG(a.shape()[i] == b.shape()[i],

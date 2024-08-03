@@ -532,8 +532,6 @@ void CudnnLRN::dispatch_cuda(const std::vector<Tensor> &inputs,
   int in_channels = input.shape()[1];
   int in_h = input.shape()[2];
   int in_w = input.shape()[3];
-
-  // pads are always 0
   int size = this->size;
   float alpha = this->alpha;
   float beta = this->beta;

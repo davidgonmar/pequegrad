@@ -949,7 +949,8 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
     kernel_name = "reduce_kernel";
   }
   std::string res = render_fn_header("", ir) + "\n";
-  res = "__global__ void " + kernel_name + "(" + res + ")";
+  res = "__global__ void __launch_bounds__(1024, 1) " + kernel_name + "(" +
+        res + ")";
   res += "{\t\n";
   std::map<std::shared_ptr<BaseExpr>, std::string> r;
   std::map<std::string, bool> rendered; // used for example not to render block
@@ -1060,7 +1061,7 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
                 ")";
     } else if (is<ForStartExpr>(expr)) {
       auto for_start = as<ForStartExpr>(expr);
-      // res += add_indent() + "#pragma unroll\n"; // prevent register
+      res += add_indent() + "#pragma unroll\n"; // prevent register
       // overloading -- in the future maybe 'search' for optimal unroll factor
       // ??
       res += add_indent() + "for (" + r[for_start->start] + "; " +
@@ -1154,7 +1155,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   // Prepare grid and block dimensions
   cudaDeviceProp prop;
   cudaGetDeviceProperties(&prop, 0);
-  dim3 threads_per_block(prop.maxThreadsPerBlock / 2, 1, 1);
+  dim3 threads_per_block(prop.maxThreadsPerBlock, 1, 1);
   size_t num_elements = outputs[0].numel();
   dim3 blocks_per_grid(
       (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);

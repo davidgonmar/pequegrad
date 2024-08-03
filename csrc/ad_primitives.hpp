@@ -750,7 +750,7 @@ public:
       : _value(value), _shape(shape), _dtype(dtype) {}
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
-  DEFINE_STR_NAME(Fill)
+  std::string str() { return "Fill<" + std::to_string(_value) + ">"; }
 
   DEFINE_BACKWARD
   DEFINE_PRECOMPUTE
