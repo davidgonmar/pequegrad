@@ -43,7 +43,11 @@ class JittedSGD:
         self.device = parameters[0].device
         self.lr = lr
         self.weight_decay = weight_decay
-        self.vt_last = [Tensor.zeros(p.shape).to(self.device) for p in parameters]
+        self.vt_last = (
+            [Tensor.zeros(p.shape).to(self.device) for p in parameters]
+            if momentum != 0
+            else None
+        )
         self.momentum = momentum
 
         self.jitted_steps = [
@@ -56,16 +60,21 @@ class JittedSGD:
     def one_param_step(self, p, gt, vt):
         if self.weight_decay != 0:
             gt += self.weight_decay * p
-        vt = self.momentum * vt + gt
-        newp = p - self.lr * vt
-        return vt, newp
+        if self.momentum != 0:
+            vt = self.momentum * vt + gt
+        newp = p - self.lr * (vt if self.momentum != 0 else gt)
+        return (vt, newp) if self.momentum != 0 else (newp,)
 
     def step(self, g):
         assert len(g) == len(self.params)
         for i, (p, gt) in enumerate(zip(self.params, g)):
             vt = self.vt_last[i]
-            vt, newp = self.jitted_steps[i](p, gt, vt)
-            self.vt_last[i] = vt.eval().detach()
+            res = self.jitted_steps[i](p, gt, vt)
+            if self.momentum != 0:
+                vt, newp = res
+                self.vt_last[i] = vt.eval().detach()
+            else:
+                newp = res[0]
             p.assign(newp)
         del g
 

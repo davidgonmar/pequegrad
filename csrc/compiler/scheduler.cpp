@@ -134,6 +134,9 @@ void schedule(
       is<MaxReduce>(out.ad_node()->primitive()) ||
       is<Mean>(out.ad_node()->primitive())) {
     marked_as_out = {out};
+    if (leafs.size() == 1 && leafs[0].id == out.id) {
+      return;
+    }
   } else {
     // if out is not in marked_as_out, add it
     bool found = false;
@@ -173,7 +176,9 @@ void schedule(
       for (Tensor &t : linearized_subgraph) {
         PG_CHECK_RUNTIME(
             t.shape() == shape,
-            "All tensors in the subgraph should have the same shape");
+            "All tensors in the subgraph should have the same shape, got " +
+                t.str() + " with shape " + vec_to_string(t.shape()) +
+                " and expected " + vec_to_string(shape));
       }
     }
 

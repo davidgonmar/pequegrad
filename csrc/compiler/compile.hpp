@@ -136,7 +136,10 @@ Maybe<Conv2dPatternMatcherResult> conv2d_pattern_matcher(Tensor &out) {
     auto &assign_at_dest = input.ad_node()->children()[0];
     auto &assign_at_src = input.ad_node()->children()[1];
     try {
-      if (assign_at_dest.ad_node()->primitive()->str() == "Fill") {
+      auto starts_with = [](const std::string &str, const std::string &prefix) {
+        return str.rfind(prefix, 0) == 0;
+      };
+      if (starts_with(assign_at_dest.ad_node()->primitive()->str(), "Fill")) {
 
         PG_CHECK_RUNTIME(assign_at_src.shape().size() == 4,
                          "AssignAt src should be 4D, got " +
@@ -560,6 +563,58 @@ void recursive_pooling2d(Tensor &out) {
   }
 }
 
+bool is_elwise(Tensor &out) {
+  std::string str = out.ad_node()->primitive()->str();
+  std::vector<std::string> supported = {"Exp", "Log", "Add", "Sub", "Mul"};
+  return std::find(supported.begin(), supported.end(), str) != supported.end();
+}
+
+void hoist_broadcasts(Tensor &out) {
+  // having a graph like
+  // input -> elwise -> broadcast -> elwise into input -> broadcast -> elwise ->
+  // elwise this allows for better fusion
+
+  if (out.device() != device::CUDA) {
+    return;
+  }
+
+  if (is_elwise(out)) {
+    for (Tensor maybe_bc : out.ad_node()->children()) {
+      if (is_broadcast(maybe_bc)) {
+        // output <- elwise <- broadcast <- broadcast_child
+        // into output <- elwise <- broadcast_child <- broadcast
+        auto &broadcast_node = get_broadcast(maybe_bc);
+        auto broadcast_child = maybe_bc.ad_node()->children()[0];
+        if (!is_elwise(broadcast_child) ||
+            broadcast_child.ad_node()->children().size() != 1) {
+          continue;
+        }
+        auto bc_child_child = broadcast_child.ad_node()->children()[0];
+
+        out.ad_node()->replace_child(maybe_bc, broadcast_child);
+        broadcast_child.ad_node()->replace_child(bc_child_child, maybe_bc);
+        maybe_bc.ad_node()->replace_child(broadcast_child, bc_child_child);
+
+        auto maybe_bc_prim_ptr = maybe_bc.ad_node()->primitive();
+        maybe_bc.copy_view_inplace(
+            maybe_bc_prim_ptr->precompute(maybe_bc.ad_node()->children())[0]);
+
+        // now precompute to propagate shapes
+        auto bc_child_prim_ptr = broadcast_child.ad_node()->primitive();
+        broadcast_child.copy_view_inplace(bc_child_prim_ptr->precompute(
+            broadcast_child.ad_node()->children())[0]);
+
+        auto out_prim_ptr = out.ad_node()->primitive();
+        out.copy_view_inplace(
+            out_prim_ptr->precompute(out.ad_node()->children())[0]);
+      }
+    }
+  }
+
+  for (Tensor &node : out.ad_node()->children()) {
+    hoist_broadcasts(node);
+  }
+}
 static void compile(Tensor &out) {
   // First pass -> remove unnecesary broadcast
   std::set<int> visited;
@@ -583,6 +638,9 @@ static void compile(Tensor &out) {
 
   // Eighth pass -> max pooling 2d backward
   recursive_max_pooling2d_backward(out);
+
+  // Before scheduling, hoist broadcasts. Maybe buggy
+  hoist_broadcasts(out);
 
   // Last pass -> schedule and fuse
   std::set<int> visited2;

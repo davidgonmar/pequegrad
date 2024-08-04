@@ -178,8 +178,9 @@ if not args.test:
 
             batch_y_onehot = Tensor.one_hot(100, labels, device=DEVICE)
             outs = train_step(inputs, batch_y_onehot)
-            # import pequegrad.viz as viz
-            # viz.viz(outs, name="outs")
+            import pequegrad.viz as viz
+
+            viz.viz(outs, name="outs")
             loss = outs[0]
             g = outs[1:]
             optim.step(g)

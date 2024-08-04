@@ -31,6 +31,7 @@ class jit:
         self.outsistuple = False
         self.externals = externals  # might be things like model parameters
         self.enabled = enabled
+        self.graphs = []
 
     def get_externals(self):
         return self.externals() if callable(self.externals) else self.externals

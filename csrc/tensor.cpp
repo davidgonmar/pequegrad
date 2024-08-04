@@ -357,12 +357,19 @@ void ADNode::replace_child(const Tensor &old_child, const Tensor &new_child) {
   // we need to specifically find the one with the same id
   for (size_t i = 0; i < _children.size(); i++) {
     if (_children[i].id == old_child.id) {
-      _children[i] = new_child;
+      _children[i] = Tensor(new_child); // copy
       return;
     }
   }
 
-  PG_CHECK_RUNTIME(false, "Child not found in ADNode::replace_child");
+  std::string childstr;
+  for (const Tensor &child : _children) {
+    childstr += child.str() + ", ";
+  }
+  PG_CHECK_RUNTIME(
+      false,
+      "Child not found in ADNode::replace_child. Old child: ", old_child.str(),
+      " New child: ", new_child.str(), "List of children: ", childstr);
 }
 
 void ADNode::set_primitive(const ADPrimitive &primitive) {

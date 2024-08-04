@@ -96,7 +96,7 @@ public:
   }
   void set_device(device::DeviceKind device) { _device = device; }
   void set_shape(const shape_t &shape) { _shape = shape; }
-
+  void set_strides(const strides_t &strides) { _strides = strides; }
   void set_ptr(const std::shared_ptr<void> &ptr, size_t nbytes) {
     _ptr = ptr;
     _nbytes = nbytes;
@@ -552,6 +552,12 @@ public:
 
   View view() const { return *_view; }
   void set_view(const View &view) { _view = std::make_shared<View>(view); }
+  void copy_view_inplace(const View &view) {
+    _view->set_shape(view.shape());
+    _view->set_strides(view.strides());
+    _view->set_dtype(view.dtype());
+    _view->set_device(view.device());
+  }
   void set_view(const std::shared_ptr<View> &view) { _view = view; }
   std::shared_ptr<View> view_ptr() const { return _view; }
 
