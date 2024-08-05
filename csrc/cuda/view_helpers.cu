@@ -184,6 +184,76 @@ View as_contiguous(const View &view) {
   return contiguous_view;
 }
 void copy(const View &src, const View &dst) {
+  // if contiguous, we can use a faster kernel
+  if (dst.is_contiguous()) {
+    if (src.is_contiguous()) {
+      cudaMemcpyAsync(dst.get_base_ptr(), src.get_base_ptr(), src.nbytes(),
+                      cudaMemcpyDeviceToDevice);
+    }
+
+    int dts = dtype_to_size(src.dtype());
+    // special ND cases
+    if (src.ndim() == 3) {
+      PG_DISPATCH_ALL_TYPES(src.dtype(), "copy_kernel_3d", [&]() {
+        cuda::copy_kernel_3d<scalar_t>
+            <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) /
+                    DEFAULT_BLOCK_SIZE),
+               dim3(DEFAULT_BLOCK_SIZE)>>>(
+                src.strides()[0] / dts, src.strides()[1] / dts,
+                src.strides()[2] / dts, src.shape()[0], src.shape()[1],
+                src.shape()[2], dst.shape()[0], dst.shape()[1], dst.shape()[2],
+                src.get_casted_base_ptr<scalar_t>(),
+                dst.get_casted_base_ptr<scalar_t>());
+      });
+      PG_CUDA_KERNEL_END;
+      return;
+    }
+    if (src.ndim() == 4) {
+      PG_DISPATCH_ALL_TYPES(src.dtype(), "copy_kernel_4d", [&]() {
+        cuda::copy_kernel_4d<scalar_t>
+            <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) /
+                    DEFAULT_BLOCK_SIZE),
+               dim3(DEFAULT_BLOCK_SIZE)>>>(
+                src.strides()[0] / dts, src.strides()[1] / dts,
+                src.strides()[2] / dts, src.strides()[3] / dts, src.shape()[0],
+                src.shape()[1], src.shape()[2], src.shape()[3],
+                src.get_casted_base_ptr<scalar_t>(),
+                dst.get_casted_base_ptr<scalar_t>());
+      });
+      PG_CUDA_KERNEL_END;
+      return;
+    }
+    if (src.ndim() == 5) {
+      PG_DISPATCH_ALL_TYPES(src.dtype(), "copy_kernel_5d", [&]() {
+        cuda::copy_kernel_5d<scalar_t>
+            <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) /
+                    DEFAULT_BLOCK_SIZE),
+               dim3(DEFAULT_BLOCK_SIZE)>>>(
+                src.strides()[0] / dts, src.strides()[1] / dts,
+                src.strides()[2] / dts, src.strides()[3] / dts,
+                src.strides()[4] / dts, src.shape()[0], src.shape()[1],
+                src.shape()[2], src.shape()[3], src.shape()[4],
+                src.get_casted_base_ptr<scalar_t>(),
+                dst.get_casted_base_ptr<scalar_t>());
+      });
+      PG_CUDA_KERNEL_END;
+      return;
+    }
+    auto d_src_strides =
+        cuda_unique_ptr_from_host(src.strides().size(), src.strides().data());
+    auto d_src_shape =
+        cuda_unique_ptr_from_host(src.shape().size(), src.shape().data());
+    PG_DISPATCH_ALL_TYPES(src.dtype(), "copy_kernel_fast", [&]() {
+      cuda::copy_kernel_fast<scalar_t>
+          <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
+             dim3(DEFAULT_BLOCK_SIZE)>>>(d_src_strides.get(), d_src_shape.get(),
+                                         src.shape().size(),
+                                         src.get_casted_base_ptr<scalar_t>(),
+                                         dst.get_casted_base_ptr<scalar_t>());
+    });
+    PG_CUDA_KERNEL_END;
+    return;
+  }
   auto d_src_shape =
       cuda_unique_ptr_from_host(src.shape().size(), src.shape().data());
   auto d_src_strides =

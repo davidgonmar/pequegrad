@@ -1,4 +1,5 @@
 #include "ir.hpp"
+#include <chrono>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <iomanip>
@@ -501,7 +502,8 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   int i = 0;
   std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node()->primitive())) {
+    if (is<Fill>(input.ad_node()->primitive()) ||
+        get_fill_value(input) != nullptr) {
       i++;
       // will be replaced by a constant
       continue;
@@ -597,7 +599,8 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // here, render the missing input idxs based on the reduce idx for each input
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node()->primitive())) {
+    if (is<Fill>(input.ad_node()->primitive()) ||
+        get_fill_value(input) != nullptr) {
       i++;
       continue;
     }
@@ -1094,6 +1097,10 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
 
 void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
+  // allocate each output
+  for (auto &output : outputs) {
+    output.view_ptr()->allocate();
+  }
   // first, we need to gather ir
   using namespace ir;
   if (this->cached_fn == nullptr) {
@@ -1146,19 +1153,83 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     delete[] ptx;
     this->cached_fn = function_ptr;
     this->_kername = ker_name;
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    // store launch params
+
+    this->threads_per_block = prop.maxThreadsPerBlock;
+    this->blocks_per_grid = (outputs[0].numel() + this->threads_per_block - 1) /
+                            this->threads_per_block;
+
+    // now do autotuning the threads per block
+    double best_time = std::numeric_limits<double>::max();
+    int best_threads_per_block = 0;
+
+    for (int i = 2; i <= prop.maxThreadsPerBlock; i *= 2) {
+      int curr_tpb = i;
+      // chrono
+      auto start = std::chrono::high_resolution_clock::now();
+
+      // launch
+      dim3 threads_per_block(curr_tpb);
+      size_t num_elements = outputs[0].numel();
+      dim3 blocks_per_grid((num_elements + curr_tpb - 1) / curr_tpb);
+      std::vector<void *> kernel_args;
+      for (const auto &input : inputs) {
+        void *in_data = input.get_base_ptr();
+        kernel_args.push_back(in_data);
+      }
+      for (auto &output : outputs) {
+        void *out_data = output.get_base_ptr();
+        kernel_args.push_back(out_data);
+      }
+
+      // Convert to array of pointers
+      std::vector<void *> kernel_args_ptrs;
+      for (auto &arg : kernel_args) {
+        kernel_args_ptrs.push_back(&arg);
+      }
+
+      // Launch the kernel
+      // create stream to launch kernel
+      // first check if function is valid
+      CUresult launch_result = cuLaunchKernel(
+          (CUfunction)this->cached_fn, blocks_per_grid.x, blocks_per_grid.y,
+          blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
+          threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
+
+      if (launch_result != CUDA_SUCCESS) {
+        const char *error_string;
+        cuGetErrorString(launch_result, &error_string);
+        PG_CHECK_RUNTIME(
+            false,
+            "Error launching kernel: " + std::string(error_string) +
+                " "
+                "for kernel " +
+                std::to_string(outputs[0].id) +
+                " with args: " + vec_to_string(kernel_args_ptrs) +
+                "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
+      }
+
+      // sync and end chrono
+      cudaDeviceSynchronize();
+      auto end = std::chrono::high_resolution_clock::now();
+      double time = std::chrono::duration<double>(end - start).count();
+      if (time < best_time) {
+        best_time = time;
+        best_threads_per_block = curr_tpb;
+      }
+    }
+
+    this->threads_per_block = best_threads_per_block;
+    this->blocks_per_grid = (outputs[0].numel() + this->threads_per_block - 1) /
+                            this->threads_per_block;
   }
-  // allocate each output
-  for (auto &output : outputs) {
-    output.view_ptr()->allocate();
-  }
+
   // Prepare kernel arguments
   // Prepare grid and block dimensions
-  cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, 0);
-  dim3 threads_per_block(prop.maxThreadsPerBlock, 1, 1);
-  size_t num_elements = outputs[0].numel();
-  dim3 blocks_per_grid(
-      (num_elements + threads_per_block.x - 1) / threads_per_block.x, 1, 1);
+  dim3 threads_per_block(this->threads_per_block, 1, 1);
+  dim3 blocks_per_grid(this->blocks_per_grid, 1, 1);
   std::vector<void *> kernel_args;
   for (const auto &input : inputs) {
     void *in_data = input.get_base_ptr();

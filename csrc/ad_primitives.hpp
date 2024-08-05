@@ -69,6 +69,7 @@ class CudnnConv2D : public ADPrimitive {
   int workspace_size;
   cudnnConvolutionFwdAlgo_t algo;
   bool initialized = false;
+  void *workspace = nullptr;
 
 public:
   shape_t kernel_shape;
@@ -92,6 +93,7 @@ class CudnnPooling2D : public ADPrimitive {
   cudnnPoolingDescriptor_t pooling_desc;
   int workspace_size;
   bool initialized = false;
+  void *workspace = nullptr;
 
 public:
   shape_t kernel_shape;
@@ -115,6 +117,7 @@ class CudnnPooling2DVjp : public ADPrimitive {
   cudnnPoolingDescriptor_t pooling_desc;
   int workspace_size;
   bool initialized = false;
+  void *workspace = nullptr;
 
 public:
   shape_t kernel_shape;
@@ -138,6 +141,7 @@ class CudnnConv2dVjpWeight : public ADPrimitive {
   size_t workspace_size;
   cudnnConvolutionBwdFilterAlgo_t algo;
   bool initialized = false;
+  void *workspace = nullptr;
 
 public:
   shape_t kernel_shape;
@@ -162,6 +166,7 @@ class CudnnConv2dVjpInput : public ADPrimitive {
   size_t workspace_size;
   cudnnConvolutionBwdDataAlgo_t algo;
   bool initialized = false;
+  void *workspace = nullptr;
 
 public:
   shape_t kernel_shape;
@@ -178,6 +183,14 @@ public:
 class CudnnLRN : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(CudnnLRN)
+
+  // CUDNN ATTRIBUTES
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_desc;
+  cudnnLRNDescriptor_t lrn_desc;
+  bool initialized = false;
+
 public:
   int size;
   double alpha;
@@ -191,6 +204,15 @@ public:
 class CudnnLRNVjpInput : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(CudnnLRN)
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_grad_desc;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_grad_desc;
+  cudnnTensorDescriptor_t forward_output_desc;
+  cudnnTensorDescriptor_t in_grad_desc;
+  cudnnLRNDescriptor_t lrn_desc;
+  bool initialized = false;
+
 public:
   int size;
   double alpha;

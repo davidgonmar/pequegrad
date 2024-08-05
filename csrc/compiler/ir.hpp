@@ -569,6 +569,8 @@ public:
   std::map<int, std::vector<std::shared_ptr<ir::BaseExpr>>>
       tensor_idx_to_strides;
   void *cached_fn = nullptr;
+  int threads_per_block;
+  int blocks_per_grid;
 };
 
 } // namespace pg

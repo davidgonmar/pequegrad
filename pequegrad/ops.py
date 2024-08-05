@@ -220,7 +220,11 @@ def log_softmax(self, dim=-1) -> "Tensor":
 def cross_entropy_loss_probs(self, target: "Tensor") -> "Tensor":
     """Returns the cross entropy loss of the tensor"""
 
-    assert self.shape == target.shape, "input and target must have the same shape"
+    assert (
+        self.shape == target.shape
+    ), "input and target must have the same shape, got {} and {}".format(
+        self.shape, target.shape
+    )
     assert self.dim > 0, "input must be a vector"
     assert target.dim > 0, "target must be a vector"
     # At the moment, we expect (batch, C) tensors, both for input and target (probability distributions)

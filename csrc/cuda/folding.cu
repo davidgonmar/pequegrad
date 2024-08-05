@@ -191,17 +191,15 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
 
     this->workspace_size = workspace_size;
     this->algo = perfResults[0].algo;
+    this->workspace = nullptr;
+    cudaMallocAsync(&this->workspace, workspace_size, 0);
   }
-  void *workspace;
-  // Allocate workspace
-  cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionForward(
       this->handle, &alpha, this->input_desc, input.get_base_ptr(), filter_desc,
       weight.get_base_ptr(), conv_desc, this->algo, workspace, workspace_size,
       &beta, output_desc, output->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  cudaFreeAsync(workspace, 0);
 }
 
 // backward pass FOR THE WEIGHTS
@@ -276,17 +274,16 @@ void CudnnConv2dVjpWeight::dispatch_cuda(const std::vector<Tensor> &inputs,
     PG_CHECK_CUDNN(cudnnGetConvolutionBackwardFilterWorkspaceSize(
         handle, input_desc, output_grad_desc, conv_desc, weight_grad_desc, algo,
         &workspace_size));
+
+    this->workspace = nullptr;
+    cudaMallocAsync(&this->workspace, workspace_size, 0);
   }
-  // Allocate workspace
-  void *workspace;
-  cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardFilter(
       handle, &alpha, input_desc, input.get_base_ptr(), output_grad_desc,
       output_grad.get_base_ptr(), conv_desc, algo, workspace, workspace_size,
       &beta, weight_grad_desc, weight_grad->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  cudaFreeAsync(workspace, 0);
 }
 
 void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
@@ -359,17 +356,16 @@ void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
         handle, weight_desc, output_grad_desc, conv_desc, input_grad_desc, algo,
         &workspace_size));
     this->initialized = true;
+    this->workspace = nullptr;
+    // Allocate workspace
+    cudaMallocAsync(&workspace, workspace_size, 0);
   }
-  void *workspace;
-  // Allocate workspace
-  cudaMallocAsync(&workspace, workspace_size, 0);
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardData(
       handle, &alpha, weight_desc, weight.get_base_ptr(), output_grad_desc,
       output_grad.get_base_ptr(), conv_desc, algo, workspace, workspace_size,
       &beta, input_grad_desc, input_grad->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  cudaFreeAsync(workspace, 0);
 }
 
 void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
@@ -518,44 +514,38 @@ void CudnnLRN::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CHECK_RUNTIME(input.dtype() == DType::Float32,
                    "Input tensor must have dtype float32");
 
-  cudnnHandle_t handle;
-  cudnnTensorDescriptor_t input_desc, output_desc;
-  cudnnLRNDescriptor_t lrn_desc;
+  if (!initialized) {
 
-  PG_CHECK_CUDNN(cudnnCreate(&handle));
-  cudnnSetStream(handle, 0);
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
-  PG_CHECK_CUDNN(cudnnCreateLRNDescriptor(&lrn_desc));
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    cudnnSetStream(handle, 0);
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
+    PG_CHECK_CUDNN(cudnnCreateLRNDescriptor(&lrn_desc));
 
-  int batch_size = input.shape()[0];
-  int in_channels = input.shape()[1];
-  int in_h = input.shape()[2];
-  int in_w = input.shape()[3];
-  int size = this->size;
-  float alpha = this->alpha;
-  float beta = this->beta;
-  float k = this->k;
+    int batch_size = input.shape()[0];
+    int in_channels = input.shape()[1];
+    int in_h = input.shape()[2];
+    int in_w = input.shape()[3];
+    int size = this->size;
+    float alpha = this->alpha;
+    float beta = this->beta;
+    float k = this->k;
 
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetLRNDescriptor(lrn_desc, size, alpha, beta, k));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetLRNDescriptor(lrn_desc, size, alpha, beta, k));
 
+    initialized = true;
+  }
   float alpha_ = 1.0f, beta_ = 0.0f;
   PG_CHECK_CUDNN(cudnnLRNCrossChannelForward(
       handle, lrn_desc, CUDNN_LRN_CROSS_CHANNEL_DIM1, &alpha_, input_desc,
       input.get_base_ptr(), &beta_, output_desc, output->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  // Cleanup
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_desc));
-  PG_CHECK_CUDNN(cudnnDestroyLRNDescriptor(lrn_desc));
-
-  PG_CHECK_CUDNN(cudnnDestroy(handle));
 }
 
 void CudnnLRNVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
@@ -585,45 +575,44 @@ void CudnnLRNVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
           forward_output.dtype() == DType::Float32,
       "Forward output and output_grad tensors must have dtype float32");
 
-  cudnnHandle_t handle;
-  cudnnTensorDescriptor_t forward_output_desc, output_grad_desc, input_desc,
-      input_grad_desc;
-  cudnnLRNDescriptor_t lrn_desc;
+  if (!initialized) {
+    PG_CHECK_CUDNN(cudnnCreate(&handle));
+    cudnnSetStream(handle, 0);
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&forward_output_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
+    PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_grad_desc));
+    PG_CHECK_CUDNN(cudnnCreateLRNDescriptor(&lrn_desc));
 
-  PG_CHECK_CUDNN(cudnnCreate(&handle));
-  cudnnSetStream(handle, 0);
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&forward_output_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_grad_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
-  PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_grad_desc));
-  PG_CHECK_CUDNN(cudnnCreateLRNDescriptor(&lrn_desc));
+    int batch_size = forward_output.shape()[0];
+    int in_channels = forward_output.shape()[1];
+    int in_h = forward_output.shape()[2];
+    int in_w = forward_output.shape()[3];
 
-  int batch_size = forward_output.shape()[0];
-  int in_channels = forward_output.shape()[1];
-  int in_h = forward_output.shape()[2];
-  int in_w = forward_output.shape()[3];
+    // pads are always 0
+    int size = this->size;
+    float alpha = this->alpha;
+    float beta = this->beta;
+    float k = this->k;
 
-  // pads are always 0
-  int size = this->size;
-  float alpha = this->alpha;
-  float beta = this->beta;
-  float k = this->k;
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        forward_output_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        output_grad_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        in_channels, in_h, in_w));
 
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
-      forward_output_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
-      in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(output_grad_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
+                                              CUDNN_DATA_FLOAT, batch_size,
+                                              in_channels, in_h, in_w));
+    // input grad guaranteed contiguous
+    PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(
+        input_grad_desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, batch_size,
+        in_channels, in_h, in_w));
+    PG_CHECK_CUDNN(cudnnSetLRNDescriptor(lrn_desc, size, alpha, beta, k));
 
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  // input grad guaranteed contiguous
-  PG_CHECK_CUDNN(cudnnSetTensor4dDescriptor(input_grad_desc, CUDNN_TENSOR_NCHW,
-                                            CUDNN_DATA_FLOAT, batch_size,
-                                            in_channels, in_h, in_w));
-  PG_CHECK_CUDNN(cudnnSetLRNDescriptor(lrn_desc, size, alpha, beta, k));
+    initialized = true;
+  }
 
   float alpha_ = 1.0f, beta_ = 0.0f;
   PG_CHECK_CUDNN(cudnnLRNCrossChannelBackward(
@@ -632,14 +621,6 @@ void CudnnLRNVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
       output_grad.get_base_ptr(), input_desc, input.get_base_ptr(), &beta_,
       input_grad_desc, input_grad->get_base_ptr()));
   PG_CUDA_KERNEL_END;
-  // Cleanup
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(forward_output_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(output_grad_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_desc));
-  PG_CHECK_CUDNN(cudnnDestroyTensorDescriptor(input_grad_desc));
-  PG_CHECK_CUDNN(cudnnDestroyLRNDescriptor(lrn_desc));
-
-  PG_CHECK_CUDNN(cudnnDestroy(handle));
 }
 
 } // namespace pg
