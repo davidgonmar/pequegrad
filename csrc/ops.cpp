@@ -452,4 +452,13 @@ Tensor binomial(const double p, const shape_t &shape, const DType dtype,
   return Tensor::from_primitive_one(std::make_shared<Binomial>(p, shape, dtype),
                                     {}, device);
 }
+
+Tensor bilinear_resize(const Tensor &a, const shape_t &new_shape) {
+  return Tensor::from_primitive_one(std::make_shared<BilinearResize>(new_shape),
+                                    {a});
+}
+Tensor one_hot(const Tensor &a, int num_classes) {
+  return Tensor::from_primitive_one(std::make_shared<OneHotVector>(num_classes),
+                                    {a});
+}
 } // namespace pg

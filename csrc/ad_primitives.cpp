@@ -805,4 +805,35 @@ std::vector<View> Binomial::precompute(const std::vector<Tensor> &inputs) {
       ViewOptions().dtype(_dtype).shape(_shape).with_natural_strides().build()};
 }
 
+std::vector<View>
+BilinearResize::precompute(const std::vector<Tensor> &inputs) {
+  size_t new_height = _output_shape[0];
+  size_t new_width = _output_shape[1];
+  shape_t new_shape = {inputs[0].shape()[0], inputs[0].shape()[1], new_height,
+                       new_width};
+  return {ViewOptions()
+              .dtype(inputs[0].dtype())
+              .shape(new_shape)
+              .with_natural_strides()
+              .build()};
+}
+
+std::vector<View> OneHotVector::precompute(const std::vector<Tensor> &inputs) {
+  PG_CHECK_ARG(inputs.size() == 1, "OneHotVector expects 1 input, got ",
+               inputs.size());
+  PG_CHECK_ARG(inputs[0].ndim() == 1, "OneHotVector expects 1D input, got ",
+               inputs[0].ndim());
+  shape_t new_shape = {inputs[0].shape()[0], size_t(num_classes)};
+  return {ViewOptions()
+              .dtype(DType::Float32)
+              .shape(new_shape)
+              .with_natural_strides()
+              .build()};
+}
+
+std::vector<Tensor> OneHotVector::backward(const std::vector<Tensor> &primals,
+                                           const std::vector<Tensor> &tangents,
+                                           const std::vector<Tensor> &outputs) {
+  return {pg::sum(tangents[0], {1}, /*keepdims*/ false)};
+}
 } // namespace pg

@@ -648,6 +648,32 @@ public:
   shape_t dilation() { return _dilation; }
 };
 
+class BilinearResize : public ADPrimitive {
+protected:
+  shape_t _output_shape;
+
+public:
+  explicit BilinearResize(shape_t output_shape) : _output_shape(output_shape) {}
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(BilinearResize)
+
+  DEFINE_PRECOMPUTE
+
+  shape_t output_shape() { return _output_shape; }
+};
+
+class OneHotVector : public ADPrimitive {
+protected:
+  int num_classes;
+
+public:
+  explicit OneHotVector(int num_classes) : num_classes(num_classes) {}
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(OneHotVector)
+  DEFINE_PRECOMPUTE
+  DEFINE_BACKWARD // incorrect, just to avoid crash
+};
+
 class Reshape : public ADPrimitive {
 protected:
   axes_t _shape_to;

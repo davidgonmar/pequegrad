@@ -24,14 +24,15 @@ class Resize(Mod):
 
             return np.array(Image.fromarray(x).resize(self.size)).transpose(2, 0, 1)
         if isinstance(x, Tensor):
-            x = (x.eval().detach().numpy() * 255).astype(np.uint8).transpose(0, 2, 3, 1)
             if x.ndim == 4:
-                return (
+                """return (
                     Tensor(
                         [np.array(Image.fromarray(img).resize(self.size)) for img in x]
                     ).permute(0, 3, 1, 2)
                     / 255.0
-                )
+                )"""
+                return pgb.bilinear_resize(x, self.size)
+            x = (x.eval().detach().numpy() * 255).astype(np.uint8).transpose(0, 2, 3, 1)
             return (
                 Tensor(np.array(Image.fromarray(x).resize(self.size))).permute(2, 0, 1)
                 / 255.0

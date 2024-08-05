@@ -165,22 +165,17 @@ def one_hot(
     device=device.cpu,
     dtype=dt.float32,
 ) -> "Tensor":
-    indices = indices.numpy().astype(int)
     assert indices.ndim == 1, "indices must be a vector"
-    assert np.all(
-        indices >= 0
-    ), "indices must be positive integers (>= 0), got {}".format(indices)
-    assert np.all(
-        indices < num_classes
-    ), "indices must be smaller than num_classes, got {}".format(
-        list(filter(lambda x: x >= num_classes, indices))
-    )
-    dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
-    np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])
+    if indices.device == pg.device.cpu:
+        indices = indices.numpy()
+        dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+        np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])
 
-    np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
+        np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
 
-    return Tensor(np_one_hot, device=device)
+        return Tensor(np_one_hot, device=device)
+    else:
+        return pg.one_hot(indices, num_classes)
 
 
 def cross_entropy_loss_indices(self, target: Tensor) -> Tensor:

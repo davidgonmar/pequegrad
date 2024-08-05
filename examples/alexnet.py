@@ -112,10 +112,10 @@ transform = transforms.Compose(
             [
                 transforms.PermuteFromTo((0, 1, 2, 3), (0, 3, 1, 2)),  # NHWC -> NCHW
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                transforms.Resize((224, 224)),
             ],
             enabled=args.jit,
         ),
-        transforms.Resize((224, 224)),
         transforms.EvalAndDetach(),
     ],
 )
@@ -175,21 +175,18 @@ if not args.test:
             inputs, labels = data
 
             inputs = inputs.to(DEVICE)
-            labels = labels.eval()
+            labels = labels.eval().to(DEVICE)
+            labels = Tensor.one_hot(100, labels)
+            outs = train_step(inputs, labels)
+            # import pequegrad.viz as viz
 
-            batch_y_onehot = Tensor.one_hot(100, labels, device=DEVICE)
-            outs = train_step(inputs, batch_y_onehot)
-            import pequegrad.viz as viz
-
-            viz.viz(outs, name="outs")
+            # viz.viz(outs, name="outs")
             loss = outs[0]
             g = outs[1:]
             optim.step(g)
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
-            if i == 100:
-                raise ValueError("stop")
             if i % 100 == 0:
                 model.save("alexnet_checkpoint.pkl")
 

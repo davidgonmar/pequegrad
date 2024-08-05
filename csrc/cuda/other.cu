@@ -77,4 +77,123 @@ void AsType::dispatch_cuda(const std::vector<Tensor> &inputs,
       std::make_shared<View>(cuda::view::astype(a.view(), _dtype_to)));
 }
 
+__global__ void bilinear_resize_kernel(const float *__restrict__ input,
+                                       float *__restrict__ output,
+                                       int batch_size, int input_height,
+                                       int input_width, int output_height,
+                                       int output_width, int channels,
+                                       float height_scale, float width_scale) {
+
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  int total_output_size = batch_size * output_height * output_width * channels;
+
+  if (index >= total_output_size)
+    return;
+
+  int n = index / (channels * output_height * output_width);
+  int c = (index / (output_height * output_width)) % channels;
+  int y = (index / output_width) % output_height;
+  int x = index % output_width;
+
+  float in_x = (x + 0.5f) * width_scale - 0.5f;
+  float in_y = (y + 0.5f) * height_scale - 0.5f;
+
+  int x0 = floor(in_x);
+  int x1 = min(x0 + 1, input_width - 1);
+  int y0 = floor(in_y);
+  int y1 = min(y0 + 1, input_height - 1);
+
+  float x_weight = in_x - x0;
+  float y_weight = in_y - y0;
+
+  const float *input_ptr = input + (n * channels * input_height * input_width);
+  float *output_ptr = output + (n * channels * output_height * output_width);
+
+  float v0 =
+      input_ptr[(c * input_height + y0) * input_width + x0] * (1 - x_weight) +
+      input_ptr[(c * input_height + y0) * input_width + x1] * x_weight;
+  float v1 =
+      input_ptr[(c * input_height + y1) * input_width + x0] * (1 - x_weight) +
+      input_ptr[(c * input_height + y1) * input_width + x1] * x_weight;
+  output_ptr[(c * output_height + y) * output_width + x] =
+      v0 * (1 - y_weight) + v1 * y_weight;
+}
+
+void BilinearResize::dispatch_cuda(const std::vector<Tensor> &inputs,
+                                   std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &input = inputs[0];
+  Tensor &output = outputs[0];
+  output.view_ptr()->allocate();
+  PG_CHECK_RUNTIME(input.dtype() == DType::Float32);
+  PG_CHECK_RUNTIME(output.dtype() == DType::Float32);
+  PG_CHECK_RUNTIME(input.shape().size() == 4);
+  PG_CHECK_RUNTIME(output.shape().size() == 4);
+
+  int batch_size = input.shape()[0];
+  int input_height = input.shape()[2];
+  int input_width = input.shape()[3];
+  int output_height = output.shape()[2];
+  int output_width = output.shape()[3];
+  int channels = input.shape()[1];
+
+  float height_scale = static_cast<float>(input_height) / output_height;
+  float width_scale = static_cast<float>(input_width) / output_width;
+
+  int total_output_size = batch_size * output_height * output_width * channels;
+  int block_size = 256;
+  int grid_size = (total_output_size + block_size - 1) / block_size;
+
+  bilinear_resize_kernel<<<grid_size, block_size>>>(
+      input.get_casted_base_ptr<float>(), output.get_casted_base_ptr<float>(),
+      batch_size, input_height, input_width, output_height, output_width,
+      channels, height_scale, width_scale);
+
+  PG_CUDA_KERNEL_END;
+}
+
+__global__ void one_hot_kernel(const int *__restrict__ input,
+                               float *__restrict__ output, int num_elements,
+                               int num_classes) {
+
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (index < num_elements) {
+    int category = input[index];
+    if (category >= 0 && category < num_classes) {
+      output[index * num_classes + category] = 1.0f;
+    }
+  }
+}
+
+void OneHotVector::dispatch_cuda(const std::vector<Tensor> &inputs,
+                                 std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &input = inputs[0];
+  Tensor &output = outputs[0];
+  output.view_ptr()->allocate();
+  int num_elements = input.shape()[0];
+  cudaMemsetAsync(output.get_casted_base_ptr<float>(), 0,
+                  num_elements * num_classes * sizeof(float));
+  PG_CHECK_RUNTIME(input.dtype() == DType::Int32,
+                   "Input must be of type Int32");
+  PG_CHECK_RUNTIME(output.dtype() == DType::Float32,
+                   "Output must be of type Float32");
+  PG_CHECK_RUNTIME(input.shape().size() == 1, "Input must be 1D");
+  PG_CHECK_RUNTIME(output.shape().size() == 2, "Output must be 2D");
+  PG_CHECK_RUNTIME(num_elements == output.shape()[0]);
+  int num_classes = output.shape()[1];
+
+  int block_size = 256;
+  int grid_size = (num_elements + block_size - 1) / block_size;
+
+  one_hot_kernel<<<grid_size, block_size>>>(input.get_casted_base_ptr<int>(),
+                                            output.get_casted_base_ptr<float>(),
+                                            num_elements, num_classes);
+
+  PG_CUDA_KERNEL_END;
+}
+
 } // namespace pg

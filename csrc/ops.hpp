@@ -39,7 +39,8 @@ DEFINE_REDUCE_OP(mean)
 
 Tensor fill(const shape_t &shape, DType dtype, double value,
             device::DeviceKind device);
-
+Tensor bilinear_resize(const Tensor &a, const shape_t &new_shape);
+Tensor one_hot(const Tensor &a, int num_classes);
 Tensor broadcast_to(const Tensor &a, const shape_t &shape);
 Tensor broadcast_as(const Tensor &a, const Tensor &b);
 

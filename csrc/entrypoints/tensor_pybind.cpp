@@ -95,6 +95,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
   });
   m.def("broadcast_to", &broadcast_to);
   m.def("broadcast_as", &broadcast_as);
+  m.def("bilinear_resize", &bilinear_resize);
+  m.def("one_hot", &one_hot);
 
   m.def("matmul", &matmul);
   m.def("where", &where);
