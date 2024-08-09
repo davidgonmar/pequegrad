@@ -14,6 +14,67 @@
 namespace pg {
 namespace ir {
 
+// Function that takes a lambda comparing, and returns true if a backward graph
+// visit makes it true
+static bool
+visit_with_condition(Tensor &t, std::function<bool(Tensor &)> f,
+                     std::function<bool(Tensor &)> should_end_branch) {
+  if (f(t)) {
+    return true;
+  }
+  if (should_end_branch(t)) {
+    return false;
+  }
+  for (auto &child : t.ad_node()->children()) {
+    if (visit_with_condition(child, f, should_end_branch)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static Tensor &visit_until(Tensor &t, std::function<bool(Tensor &)> f,
+                           std::function<bool(Tensor &)> should_end_branch) {
+  if (f(t)) {
+    return t;
+  }
+  if (should_end_branch(t)) {
+    throw std::runtime_error("visit_until: not found");
+  }
+  for (auto &child : t.ad_node()->children()) {
+    try {
+      return visit_until(child, f, should_end_branch);
+    } catch (const std::runtime_error &) {
+      // Continue to the next child. Only throw if its root
+    }
+  }
+  throw std::runtime_error("visit_until: not found");
+}
+
+static void visit_all_branches_until(Tensor &t,
+                                     std::function<bool(Tensor &)> f) {
+  if (f(t)) {
+    return;
+  }
+  for (auto &child : t.ad_node()->children()) {
+    visit_all_branches_until(child, f);
+  }
+}
+
+static std::vector<Tensor> visit_all_until(Tensor &t,
+                                           std::function<bool(Tensor &)> f) {
+  std::vector<Tensor> res;
+  if (f(t)) {
+    res.push_back(t);
+    return res;
+  }
+  for (auto &child : t.ad_node()->children()) {
+    auto res_ = visit_all_until(child, f);
+    res.insert(res.end(), res_.begin(), res_.end());
+  }
+  return res;
+}
+
 static BinaryOpKind op_to_binop_kind(std::shared_ptr<ADPrimitive> prim) {
   if (is<Add>(prim)) {
     return BinaryOpKind::Add;
@@ -113,9 +174,14 @@ static std::shared_ptr<ImmExpr> get_fill_value(const Tensor &t) {
 std::shared_ptr<BaseExpr>
 graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
                   std::vector<std::shared_ptr<BaseExpr>> &ir,
-                  IrBuilderContext &ctx,
-                  const std::vector<Tensor> &orig_inputs) {
+                  IrBuilderContext &ctx, const std::vector<Tensor> &orig_inputs,
+                  std::shared_ptr<BaseExpr> reduce_result = nullptr,
+                  std::shared_ptr<Tensor> reduced_tensor = nullptr) {
   auto prim = out.ad_node()->primitive();
+  if (reduce_result != nullptr) {
+    PG_CHECK_RUNTIME(reduced_tensor != nullptr,
+                     "reduced_tensor is null. Out: " + out.str());
+  }
   // first detect constants, then args, then binary ops, then unary ops
   if (is<Fill>(prim)) {
     auto fill = std::make_shared<ImmExpr>();
@@ -136,7 +202,6 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
                                         [&out](const Tensor &t) {
                                           return t.id == out.id;
                                         }) != orig_inputs.end();
-
   if (is_in_orig_inputs) {
     // these are the args to the kernel
     // we need to do a load expression
@@ -151,10 +216,18 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
     return ir_load.back();
   }
 
+  if (reduced_tensor != nullptr && reduced_tensor->id == out.id) {
+    PG_CHECK_RUNTIME(reduce_result != nullptr,
+                     "reduce_result is null. Out: " + out.str());
+    return reduce_result;
+  }
+
   // first recursively the input tensors
   std::vector<std::shared_ptr<BaseExpr>> inputs;
-  for (auto &input : out.children()) {
-    auto ir_ = graph_to_ir_inner(input, marked_as_out, ir, ctx, orig_inputs);
+
+  for (auto &input : out.ad_node()->children()) {
+    auto ir_ = graph_to_ir_inner(input, marked_as_out, ir, ctx, orig_inputs,
+                                 reduce_result, reduced_tensor);
     inputs.push_back(ir_);
   }
 
@@ -211,131 +284,16 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
     }
     return ternop;
   }
-  throw std::runtime_error(
-      "Bad schedule. Not an input and not a supported op: out: " + out.str());
-}
 
-void optim_ir_implace(ir_t &ir) {
-  // if it is a pow with int, replace
-  for (int i = 0; i < ir.size(); i++) {
-    auto expr = ir[i];
-    ir_t new_interm_ir = ir_t();
-    if (is<BinaryExpr>(expr)) {
-      auto binop = as<BinaryExpr>(expr);
-      if (binop->op == BinaryOpKind::Pow) {
-        if (is<ImmExpr>(binop->rhs)) {
-          auto imm = as<ImmExpr>(binop->rhs);
-          // if is int less than 10
-          double val = imm->value;
-          bool is_int = val == (int)val;
-
-          if (is_int && val < 10) {
-            // replace with a series of multiplications
-            auto lhs = binop->lhs;
-            auto res = lhs;
-            for (int j = 1; j < val; j++) {
-              auto new_binop = std::make_shared<BinaryExpr>();
-              new_binop->op = BinaryOpKind::Mul;
-              new_binop->lhs = res;
-              new_binop->rhs = lhs;
-              new_interm_ir.push_back(new_binop);
-              res = new_binop;
-            }
-
-            // delete the old pow, add new_interm_ir
-            ir.erase(ir.begin() + i);
-            ir.insert(ir.begin() + i, new_interm_ir.begin(),
-                      new_interm_ir.end());
-
-            // find all references to the old pow and replace with the new res
-            auto toreplace = expr;
-            for (int j = 0; j < ir.size(); j++) {
-              auto expr = ir[j];
-              if (is<BinaryExpr>(expr)) {
-                auto binop = as<BinaryExpr>(expr);
-                if (binop->lhs == toreplace) {
-                  binop->lhs = res;
-                }
-                if (binop->rhs == toreplace) {
-                  binop->rhs = res;
-                }
-              }
-              if (is<UnaryExpr>(expr)) {
-                auto unop = as<UnaryExpr>(expr);
-                if (unop->child == toreplace) {
-                  unop->child = res;
-                }
-              }
-              if (is<TernaryExpr>(expr)) {
-                auto ternop = as<TernaryExpr>(expr);
-                if (ternop->first == toreplace) {
-                  ternop->first = res;
-                }
-                if (ternop->second == toreplace) {
-                  ternop->second = res;
-                }
-                if (ternop->third == toreplace) {
-                  ternop->third = res;
-                }
-              }
-              if (is<LoadExpr>(expr)) {
-                auto load = as<LoadExpr>(expr);
-                if (load->idx == toreplace) {
-                  load->idx = res;
-                }
-                if (load->child == toreplace) {
-                  load->child = res;
-                }
-              }
-              if (is<StoreExpr>(expr)) {
-                auto store = as<StoreExpr>(expr);
-                if (store->idx == toreplace) {
-                  store->idx = res;
-                }
-                if (store->value == toreplace) {
-                  store->value = res;
-                }
-              }
-
-              if (is<IfStartExpr>(expr)) {
-                auto if_start = as<IfStartExpr>(expr);
-                if (if_start->cond == toreplace) {
-                  if_start->cond = res;
-                }
-              }
-
-              if (is<ReturnExpr>(expr)) {
-                auto ret = as<ReturnExpr>(expr);
-                if (ret->value == toreplace) {
-                  ret->value = res;
-                }
-              }
-
-              if (is<ForStartExpr>(expr)) {
-                auto for_start = as<ForStartExpr>(expr);
-                if (for_start->start == toreplace) {
-                  for_start->start = res;
-                }
-                if (for_start->end == toreplace) {
-                  for_start->end = res;
-                }
-                if (for_start->step == toreplace) {
-                  for_start->step = res;
-                }
-              }
-
-              if (is<IfEndExpr>(expr)) {
-                auto if_end = as<IfEndExpr>(expr);
-                if (if_end->if_start == toreplace) {
-                  if_end->if_start = res;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+  std::string inps_str = "";
+  for (auto &inp : orig_inputs) {
+    inps_str += inp.str() + " ";
   }
+  throw std::runtime_error(
+      "Bad schedule. Not an input and not a supported op: out: " + out.str() +
+      " reduced_tensor is null: " +
+      (reduced_tensor == nullptr ? "null" : reduced_tensor->str()) +
+      " inputs: " + inps_str);
 }
 
 static ir_t render_return_guard(int max_val, std::shared_ptr<BaseExpr> idx) {
@@ -431,20 +389,60 @@ static std::pair<ir_t, ir_t> render_local_idxs(
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
 graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
-  PG_CHECK_RUNTIME(is_reduce_op(out.ad_node()->primitive()),
-                   "graph_to_ir_reduce can only be called with a reduce op");
+  std::vector<Tensor> inputs_visited;
+  Tensor &reduced = visit_until(
+      out,
+      [&inputs](Tensor &t) {
+        return is_reduce_op(t.ad_node()->primitive()) &&
+               std::find_if(inputs.begin(), inputs.end(),
+                            [&t](const Tensor &input) {
+                              return t.id == input.id;
+                            }) == inputs.end();
+      },
+      [&inputs](Tensor &t) {
+        return std::find_if(inputs.begin(), inputs.end(),
+                            [&t](const Tensor &input) {
+                              return t.id == input.id;
+                            }) != inputs.end();
+      });
 
-  std::shared_ptr<Reduce> reduce =
-      std::dynamic_pointer_cast<Reduce>(out.ad_node()->primitive());
+  std::vector<Tensor> reduced_producer_leafs =
+      visit_all_until(reduced, [&inputs](Tensor &t) {
+        // return if it is in inputs
+        return std::any_of(inputs.begin(), inputs.end(),
+                           [&t](const Tensor &input) {
+                             return t.id == input.id && !get_fill_value(input);
+                           });
+      });
+
+  // make reduced_producer_leafs unique
+  std::unordered_map<int, bool> reduced_producer_leafs_map;
+  std::vector<Tensor> unique_reduced_producer_leafs;
+  for (auto &leaf : reduced_producer_leafs) {
+    if (reduced_producer_leafs_map.find(leaf.id) ==
+        reduced_producer_leafs_map.end()) {
+      reduced_producer_leafs_map[leaf.id] = true;
+      unique_reduced_producer_leafs.push_back(leaf);
+    }
+  }
+  reduced_producer_leafs = unique_reduced_producer_leafs;
+
+  // Start of Selection
+  auto reduced_depends_on_input = [&reduced_producer_leafs](const Tensor &t) {
+    return std::any_of(reduced_producer_leafs.begin(),
+                       reduced_producer_leafs.end(),
+                       [&t](const Tensor &leaf) { return t.id == leaf.id; });
+  };
+
+  std::shared_ptr<Reduce> reduce = as<Reduce>(reduced.ad_node()->primitive());
   axes_t axes = reduce->axes();
   for (int xx = 0; xx < axes.size(); xx++) {
-    axes[xx] = axes[xx] < 0 ? out.ad_node()->children()[0].ndim() + axes[xx]
+    axes[xx] = axes[xx] < 0 ? reduced.ad_node()->children()[0].ndim() + axes[xx]
                             : axes[xx];
   }
   auto is_reduced = [&axes](int i) {
     return std::find(axes.begin(), axes.end(), i) != axes.end();
   };
-
   int total_out_elems = out.numel();
   int total_reduced_elems = reduce->total_reduce_numel();
   // out = reduce(fn(inputs), axis=...
@@ -475,7 +473,6 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   ir.push_back(global_idx);
 
   int gidx_idx = ir.size() - 1;
-
   // we will render reduce like:
   /*
   void kernel(args...) {
@@ -500,6 +497,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // fill the ctx and ir with the input tensors
   int i = 0;
+  std::vector<int> already_used; // used to dedupe inputs
   std::vector<bool> used_inputs(inputs.size(), false);
   for (auto &input : inputs) {
     if (is<Fill>(input.ad_node()->primitive()) ||
@@ -508,6 +506,12 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
       // will be replaced by a constant
       continue;
     }
+    if (std::find(already_used.begin(), already_used.end(), input.id) !=
+        already_used.end()) {
+      i++;
+      continue;
+    }
+    already_used.push_back(input.id);
     used_inputs[i] = true;
     auto arg = std::make_shared<ArgExpr>();
     arg->dtype = input.dtype();
@@ -530,8 +534,9 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
       ctx.arg_to_strides.at(arg).push_back(stride);
     }
     auto [local_idxs, only_loads] =
-        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i,
-                          [=](int i) { return !is_reduced(i); });
+        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i, [=](int i) {
+          return !is_reduced(i) || !reduced_depends_on_input(input);
+        });
     ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
     ctx.arg_to_idxs_to_load[arg] = only_loads;
     i++;
@@ -565,8 +570,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // first, render the accumulator (imm value of 0)
   auto acc = std::make_shared<ImmExpr>();
-  acc->value = (is<Sum>(out.ad_node()->primitive()) ||
-                is<Mean>(out.ad_node()->primitive()))
+  acc->value = (is<Sum>(reduce) || is<Mean>(reduce))
                    ? 0
                    : std::numeric_limits<float>::lowest();
   acc->dtype = out.dtype();
@@ -599,11 +603,11 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // here, render the missing input idxs based on the reduce idx for each input
   for (auto &input : inputs) {
-    if (is<Fill>(input.ad_node()->primitive()) ||
-        get_fill_value(input) != nullptr) {
+    if (!used_inputs[i]) {
       i++;
       continue;
     }
+
     int redidx = 0;
     // Render the inner idxs of the loop
     for (int x = 0; x < input.ndim(); x++) {
@@ -613,7 +617,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
       auto arg = ctx.tid_to_arg.at(input.id);
       auto [local_idxs_reduce, only_loads_reduce] = render_local_idxs(
           reduce_loops.at(redidx)->start, ctx.arg_to_shape.at(arg), i,
-          [=](int i) { return i == x; });
+          [=](int i) { return i == x && reduced_depends_on_input(input); });
 
       ir.insert(ir.end(), local_idxs_reduce.begin(), local_idxs_reduce.end());
       for (int j = 0; j < only_loads_reduce.size(); j++) {
@@ -628,12 +632,11 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
 
   // render inner
   std::vector<Tensor> x;
-  graph_to_ir_inner(out.ad_node()->children()[0], x, ir, ctx, inputs);
-
+  graph_to_ir_inner(reduced.ad_node()->children()[0], x, ir, ctx, inputs);
   // acc += inner_ir[-1]
 
   auto acc_binop = std::make_shared<AccumExpr>();
-  auto prim = out.ad_node()->primitive();
+  auto prim = reduce;
   acc_binop->op =
       (is<Sum>(prim) || is<Mean>(prim)) ? AccumOpKind::Add : AccumOpKind::Max;
   acc_binop->lhs = acc;
@@ -649,6 +652,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
     ir.push_back(for_end);
   }
 
+  auto reduce_result = std::shared_ptr<BaseExpr>();
   // if its mean, divide by total_reduced_elems
   if (is<Mean>(prim)) {
     auto div = std::make_shared<BinaryExpr>();
@@ -659,17 +663,39 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
     ir.push_back(total_reduced_elems_imm);
     div->rhs = total_reduced_elems_imm;
     ir.push_back(div);
-    auto store_ir = render_store_idxs_for_expr(
-        ctx.arg_to_idxs_to_load.at(arg), ctx.arg_to_strides.at(arg), arg, div);
-    ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    reduce_result = div;
+    // auto store_ir = render_store_idxs_for_expr(
+    // ctx.arg_to_idxs_to_load.at(arg), ctx.arg_to_strides.at(arg), arg, div);
+    // ir.insert(ir.end(), store_ir.begin(), store_ir.end());
   }
   // else, just store the acc
   else {
-    auto store_ir = render_store_idxs_for_expr(
-        ctx.arg_to_idxs_to_load.at(arg), ctx.arg_to_strides.at(arg), arg, acc);
+    reduce_result = acc;
+    // auto store_ir = render_store_idxs_for_expr(
+    // ctx.arg_to_idxs_to_load.at(arg), ctx.arg_to_strides.at(arg), arg, acc);
 
-    ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    // ir.insert(ir.end(), store_ir.begin(), store_ir.end());
   }
+  if (out.id == reduced.id) {
+    auto _arg = ctx.tid_to_arg.at(out.id);
+    auto store_ir = render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(_arg),
+                                               ctx.arg_to_strides.at(_arg),
+                                               _arg, reduce_result);
+    ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    return {ir, ctx, used_inputs};
+  }
+
+  std::shared_ptr<Tensor> reduced_tensor = std::make_shared<Tensor>(reduced);
+  graph_to_ir_inner(out, x, ir, ctx, inputs, reduce_result, reduced_tensor);
+
+  // The result is in the last element of the ir
+  // render a store for the result
+  auto _arg = ctx.tid_to_arg.at(out.id);
+  auto store_ir =
+      render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(_arg),
+                                 ctx.arg_to_strides.at(_arg), _arg, ir.back());
+  ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+
   // optim_ir_implace(ir);
   return {ir, ctx, used_inputs};
 }
@@ -678,8 +704,24 @@ std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
 graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
             const std::vector<Tensor> &inputs) {
-  // out = reduce(fn(inputs), axis=...)
-  if (is_reduce_op(out.ad_node()->primitive())) {
+  // out = fn(reduce(fn(inputs), axis=...))
+  if (visit_with_condition(
+          out,
+          [&inputs](const Tensor &t) {
+            // if there is a reduce op that is not an input
+            return is_reduce_op(t.ad_node()->primitive()) &&
+                   std::find_if(inputs.begin(), inputs.end(),
+                                [&t](const Tensor &input) {
+                                  return t.id == input.id;
+                                }) == inputs.end();
+          },
+          [&inputs](const Tensor &t) {
+            // if there is an input
+            return std::find_if(inputs.begin(), inputs.end(),
+                                [&t](const Tensor &input) {
+                                  return t.id == input.id;
+                                }) != inputs.end();
+          })) {
     return graph_to_ir_reduce(out, inputs);
   }
   // the result will be a linear IR
@@ -921,7 +963,7 @@ std::string render_fn_header(std::string fn_name,
   std::string res = "";
   for (int i = 0; i < args.size(); i++) {
     auto arg = args[i];
-    res += get_dtype_cpp_str(arg->dtype) + " *" + arg->name;
+    res += get_dtype_cpp_str(arg->dtype) + " * __restrict__ " + arg->name;
     if (i != args.size() - 1) {
       res += ", ";
     }
@@ -951,6 +993,8 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   if (is_reduce) {
     kernel_name = "reduce_kernel";
   }
+  // add random id
+  kernel_name += "_" + std::to_string(rand());
   std::string res = render_fn_header("", ir) + "\n";
   res = "__global__ void __launch_bounds__(1024, 1) " + kernel_name + "(" +
         res + ")";
@@ -1167,56 +1211,65 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
 
     for (int i = 2; i <= prop.maxThreadsPerBlock; i *= 2) {
       int curr_tpb = i;
-      // chrono
-      auto start = std::chrono::high_resolution_clock::now();
+      double total_time = 0.0;
+      int num_repeats =
+          10; // Number of times to repeat the kernel launch for better timing
 
-      // launch
-      dim3 threads_per_block(curr_tpb);
-      size_t num_elements = outputs[0].numel();
-      dim3 blocks_per_grid((num_elements + curr_tpb - 1) / curr_tpb);
-      std::vector<void *> kernel_args;
-      for (const auto &input : inputs) {
-        void *in_data = input.get_base_ptr();
-        kernel_args.push_back(in_data);
+      for (int j = 0; j < num_repeats; ++j) {
+        // chrono
+        auto start = std::chrono::high_resolution_clock::now();
+
+        // launch
+        dim3 threads_per_block(curr_tpb);
+        size_t num_elements = outputs[0].numel();
+        dim3 blocks_per_grid((num_elements + curr_tpb - 1) / curr_tpb);
+        std::vector<void *> kernel_args;
+        for (const auto &input : inputs) {
+          void *in_data = input.get_base_ptr();
+          kernel_args.push_back(in_data);
+        }
+        for (auto &output : outputs) {
+          void *out_data = output.get_base_ptr();
+          kernel_args.push_back(out_data);
+        }
+
+        // Convert to array of pointers
+        std::vector<void *> kernel_args_ptrs;
+        for (auto &arg : kernel_args) {
+          kernel_args_ptrs.push_back(&arg);
+        }
+
+        // Launch the kernel
+        // create stream to launch kernel
+        // first check if function is valid
+        CUresult launch_result = cuLaunchKernel(
+            (CUfunction)this->cached_fn, blocks_per_grid.x, blocks_per_grid.y,
+            blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
+            threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
+
+        if (launch_result != CUDA_SUCCESS) {
+          const char *error_string;
+          cuGetErrorString(launch_result, &error_string);
+          PG_CHECK_RUNTIME(
+              false,
+              "Error launching kernel: " + std::string(error_string) +
+                  " "
+                  "for kernel " +
+                  std::to_string(outputs[0].id) +
+                  " with args: " + vec_to_string(kernel_args_ptrs) +
+                  "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
+        }
+
+        // sync and end chrono
+        cudaDeviceSynchronize();
+        auto end = std::chrono::high_resolution_clock::now();
+        double time = std::chrono::duration<double>(end - start).count();
+        total_time += time;
       }
-      for (auto &output : outputs) {
-        void *out_data = output.get_base_ptr();
-        kernel_args.push_back(out_data);
-      }
 
-      // Convert to array of pointers
-      std::vector<void *> kernel_args_ptrs;
-      for (auto &arg : kernel_args) {
-        kernel_args_ptrs.push_back(&arg);
-      }
-
-      // Launch the kernel
-      // create stream to launch kernel
-      // first check if function is valid
-      CUresult launch_result = cuLaunchKernel(
-          (CUfunction)this->cached_fn, blocks_per_grid.x, blocks_per_grid.y,
-          blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
-          threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
-
-      if (launch_result != CUDA_SUCCESS) {
-        const char *error_string;
-        cuGetErrorString(launch_result, &error_string);
-        PG_CHECK_RUNTIME(
-            false,
-            "Error launching kernel: " + std::string(error_string) +
-                " "
-                "for kernel " +
-                std::to_string(outputs[0].id) +
-                " with args: " + vec_to_string(kernel_args_ptrs) +
-                "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
-      }
-
-      // sync and end chrono
-      cudaDeviceSynchronize();
-      auto end = std::chrono::high_resolution_clock::now();
-      double time = std::chrono::duration<double>(end - start).count();
-      if (time < best_time) {
-        best_time = time;
+      double avg_time = total_time / num_repeats;
+      if (avg_time < best_time) {
+        best_time = avg_time;
         best_threads_per_block = curr_tpb;
       }
     }

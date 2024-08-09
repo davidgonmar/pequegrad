@@ -18,7 +18,10 @@ template <typename Casted> Casted as(ADPrimitive &primitive) {
 
 template <typename Casted>
 std::shared_ptr<Casted> as(std::shared_ptr<ADPrimitive> primitive) {
-  return std::dynamic_pointer_cast<Casted>(primitive);
+  auto ret = std::dynamic_pointer_cast<Casted>(primitive);
+  PG_CHECK_RUNTIME(ret != nullptr,
+                   "Failed to cast to " + std::string(typeid(Casted).name()));
+  return ret;
 }
 
 // Linear IR (Intermediate Representation)

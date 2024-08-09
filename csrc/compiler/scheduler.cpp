@@ -7,109 +7,46 @@ using namespace ir;
 
 using leaf_record_t = std::vector<Tensor>;
 
+constexpr bool ALLOW_REDUCE_EPILOGUE = true;
+
 static void schedule_inner(Tensor &node, leaf_record_t &leafs,
                            std::vector<Tensor> &marked_as_out,
                            std::unordered_map<int, std::set<int>> &dependents,
-                           bool is_root = false) {
-  // if node is used by another node, mark it as output
-  if (is<Log>(node.ad_node()->primitive())) {
-    auto &log = dynamic_cast<Log &>(*node.ad_node()->primitive());
+                           bool *allow_reduce) {
+  auto prim = node.ad_node()->primitive();
+  if ((is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) &&
+      *allow_reduce) {
+    *allow_reduce = false;
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce); // dont allow more reduce if we
+                                              // already have one
     return;
   }
-  if (is<Exp>(node.ad_node()->primitive())) {
-    auto &exp = dynamic_cast<Exp &>(*node.ad_node()->primitive());
+
+  if (is<Log>(prim) || is<Exp>(prim)) {
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce);
     return;
   }
-  if (is<Add>(node.ad_node()->primitive())) {
-    auto &add = dynamic_cast<Add &>(*node.ad_node()->primitive());
+  // allow_reduce =false; // buggy if we allow reduce here
+
+  if (is<Add>(prim) || is<Mul>(prim) || is<Sub>(prim) || is<Div>(prim) ||
+      is<Max>(prim) || is<Gt>(prim) || is<Lt>(prim) || is<Eq>(prim) ||
+      is<Pow>(prim)) {
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce);
     schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Mul>(node.ad_node()->primitive())) {
-    auto &mul = dynamic_cast<Mul &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Sub>(node.ad_node()->primitive())) {
-    auto &sub = dynamic_cast<Sub &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Div>(node.ad_node()->primitive())) {
-    auto &div = dynamic_cast<Div &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Max>(node.ad_node()->primitive())) {
-    auto &max = dynamic_cast<Max &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Gt>(node.ad_node()->primitive())) {
-    auto &gt = dynamic_cast<Gt &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Lt>(node.ad_node()->primitive())) {
-    auto &lt = dynamic_cast<Lt &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce);
     return;
   }
   if (is<Where>(node.ad_node()->primitive())) {
     auto &where = dynamic_cast<Where &>(*node.ad_node()->primitive());
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce);
     schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce);
     schedule_inner(node.ad_node()->children()[2], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Eq>(node.ad_node()->primitive())) {
-    auto &eq = dynamic_cast<Eq &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  if (is<Pow>(node.ad_node()->primitive())) {
-    auto &pow = dynamic_cast<Pow &>(*node.ad_node()->primitive());
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
-    schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents);
-    return;
-  }
-  auto prim = node.ad_node()->primitive();
-  if ((is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) && is_root) {
-    schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents);
+                   dependents, allow_reduce);
     return;
   }
   // else, we have a leaf
@@ -123,7 +60,8 @@ void schedule(
                        // dependent means that the node is used by another node
   leaf_record_t leafs;
   std::vector<Tensor> marked_as_out;
-  schedule_inner(out, leafs, marked_as_out, dependents, true);
+  bool allow_reduce_ptr = true;
+  schedule_inner(out, leafs, marked_as_out, dependents, &allow_reduce_ptr);
   // if leafs is {out}, we failed to schedule and just return early
   if (leafs.size() == 0 | leafs.size() == 1 && leafs[0].id == out.id) {
     return;
@@ -170,7 +108,7 @@ void schedule(
 
     recurse(out);
 
-    // check that every tensor in the linearized_subgraph has same shape
+    /*// check that every tensor in the linearized_subgraph has same shape
     if (linearized_subgraph.size() > 0) {
       shape_t shape = linearized_subgraph[0].shape();
       for (Tensor &t : linearized_subgraph) {
@@ -180,7 +118,7 @@ void schedule(
                 t.str() + " with shape " + vec_to_string(t.shape()) +
                 " and expected " + vec_to_string(shape));
       }
-    }
+    }*/
 
     // linearized_subgraph = SG
     // root... = GG
@@ -202,7 +140,7 @@ void schedule(
       }
     }
 
-    // check that every node marked as out has the same shape
+    /*// check that every node marked as out has the same shape
     if (marked_as_out.size() > 0) {
       shape_t shape = marked_as_out[0].shape();
       for (Tensor &t : marked_as_out) {
@@ -210,7 +148,7 @@ void schedule(
             t.shape() == shape,
             "All tensors marked as out should have the same shape");
       }
-    }
+    }*/
 
     // make them unique
     std::set<int> ids;
@@ -245,9 +183,6 @@ void schedule(
 
       for (Tensor &tout : marked_as_out) {
         if (tout.id == node.id) {
-          // std::cout << "Cycle detected with node " << tout.str() <<
-          // std::endl;
-          // delete from marked_as_out
           for (int i = 0; i < marked_as_out.size(); i++) {
             if (marked_as_out[i].id == tout.id) {
               marked_as_out.erase(marked_as_out.begin() + i);
