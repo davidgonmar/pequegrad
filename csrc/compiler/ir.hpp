@@ -1,4 +1,5 @@
 #include "ad_primitives.hpp"
+#include "jit_kernel.hpp"
 #include <memory>
 
 namespace pg {
@@ -334,6 +335,7 @@ public:
   std::map<ir_arg_t, ir_t> arg_to_strides;
   std::map<ir_arg_t, ir_t> arg_to_shape;
   std::map<ir_arg_t, ir_t> arg_to_idxs_to_load;
+  std::map<ir_arg_t, bool> arg_to_is_contiguous;
 };
 
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
@@ -473,11 +475,23 @@ static ir_t get_imm_expr(double value, DType dtype) {
 // renders Tensor<shape=(A, B, C), strides=(X, Y, Z)>[i, j, k] where 0 <= i < A,
 // 0 <= j < B, 0 <= k < C
 static ir_t render_load_idxs_for_expr(ir_t load_idxs, ir_t tensor_strides,
-                                      ir_arg_t arg) {
+                                      ir_arg_t arg, IrBuilderContext ctx) {
   PG_CHECK_RUNTIME(
-      load_idxs.size() == tensor_strides.size(),
+      load_idxs.size() == tensor_strides.size() ||
+          ctx.arg_to_is_contiguous[arg],
       "[render_load_idxs_for_expr] load_idxs.size() != tensor_strides.size()");
   ir_t res;
+  // if ctx is contiguous, we can just do a load
+  if (ctx.arg_to_is_contiguous[arg]) {
+    auto load = std::make_shared<LoadExpr>();
+    PG_CHECK_RUNTIME(load_idxs.size() == 1,
+                     "[render_load_idxs_for_expr] load_idxs.size() != 1");
+    load->child = arg;
+    load->idx = load_idxs[0]; // global idx
+    load->dtype = arg->dtype;
+    res.push_back(load);
+    return res;
+  }
   if (load_idxs.size() == 0) {
     auto load = std::make_shared<LoadExpr>();
     load->child = arg;
@@ -518,11 +532,25 @@ static ir_t render_load_idxs_for_expr(ir_t load_idxs, ir_t tensor_strides,
 // same that for load, but at the end we just do a store
 static ir_t render_store_idxs_for_expr(ir_t store_idxs, ir_t tensor_strides,
                                        ir_arg_t arg,
-                                       std::shared_ptr<BaseExpr> value) {
-  PG_CHECK_RUNTIME(store_idxs.size() == tensor_strides.size(),
+                                       std::shared_ptr<BaseExpr> value,
+                                       IrBuilderContext ctx) {
+  PG_CHECK_RUNTIME(store_idxs.size() == tensor_strides.size() ||
+                       ctx.arg_to_is_contiguous[arg],
                    "[render_store_idxs_for_expr] store_idxs.size() != "
                    "tensor_strides.size()");
   ir_t res;
+  if (ctx.arg_to_is_contiguous[arg]) {
+    auto store = std::make_shared<StoreExpr>();
+    PG_CHECK_RUNTIME(store_idxs.size() == 1,
+                     "[render_store_idxs_for_expr] store_idxs.size() != 1");
+    store->ptr = arg;
+    store->idx = store_idxs[0]; // global idx
+    store->value = value;
+    store->dtype = arg->dtype;
+    res.push_back(store);
+    return res;
+  }
+
   if (store_idxs.size() == 0) {
     auto store = std::make_shared<StoreExpr>();
     store->ptr = arg;
@@ -569,11 +597,7 @@ public:
   std::string str() { return "Compiled<" + _kername + ">"; }
   DEFINE_DISPATCH_CUDA
   ir::ir_t ir;
-  std::map<int, std::vector<std::shared_ptr<ir::BaseExpr>>>
-      tensor_idx_to_strides;
-  void *cached_fn = nullptr;
-  int threads_per_block;
-  int blocks_per_grid;
+  std::shared_ptr<AbstractKernel> jit_kernel;
 };
 
 } // namespace pg

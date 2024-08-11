@@ -210,7 +210,7 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
     auto arg = ctx.tid_to_arg.at(out.id);
     auto strides = ctx.arg_to_strides.at(arg);
     auto idxs_to_load = ctx.arg_to_idxs_to_load.at(arg);
-    auto ir_load = render_load_idxs_for_expr(idxs_to_load, strides, arg);
+    auto ir_load = render_load_idxs_for_expr(idxs_to_load, strides, arg, ctx);
     // irload is a vector
     ir.insert(ir.end(), ir_load.begin(), ir_load.end());
     return ir_load.back();
@@ -245,7 +245,7 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
       auto arg = ctx.tid_to_arg.at(out.id);
       auto strides = ctx.arg_to_strides.at(arg);
       auto store_ir = render_store_idxs_for_expr(
-          ctx.arg_to_idxs_to_load.at(arg), strides, arg, binop);
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, binop, ctx);
       ir.insert(ir.end(), store_ir.begin(), store_ir.end());
     }
     return binop;
@@ -261,7 +261,7 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
       auto arg = ctx.tid_to_arg.at(out.id);
       auto strides = ctx.arg_to_strides.at(arg);
       auto store_ir = render_store_idxs_for_expr(
-          ctx.arg_to_idxs_to_load.at(arg), strides, arg, unop);
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, unop, ctx);
       ir.insert(ir.end(), store_ir.begin(), store_ir.end());
     }
     return unop;
@@ -279,7 +279,7 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
       auto arg = ctx.tid_to_arg.at(out.id);
       auto strides = ctx.arg_to_strides.at(arg);
       auto store_ir = render_store_idxs_for_expr(
-          ctx.arg_to_idxs_to_load.at(arg), strides, arg, ternop);
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, ternop, ctx);
       ir.insert(ir.end(), store_ir.begin(), store_ir.end());
     }
     return ternop;
@@ -320,10 +320,15 @@ using l = std::function<bool(int)>;
 l default_choose_which_idxs_to_load = [](int i) { return true; };
 
 static std::pair<ir_t, ir_t> render_local_idxs(
-    ir_item_t gidx, ir_t shapes, int input_idx,
+    ir_item_t gidx, ir_t shapes, int input_idx, bool is_contiguous = false,
     l choose_which_idxs_to_load = default_choose_which_idxs_to_load) {
   ir_t res;
   ir_t only_loads = ir_t();
+  // if is contigous, only return global idx
+  if (is_contiguous) {
+    only_loads.push_back(gidx);
+    return {res, only_loads};
+  }
   only_loads.resize(shapes.size());
   std::vector<std::shared_ptr<BaseExpr>> shapes_to_div =
       std::vector<std::shared_ptr<BaseExpr>>();
@@ -533,8 +538,8 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
       ir.push_back(stride);
       ctx.arg_to_strides.at(arg).push_back(stride);
     }
-    auto [local_idxs, only_loads] =
-        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i, [=](int i) {
+    auto [local_idxs, only_loads] = render_local_idxs(
+        global_idx, ctx.arg_to_shape.at(arg), i, false, [=](int i) {
           return !is_reduced(i) || !reduced_depends_on_input(input);
         });
     ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
@@ -616,7 +621,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
       }
       auto arg = ctx.tid_to_arg.at(input.id);
       auto [local_idxs_reduce, only_loads_reduce] = render_local_idxs(
-          reduce_loops.at(redidx)->start, ctx.arg_to_shape.at(arg), i,
+          reduce_loops.at(redidx)->start, ctx.arg_to_shape.at(arg), i, false,
           [=](int i) { return i == x && reduced_depends_on_input(input); });
 
       ir.insert(ir.end(), local_idxs_reduce.begin(), local_idxs_reduce.end());
@@ -680,7 +685,7 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
     auto _arg = ctx.tid_to_arg.at(out.id);
     auto store_ir = render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(_arg),
                                                ctx.arg_to_strides.at(_arg),
-                                               _arg, reduce_result);
+                                               _arg, reduce_result, ctx);
     ir.insert(ir.end(), store_ir.begin(), store_ir.end());
     return {ir, ctx, used_inputs};
   }
@@ -691,9 +696,9 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   // The result is in the last element of the ir
   // render a store for the result
   auto _arg = ctx.tid_to_arg.at(out.id);
-  auto store_ir =
-      render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(_arg),
-                                 ctx.arg_to_strides.at(_arg), _arg, ir.back());
+  auto store_ir = render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(_arg),
+                                             ctx.arg_to_strides.at(_arg), _arg,
+                                             ir.back(), ctx);
   ir.insert(ir.end(), store_ir.begin(), store_ir.end());
 
   // optim_ir_implace(ir);
@@ -787,21 +792,16 @@ graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
       ir.push_back(stride);
       ctx.arg_to_strides.at(arg).push_back(stride);
     }
-    auto [local_idxs, only_loads] =
-        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
+    auto [local_idxs, only_loads] = render_local_idxs(
+        global_idx, ctx.arg_to_shape.at(arg), i, input.is_contiguous());
     ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
     ctx.arg_to_idxs_to_load[arg] = only_loads;
-
+    ctx.arg_to_is_contiguous[arg] = input.is_contiguous();
     i++;
   }
 
   // same for the marked_as_out
   for (auto &input : marked_as_out) {
-    if (is<Fill>(input.ad_node()->primitive())) {
-      i++;
-      // will be replaced by a constant
-      continue;
-    }
     auto arg = std::make_shared<ArgExpr>();
     arg->name = "out" + std::to_string(i);
     arg->dtype = input.dtype();
@@ -823,58 +823,14 @@ graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
       ir.push_back(stride);
       ctx.arg_to_strides.at(arg).push_back(stride);
     }
-    auto [local_idxs, only_loads] =
-        render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
+    auto [local_idxs, only_loads] = render_local_idxs(
+        global_idx, ctx.arg_to_shape.at(arg), i, input.is_contiguous());
     ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
     ctx.arg_to_idxs_to_load[arg] = only_loads;
+    ctx.arg_to_is_contiguous[arg] = input.is_contiguous();
     i++;
   }
-
-  // now same but for the output tensor
-  /*auto arg = std::make_shared<ArgExpr>();
-  arg->name = "out" + std::to_string(i);
-  arg->dtype = out.dtype();
-  ir.push_back(arg);
-  ctx.tid_to_arg[out.id] = arg;
-  ctx.arg_to_shape[arg] = std::vector<std::shared_ptr<BaseExpr>>();
-  ctx.arg_to_strides[arg] = std::vector<std::shared_ptr<BaseExpr>>();
-  ctx.arg_to_idxs_to_load[arg] = std::vector<std::shared_ptr<BaseExpr>>();
-  ctx.arg_to_idxs_to_load[arg].resize(out.ndim());
-  for (int j = 0; j < out.ndim(); j++) {
-    auto shape = std::make_shared<ImmExpr>();
-    shape->value = out.shape()[j];
-    ir.push_back(shape);
-    ctx.arg_to_shape.at(arg).push_back(shape);
-    auto stride = std::make_shared<ImmExpr>();
-    stride->value =
-        out.strides()[j] / dtype_to_size(out.dtype()); // stride is in bytes
-    ir.push_back(stride);
-    ctx.arg_to_strides.at(arg).push_back(stride);
-  }
-  auto [local_idxs, only_loads] =
-      render_local_idxs(global_idx, ctx.arg_to_shape.at(arg), i);
-  ir.insert(ir.end(), local_idxs.begin(), local_idxs.end());
-  ctx.arg_to_idxs_to_load[arg] = only_loads; */
-
   graph_to_ir_inner(out, marked_as_out, ir, ctx, inputs);
-
-  // now, at the end, add a store operation
-  // we need to get the last ir item that is not a store
-  /*std::shared_ptr<BaseExpr> last_ir_item;
-  for (int i = ir.size() - 1; i >= 0; i--) {
-    if (!is<StoreExpr>(ir[i])) {
-      last_ir_item = ir[i];
-      break;
-    }
-  }
-  auto store_ir =
-      render_store_idxs_for_expr(ctx.arg_to_idxs_to_load.at(arg),
-                                 ctx.arg_to_strides.at(arg), arg, last_ir_item);
-
-
-  ir.insert(ir.end(), store_ir.begin(), store_ir.end());*/
-
-  // optim_ir_implace(ir);
   return {ir, ctx, used_inputs};
 }
 
@@ -1147,64 +1103,20 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   }
   // first, we need to gather ir
   using namespace ir;
-  if (this->cached_fn == nullptr) {
+  if (this->jit_kernel == nullptr) {
 
     // firsts
     auto [ker, ker_name] = ir_to_cuda(this->ir);
-    nvrtcProgram prog;
-    // apend extern C
-    std::string file = "extern \"C\" {\n" + ker + "\n}";
-    nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
-
-    if (std::getenv("PG_KERNEL_DB") != nullptr) {
-      std::cout << "file: " << file << std::endl;
+    this->jit_kernel = std::make_shared<CudaKernel>(ker_name, ker);
+    if (getenv("PG_KERNEL_DB") != nullptr) {
+      // print the kernel to stdout
+      std::cout << ker << std::endl;
     }
-    const char *opts[] = {"--use_fast_math"};
-    nvrtcResult compileResult = nvrtcCompileProgram(prog, 1, opts);
-
-    // Check for compilation errors
-    if (compileResult != NVRTC_SUCCESS) {
-      size_t logSize;
-      nvrtcGetProgramLogSize(prog, &logSize);
-      char *log = new char[logSize];
-      nvrtcGetProgramLog(prog, log);
-      nvrtcDestroyProgram(&prog);
-      throw std::runtime_error("NVRTC compilation failed: " + std::string(log));
-    }
-
-    size_t ptxSize;
-    nvrtcGetPTXSize(prog, &ptxSize);
-    char *ptx = new char[ptxSize];
-    nvrtcGetPTX(prog, ptx);
-
-    CUmodule cuModule;
-    CUfunction cuFunction;
-    CUcontext cuContext;
-    CUresult R1 = cuModuleLoadData(&cuModule, ptx);
-    PG_CHECK_RUNTIME(R1 == CUDA_SUCCESS,
-                     "Failed to load data: got " + std::to_string(R1));
-    CUresult R = cuModuleGetFunction(&cuFunction, cuModule, ker_name.c_str());
-    PG_CHECK_RUNTIME(R == CUDA_SUCCESS, "Failed to get function: got " +
-                                            std::to_string(R) + " for kernel " +
-                                            ker_name);
-
-    PG_CHECK_RUNTIME(cuFunction != nullptr, "Failed to get function");
-    // Store the function pointer in a void*
-    void *function_ptr = reinterpret_cast<void *>(cuFunction);
-    PG_CHECK_RUNTIME(function_ptr != nullptr, "Failed to get function pointer");
-    // Clean up
-    nvrtcDestroyProgram(&prog);
-    delete[] ptx;
-    this->cached_fn = function_ptr;
-    this->_kername = ker_name;
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, 0);
-    // store launch params
-
-    this->threads_per_block = prop.maxThreadsPerBlock;
-    this->blocks_per_grid = (outputs[0].numel() + this->threads_per_block - 1) /
-                            this->threads_per_block;
-
+    auto threads_per_block = prop.maxThreadsPerBlock;
+    auto blocks_per_grid =
+        (outputs[0].numel() + threads_per_block - 1) / threads_per_block;
     // now do autotuning the threads per block
     double best_time = std::numeric_limits<double>::max();
     int best_threads_per_block = 0;
@@ -1238,28 +1150,17 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
         for (auto &arg : kernel_args) {
           kernel_args_ptrs.push_back(&arg);
         }
-
         // Launch the kernel
         // create stream to launch kernel
         // first check if function is valid
-        CUresult launch_result = cuLaunchKernel(
-            (CUfunction)this->cached_fn, blocks_per_grid.x, blocks_per_grid.y,
-            blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
-            threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
-
-        if (launch_result != CUDA_SUCCESS) {
-          const char *error_string;
-          cuGetErrorString(launch_result, &error_string);
-          PG_CHECK_RUNTIME(
-              false,
-              "Error launching kernel: " + std::string(error_string) +
-                  " "
-                  "for kernel " +
-                  std::to_string(outputs[0].id) +
-                  " with args: " + vec_to_string(kernel_args_ptrs) +
-                  "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
+        auto casted_to_cuda_kernel =
+            std::dynamic_pointer_cast<CudaKernel>(this->jit_kernel);
+        if (casted_to_cuda_kernel == nullptr) {
+          throw std::runtime_error("Kernel is not a CudaKernel");
         }
-
+        casted_to_cuda_kernel->set_blocks_per_grid(blocks_per_grid.x);
+        casted_to_cuda_kernel->set_threads_per_block(threads_per_block.x);
+        this->jit_kernel->launch(kernel_args_ptrs);
         // sync and end chrono
         cudaDeviceSynchronize();
         auto end = std::chrono::high_resolution_clock::now();
@@ -1274,15 +1175,11 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
       }
     }
 
-    this->threads_per_block = best_threads_per_block;
-    this->blocks_per_grid = (outputs[0].numel() + this->threads_per_block - 1) /
-                            this->threads_per_block;
+    auto casted = std::dynamic_pointer_cast<CudaKernel>(this->jit_kernel);
+    casted->set_blocks_per_grid(blocks_per_grid);
+    casted->set_threads_per_block(threads_per_block);
   }
 
-  // Prepare kernel arguments
-  // Prepare grid and block dimensions
-  dim3 threads_per_block(this->threads_per_block, 1, 1);
-  dim3 blocks_per_grid(this->blocks_per_grid, 1, 1);
   std::vector<void *> kernel_args;
   for (const auto &input : inputs) {
     void *in_data = input.get_base_ptr();
@@ -1301,31 +1198,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
   }
 
   // Launch the kernel
-  // create stream to launch kernel
-  // first check if function is valid
-  CUresult launch_result = cuLaunchKernel(
-      (CUfunction)this->cached_fn, blocks_per_grid.x, blocks_per_grid.y,
-      blocks_per_grid.z, threads_per_block.x, threads_per_block.y,
-      threads_per_block.z, 0, NULL, kernel_args_ptrs.data(), NULL);
-
-  if (launch_result != CUDA_SUCCESS) {
-    const char *error_string;
-    cuGetErrorString(launch_result, &error_string);
-    PG_CHECK_RUNTIME(
-        false, "Error launching kernel: " + std::string(error_string) +
-                   " "
-                   "for kernel " +
-                   std::to_string(outputs[0].id) +
-                   " with args: " + vec_to_string(kernel_args_ptrs) +
-                   "\n and fn_ptr: " + std::to_string((size_t)this->cached_fn));
-  }
-
-  // check error again
-  cudaError_t error = cudaGetLastError();
-  if (error != cudaSuccess) {
-    PG_CHECK_RUNTIME(false,
-                     "cuda error: " + std::string(cudaGetErrorString(error)));
-  }
+  this->jit_kernel->launch(kernel_args_ptrs);
 }
 
 } // namespace pg
