@@ -108,18 +108,6 @@ void schedule(
 
     recurse(out);
 
-    /*// check that every tensor in the linearized_subgraph has same shape
-    if (linearized_subgraph.size() > 0) {
-      shape_t shape = linearized_subgraph[0].shape();
-      for (Tensor &t : linearized_subgraph) {
-        PG_CHECK_RUNTIME(
-            t.shape() == shape,
-            "All tensors in the subgraph should have the same shape, got " +
-                t.str() + " with shape " + vec_to_string(t.shape()) +
-                " and expected " + vec_to_string(shape));
-      }
-    }*/
-
     // linearized_subgraph = SG
     // root... = GG
     // so, for each node in SG, check if its dependants are not in SG (if they
@@ -139,16 +127,6 @@ void schedule(
         }
       }
     }
-
-    /*// check that every node marked as out has the same shape
-    if (marked_as_out.size() > 0) {
-      shape_t shape = marked_as_out[0].shape();
-      for (Tensor &t : marked_as_out) {
-        PG_CHECK_RUNTIME(
-            t.shape() == shape,
-            "All tensors marked as out should have the same shape");
-      }
-    }*/
 
     // make them unique
     std::set<int> ids;

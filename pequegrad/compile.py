@@ -57,8 +57,7 @@ class jit:
 
             self.cache[inpshapes] = c
 
-            for out in outs:
-                compile(out)
+            compile(outs)
 
         # now clone c and feed data
 

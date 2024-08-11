@@ -615,35 +615,20 @@ void hoist_broadcasts(Tensor &out) {
     hoist_broadcasts(node);
   }
 }
-static void compile(Tensor &out) {
-  // First pass -> remove unnecesary broadcast
-  std::set<int> visited;
-  remove_useless_broadcast(out, visited);
-  // Second pass -> conv2d pattern matching
-  recursive_conv2d(out);
-  // Third pass -> pooling2d pattern matching
-  recursive_pooling2d(out);
-  // Fourth pass -> conv2d vjp weight pattern matching
-  recursive_conv2d_vjp_weight(out);
-
-  // Fifth pass -> conv2d vjp input pattern matching
-  recursive_conv2d_vjp_input(out);
-
-  // TODO -- these are buggy
-  // Sixth pass -> local response normalization
-  recursive_local_response_normalization(out);
-
-  // Seventh pass -> lrn vjp input
-  recursive_lrn_vjp_input(out);
-
-  // Eighth pass -> max pooling 2d backward
-  recursive_max_pooling2d_backward(out);
-
-  // Before scheduling, hoist broadcasts. Maybe buggy
-  hoist_broadcasts(out);
-
-  // Last pass -> schedule and fuse
-  std::set<int> visited2;
-  rec_schedule(out, out, visited2);
+static void compile(std::vector<Tensor> &outs) {
+  for (Tensor &out : outs) {
+    std::set<int> visited;
+    remove_useless_broadcast(out, visited);
+    recursive_conv2d(out);
+    recursive_pooling2d(out);
+    recursive_conv2d_vjp_weight(out);
+    recursive_conv2d_vjp_input(out);
+    recursive_local_response_normalization(out);
+    recursive_lrn_vjp_input(out);
+    recursive_max_pooling2d_backward(out);
+    hoist_broadcasts(out);
+    std::set<int> visited2;
+    rec_schedule(out, out, visited2);
+  }
 }
 } // namespace pg
