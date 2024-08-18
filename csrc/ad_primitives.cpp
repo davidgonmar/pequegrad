@@ -40,7 +40,8 @@ std::vector<View> FromNumpy::precompute(const std::vector<Tensor> &inputs) {
 
 void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs,
                                   device::DeviceKind device) {
-  auto _ptr = device::allocate(_buffer_size * dtype_to_size(_dtype), device);
+  auto _ptr = device::allocate(_buffer_size * dtype_to_size(_dtype), device,
+                               /*pinned=*/true);
   if (device == device::DeviceKind::CUDA) {
     copy_from_cpu_to_cuda(_data_ptr, _ptr,
                           _buffer_size * dtype_to_size(_dtype));

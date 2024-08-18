@@ -36,7 +36,8 @@ inline std::ostream &operator<<(std::ostream &os, const DeviceKind &device) {
 
 const DeviceKind &default_device();
 
-std::shared_ptr<void> allocate(const size_t nbytes, const DeviceKind device);
+std::shared_ptr<void> allocate(const size_t nbytes, const DeviceKind device,
+                               bool pinned = false);
 
 } // namespace device
 

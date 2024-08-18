@@ -10,9 +10,10 @@ static DeviceKind _default_device = DeviceKind::CPU;
 
 const DeviceKind &default_device() { return _default_device; }
 
-std::shared_ptr<void> allocate(const size_t nbytes, const DeviceKind device) {
+std::shared_ptr<void> allocate(const size_t nbytes, const DeviceKind device,
+                               bool pinned) {
   if (device == DeviceKind::CPU) {
-    return allocate_cpu(nbytes);
+    return allocate_cpu(nbytes, pinned);
   } else if (device == DeviceKind::CUDA) {
     return allocate_cuda(nbytes);
   } else {

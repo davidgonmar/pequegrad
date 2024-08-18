@@ -26,7 +26,7 @@ void _slice_and_assign_with_array_kernel(
   int src_shape_len = src_shape.size();
   int max_idx_src = get_max_idx(src_shape, src_shape_len);
   int max_idx_out = get_max_idx(out_shape, slices_size);
-
+#pragma omp parallel for
   for (int out_idx = 0; out_idx < max_idx_out; out_idx++) {
     int visited_tensors = 0;
     int leftover = out_idx;
@@ -67,8 +67,6 @@ void _slice_and_assign_with_array_kernel(
         src_idx += src_strides[i] / sizeof(T) * curr_out_dim;
       }
     }
-    int max_idx_src = get_max_idx(src_shape, src_shape_len);
-    int max_idx_out = get_max_idx(out_shape, slices_size);
     if (out_idx >= max_idx_out || src_idx >= max_idx_src) {
       continue;
     }
