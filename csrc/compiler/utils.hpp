@@ -1,7 +1,7 @@
 #include "tensor.hpp"
 
 namespace pg {
-using consumers_map_t = std::unordered_map<Tensor, std::vector<Tensor>>;
+/*using consumers_map_t = std::unordered_map<Tensor, std::vector<Tensor>>;
 
 void get_consumers_recursive(Tensor &out, consumers_map_t &consumers) {
   for (Tensor &node : out.ad_node()->children()) {
@@ -16,5 +16,5 @@ consumers_map_t get_consumers(std::vector<Tensor> &outs) {
     get_consumers_recursive(out, consumers);
   }
   return consumers;
-}
+}*/
 } // namespace pg

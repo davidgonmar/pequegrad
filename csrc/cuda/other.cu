@@ -73,7 +73,9 @@ void FusedLinearBiasReLU::dispatch_cuda(const std::vector<Tensor> &inputs,
 
   if (input.shape()[1] != weight.shape()[0]) {
     throw std::runtime_error("Input and weight dimensions are incompatible for "
-                             "matrix multiplication.");
+                             "matrix multiplication: " +
+                             vec_to_string(input.shape()) + " and " +
+                             vec_to_string(weight.shape()));
   }
 
   cutlass::gemm::GemmCoord problem_size(m, n, k);

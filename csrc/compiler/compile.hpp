@@ -1,7 +1,9 @@
 #pragma once
+#include "pattern_matcher.hpp"
 #include "scheduler.hpp"
 
 namespace pg {
+namespace pm = pattern_matcher;
 static bool is_broadcast(ADPrimitive &primitive) {
   return dynamic_cast<BroadcastTo *>(&primitive) != nullptr;
 }
@@ -173,7 +175,25 @@ public:
 
 Maybe<Conv2dVjpWeightMatcherResult>
 conv2d_vjp_weight_pattern_matcher(Tensor &out) {
-  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Reshape");
+  // use pattern matcher
+  std::shared_ptr<Tensor> input_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> out_grad_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> im2col_ptr = std::make_shared<Tensor>();
+  auto p = pm::Reshape(pm::Permute(pm::Permute(pm::Sum(pm::MatMul(
+      pm::Im2Col(pm::Input(out_grad_ptr)),
+      pm::Permute(pm::Im2Col(pm::Input(input_ptr)) << im2col_ptr))))));
+  if (!p->match(out)) {
+    return std::nullopt;
+  }
+  auto *im2col =
+      dynamic_cast<Im2Col *>(im2col_ptr->ad_node()->primitive().get());
+  PG_CHECK_RUNTIME(im2col != nullptr,
+                   "Im2Col not found, str is " +
+                       im2col_ptr->ad_node()->primitive()->str());
+  return Conv2dVjpWeightMatcherResult{
+      *out_grad_ptr, *input_ptr, im2col->strides(), im2col->dilation(), {0, 0}};
+
+  /*RETURN_FALSE_IF_PRIM_IS_NOT(out, "Reshape");
   auto &out1 = out.ad_node()->children()[0];
   RETURN_FALSE_IF_PRIM_IS_NOT(out1, "Permute");
   auto &out2 = out1.ad_node()->children()[0];
@@ -194,8 +214,10 @@ conv2d_vjp_weight_pattern_matcher(Tensor &out) {
   RETURN_FALSE_IF_PRIM_IS_NOT(input0, "Im2Col");
   auto &input1 = input0.ad_node()->children()[0];
   auto &im2col = dynamic_cast<Im2Col &>(*input0.ad_node()->primitive().get());
+
   return Conv2dVjpWeightMatcherResult{
       out_grad, input1, im2col.strides(), im2col.dilation(), {0, 0}};
+      */
 }
 
 class Conv2dVjpInputMatcherResult {
@@ -572,38 +594,28 @@ public:
 
 Maybe<FusedLinearBiasReLUPatternMatcherResult>
 fused_linear_pattern_matcher(Tensor &out) {
-  /*RETURN_FALSE_IF_PRIM_IS_NOT(out, "Max");
-  auto &maxrightside = out.ad_node()->children()[1];
-  RETURN_FALSE_IF_PRIM_IS_NOT(maxrightside, "Broadcast");
-  // make sure the child of broadcast is fill with 0
-  auto &fill = maxrightside.ad_node()->children()[0];
-  auto fillprim_ptr = dynamic_cast<Fill *>(fill.ad_node()->primitive().get());
-  if (!fillprim_ptr) {
-    return std::nullopt;
-  }
-  if (fillprim_ptr->value() != 0) {
+
+  std::shared_ptr<Tensor> input_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> weight_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> bias_ptr = std::make_shared<Tensor>();
+
+  pm::Pattern p =
+      pm::Add(pm::MatMul(pm::Input(input_ptr), pm::Input(weight_ptr)),
+              pm::Broadcast(pm::Input(bias_ptr)));
+
+  if (!p->match(out)) {
     return std::nullopt;
   }
 
-  auto &maxleftside = out.ad_node()->children()[0];
-  */
-  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Add");
-  auto &broadcasted_bias = out.ad_node()->children()[1];
-  RETURN_FALSE_IF_PRIM_IS_NOT(broadcasted_bias, "Broadcast");
-  auto &bias = broadcasted_bias.ad_node()->children()[0];
-
-  auto &linearout = out.ad_node()->children()[0];
-  RETURN_FALSE_IF_PRIM_IS_NOT(linearout, "MatMul");
-  auto &weight = linearout.ad_node()->children()[1];
-  auto &input = linearout.ad_node()->children()[0];
-  int m = weight.shape()[0];
-  int n = weight.shape()[1];
-  int k = input.shape()[1];
   // m must be multiple of 16, n and k of 8
+  auto m = weight_ptr->shape()[0];
+  auto n = weight_ptr->shape()[1];
+  auto k = input_ptr->shape()[1];
   if (m % 16 != 0 || n % 8 != 0 || k % 8 != 0) {
     return std::nullopt;
   }
-  return FusedLinearBiasReLUPatternMatcherResult{input, weight, bias};
+  return FusedLinearBiasReLUPatternMatcherResult{*input_ptr, *weight_ptr,
+                                                 *bias_ptr};
 }
 
 bool try_convert_fused_linear(Tensor &out) {
