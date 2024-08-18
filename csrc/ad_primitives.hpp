@@ -688,6 +688,13 @@ public:
   DEFINE_PRECOMPUTE
 };
 
+class FusedLinearBiasReLU : public ADPrimitive {
+public:
+  bool is_relu;
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(FusedLinearBiasReLU)
+};
+
 // SLICING
 
 // Of the form [start:stop:step]

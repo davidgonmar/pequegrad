@@ -1,4 +1,4 @@
-from pequegrad import Tensor, device, dt
+from pequegrad import Tensor, device, dt, sync_cuda_device
 from pequegrad.compile import jit
 import numpy as np
 import time
@@ -21,10 +21,12 @@ def test_some_fn():
 
         start = time.time()
         j = some_function(x, y, z).eval()
+        sync_cuda_device()
         jittedtime = time.time() - start
 
         start = time.time()
         nj = non_jitted(x, y, z).eval()
+        sync_cuda_device()
         nonjittedtime = time.time() - start
 
         print(f"Jitted time: {jittedtime}, Non-jitted time: {nonjittedtime}")
@@ -43,10 +45,12 @@ def test_relu():
         x = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32)
         start = time.time()
         nj = non_jitted(x).eval()
+        sync_cuda_device()
         nonjittedtime = time.time() - start
 
         start = time.time()
         j = some_function(x).eval()
+        sync_cuda_device()
         jittedtime = time.time() - start
 
         print(f"Jitted time: {jittedtime}, Non-jitted time: {nonjittedtime}")

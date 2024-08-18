@@ -67,7 +67,7 @@ private:
 
   void launch(std::vector<void *> &args) {
     if (_func == nullptr) {
-      compile();
+      throw std::runtime_error("Kernel not compiled");
     }
     CUresult R = cuLaunchKernel(_func, _blocks_per_grid.x, _blocks_per_grid.y,
                                 _blocks_per_grid.z, _threads_per_block.x,

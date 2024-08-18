@@ -1176,8 +1176,10 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     }
 
     auto casted = std::dynamic_pointer_cast<CudaKernel>(this->jit_kernel);
-    casted->set_blocks_per_grid(blocks_per_grid);
-    casted->set_threads_per_block(threads_per_block);
+    casted->set_threads_per_block(best_threads_per_block);
+    auto bpg = (outputs[0].numel() + best_threads_per_block - 1) /
+               best_threads_per_block;
+    casted->set_blocks_per_grid(bpg);
   }
 
   std::vector<void *> kernel_args;

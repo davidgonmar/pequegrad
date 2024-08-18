@@ -12,7 +12,95 @@
 #include <memory>
 #include <vector>
 
+// cutlass for fused linear bias relu
+#include <cutlass/epilogue/thread/linear_combination_relu.h>
+#include <cutlass/gemm/device/gemm.h>
 namespace pg {
+void FusedLinearBiasReLU::dispatch_cuda(const std::vector<Tensor> &inputs,
+                                        std::vector<Tensor> &outputs) {
+  using ElementAccumulator = float;
+  using ElementComputeEpilogue = ElementAccumulator;
+  using ElementInputA = float;
+  using ElementInputB = float;
+  using ElementOutput = float;
+
+  using LayoutInputA = cutlass::layout::RowMajor;
+  using LayoutInputB = cutlass::layout::RowMajor;
+  using LayoutOutput = cutlass::layout::RowMajor;
+
+  using MMAOp = cutlass::arch::OpClassTensorOp;
+  using SmArch = cutlass::arch::Sm75;
+
+  using ShapeMMAThreadBlock = cutlass::gemm::GemmShape<128, 128, 32>;
+  using ShapeMMAWarp = cutlass::gemm::GemmShape<64, 64, 32>;
+  using ShapeMMAOp = cutlass::gemm::GemmShape<16, 8, 8>;
+
+  using SwizzleThreadBlock =
+      cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>;
+
+  using EpilogueOp = cutlass::epilogue::thread::LinearCombination<
+      ElementOutput, 128 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator, ElementComputeEpilogue,
+      cutlass::epilogue::thread::ScaleType::NoBetaScaling>;
+
+  constexpr int NumStages = 2;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+      ElementInputA, LayoutInputA, ElementInputB, LayoutInputB, ElementOutput,
+      LayoutOutput, ElementAccumulator, MMAOp, SmArch, ShapeMMAThreadBlock,
+      ShapeMMAWarp, ShapeMMAOp, EpilogueOp, SwizzleThreadBlock, NumStages>;
+
+  auto &input = cuda::view::as_contiguous(inputs[0].view());
+  auto &weight = cuda::view::as_contiguous(inputs[1].view());
+  auto &bias = cuda::view::as_contiguous(inputs[2].view());
+  Tensor &output = outputs[0];
+
+  output.view_ptr()->allocate();
+
+  int m = input.shape()[0];
+  int k = input.shape()[1];
+  int n = weight.shape()[1];
+
+  PG_CHECK_RUNTIME(input.shape().size() == 2);
+  PG_CHECK_RUNTIME(weight.shape().size() == 2);
+  PG_CHECK_RUNTIME(bias.shape().size() == 1);
+  PG_CHECK_RUNTIME(output.shape().size() == 2);
+
+  ElementInputA *d_input = input.get_casted_base_ptr<ElementInputA>();
+  ElementInputB *d_weight = weight.get_casted_base_ptr<ElementInputB>();
+  ElementOutput *d_output = output.get_casted_base_ptr<ElementOutput>();
+  ElementOutput *d_bias = bias.get_casted_base_ptr<ElementOutput>();
+
+  if (input.shape()[1] != weight.shape()[0]) {
+    throw std::runtime_error("Input and weight dimensions are incompatible for "
+                             "matrix multiplication.");
+  }
+
+  cutlass::gemm::GemmCoord problem_size(m, n, k);
+
+  cudaMemsetAsync(d_output, 0, m * n * sizeof(ElementOutput));
+  ElementComputeEpilogue alpha = ElementComputeEpilogue(1);
+
+  int split_k_slices = 1;
+  typename Gemm::Arguments arguments{
+      problem_size,  {d_input, k}, {d_weight, n}, {d_bias, 0},
+      {d_output, n}, {alpha},      split_k_slices};
+
+  Gemm gemm_op;
+  cutlass::Status status = gemm_op.can_implement(arguments);
+  if (status != cutlass::Status::kSuccess) {
+    throw std::runtime_error(
+        "Operation cannot be implemented by CUTLASS. Reason: " +
+        std::string(cutlass::cutlassGetStatusString(status)));
+  }
+  status = gemm_op(arguments);
+
+  if (status != cutlass::Status::kSuccess) {
+    throw std::runtime_error("GEMM operation failed!");
+  }
+
+  PG_CUDA_KERNEL_END;
+}
 
 void Reshape::dispatch_cuda(const std::vector<Tensor> &inputs,
                             std::vector<Tensor> &outputs) {

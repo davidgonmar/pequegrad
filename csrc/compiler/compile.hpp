@@ -563,6 +563,70 @@ void recursive_pooling2d(Tensor &out) {
   }
 }
 
+class FusedLinearBiasReLUPatternMatcherResult {
+public:
+  Tensor input;
+  Tensor weight;
+  Tensor bias;
+};
+
+Maybe<FusedLinearBiasReLUPatternMatcherResult>
+fused_linear_pattern_matcher(Tensor &out) {
+  /*RETURN_FALSE_IF_PRIM_IS_NOT(out, "Max");
+  auto &maxrightside = out.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(maxrightside, "Broadcast");
+  // make sure the child of broadcast is fill with 0
+  auto &fill = maxrightside.ad_node()->children()[0];
+  auto fillprim_ptr = dynamic_cast<Fill *>(fill.ad_node()->primitive().get());
+  if (!fillprim_ptr) {
+    return std::nullopt;
+  }
+  if (fillprim_ptr->value() != 0) {
+    return std::nullopt;
+  }
+
+  auto &maxleftside = out.ad_node()->children()[0];
+  */
+  RETURN_FALSE_IF_PRIM_IS_NOT(out, "Add");
+  auto &broadcasted_bias = out.ad_node()->children()[1];
+  RETURN_FALSE_IF_PRIM_IS_NOT(broadcasted_bias, "Broadcast");
+  auto &bias = broadcasted_bias.ad_node()->children()[0];
+
+  auto &linearout = out.ad_node()->children()[0];
+  RETURN_FALSE_IF_PRIM_IS_NOT(linearout, "MatMul");
+  auto &weight = linearout.ad_node()->children()[1];
+  auto &input = linearout.ad_node()->children()[0];
+  int m = weight.shape()[0];
+  int n = weight.shape()[1];
+  int k = input.shape()[1];
+  // m must be multiple of 16, n and k of 8
+  if (m % 16 != 0 || n % 8 != 0 || k % 8 != 0) {
+    return std::nullopt;
+  }
+  return FusedLinearBiasReLUPatternMatcherResult{input, weight, bias};
+}
+
+bool try_convert_fused_linear(Tensor &out) {
+  auto maybe_result = fused_linear_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  out.ad_node()->set_primitive(std::make_shared<FusedLinearBiasReLU>());
+  out.ad_node()->set_children({result.input, result.weight, result.bias});
+  return true;
+}
+
+void recursive_fused_linear(Tensor &out) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  try_convert_fused_linear(out);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_fused_linear(node);
+  }
+}
+
 bool is_elwise(Tensor &out) {
   std::string str = out.ad_node()->primitive()->str();
   std::vector<std::string> supported = {"Exp", "Log", "Add", "Sub", "Mul"};
@@ -619,6 +683,7 @@ static void compile(std::vector<Tensor> &outs) {
   for (Tensor &out : outs) {
     std::set<int> visited;
     remove_useless_broadcast(out, visited);
+    recursive_fused_linear(out);
     recursive_conv2d(out);
     recursive_pooling2d(out);
     recursive_conv2d_vjp_weight(out);

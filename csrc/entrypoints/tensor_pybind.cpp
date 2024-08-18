@@ -141,7 +141,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   m.def("permute", &permute);
   m.def("compile", &compile);
-
+  m.def("sync_cuda_device", []() { cudaDeviceSynchronize(); });
   m.def(
       "grads",
       [](std::vector<Tensor> required_tensors, const Tensor &output,

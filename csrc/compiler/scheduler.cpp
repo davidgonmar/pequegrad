@@ -72,8 +72,7 @@ void schedule(
       is<MaxReduce>(out.ad_node()->primitive()) ||
       is<Mean>(out.ad_node()->primitive())) {
     marked_as_out = {out};
-    if (leafs.size() == 1 && leafs[0].id == out.id) {
-      return;
+    if (leafs.size() == 1 && leafs[0].id == out.children()[0].id) {
     }
   } else {
     // if out is not in marked_as_out, add it

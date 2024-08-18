@@ -47,6 +47,8 @@ find_package(CUDA REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
+# cutlass
+include_directories(external/cutlass/include)
 file(GLOB PG_SOURCES
         csrc/dtype.cpp
         csrc/shape.cpp
