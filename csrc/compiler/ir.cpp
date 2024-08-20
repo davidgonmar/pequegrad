@@ -1,4 +1,5 @@
 #include "ir.hpp"
+#include "new_ir.hpp"
 #include <chrono>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -13,6 +14,16 @@
 
 namespace pg {
 namespace ir {
+std::string get_dtype_cpp_str(DType dtype) {
+  switch (dtype) {
+  case DType::Float32:
+    return "float";
+  case DType::Int32:
+    return "int";
+  default:
+    throw std::runtime_error("Unsupported dtype");
+  }
+}
 
 // Function that takes a lambda comparing, and returns true if a backward graph
 // visit makes it true
@@ -100,6 +111,30 @@ static BinaryOpKind op_to_binop_kind(std::shared_ptr<ADPrimitive> prim) {
   }
 }
 
+static newir::BinaryOpKind op_to_binop_kind_new(ADPrimitive &prim) {
+  if (is<Add>(prim)) {
+    return newir::BinaryOpKind::Add;
+  } else if (is<Sub>(prim)) {
+    return newir::BinaryOpKind::Sub;
+  } else if (is<Mul>(prim)) {
+    return newir::BinaryOpKind::Mul;
+  } else if (is<Div>(prim)) {
+    return newir::BinaryOpKind::Div;
+  } else if (is<Gt>(prim)) {
+    return newir::BinaryOpKind::Gt;
+  } else if (is<Lt>(prim)) {
+    return newir::BinaryOpKind::Lt;
+  } else if (is<Max>(prim)) {
+    return newir::BinaryOpKind::Max;
+  } else if (is<Eq>(prim)) {
+    return newir::BinaryOpKind::Eq;
+  } else if (is<Pow>(prim)) {
+    return newir::BinaryOpKind::Pow;
+  } else {
+    throw std::runtime_error("Unsupported binary operation");
+  }
+}
+
 static UnaryOpKind op_to_unaryop_kind(ADPrimitive &prim) {
   if (is<Log>(prim)) {
     return UnaryOpKind::Log;
@@ -109,10 +144,26 @@ static UnaryOpKind op_to_unaryop_kind(ADPrimitive &prim) {
     throw std::runtime_error("Unsupported unary operation");
   }
 }
+static newir::UnaryOpKind op_to_unaryop_kind_new(ADPrimitive &prim) {
+  if (is<Log>(prim)) {
+    return newir::UnaryOpKind::Log;
+  } else if (is<Exp>(prim)) {
+    return newir::UnaryOpKind::Exp;
+  } else {
+    throw std::runtime_error("Unsupported unary operation");
+  }
+}
 
 static TernaryOpKind op_to_ternaryop_kind(ADPrimitive &prim) {
   if (is<Where>(prim)) {
     return TernaryOpKind::Where;
+  } else {
+    throw std::runtime_error("Unsupported ternary operation");
+  }
+}
+static newir::TernaryOpKind op_to_ternaryop_kind_new(ADPrimitive &prim) {
+  if (is<Where>(prim)) {
+    return newir::TernaryOpKind::Where;
   } else {
     throw std::runtime_error("Unsupported ternary operation");
   }
@@ -146,6 +197,34 @@ static bool is_reduce_op(std::shared_ptr<ADPrimitive> prim) {
   return is<Sum>(prim) || is<Mean>(prim) || is<MaxReduce>(prim);
 }
 
+namespace n = newir;
+class PrinterContext {
+public:
+  int indent = 0;
+  std::string str = "";
+  void add_indent() { indent++; }
+  void remove_indent() { indent--; }
+  void operator<<(std::string s) {
+    if (str.size() > 0 && str.back() == '\n') {
+      for (int i = 0; i < indent; i++) {
+        str += " ";
+      }
+    }
+    str += s;
+  }
+  std::map<std::shared_ptr<n::BaseExpr>, std::string> expr_to_str;
+  int varidx = 0;
+  void savevar(std::shared_ptr<n::BaseExpr> expr) {
+    expr_to_str[expr] = "t" + std::to_string(varidx++);
+  }
+  void savevarexpr(std::shared_ptr<n::BaseExpr> expr, std::string s) {
+    expr_to_str[expr] = s;
+  }
+  std::map<std::shared_ptr<n::LoopExpr>, int> loop_depth;
+};
+
+void print_new_ir(std::shared_ptr<n::BaseExpr> expr, PrinterContext &ctx);
+
 // we can treat f(Fill(value)) as a constant as long as f is a reshape,
 // transpose or other movement op this function gets a tensor and return null if
 // it cannot reach a Fill node, or the value of the Fill node if it can
@@ -169,6 +248,347 @@ static std::shared_ptr<ImmExpr> get_fill_value(const Tensor &t) {
     }
   }
   return nullptr;
+}
+
+void print_function(std::shared_ptr<n::FunctionExpr> func) {
+  PrinterContext ctx;
+  // fill context with loop depths
+  std::shared_ptr<n::BaseExpr> block = func;
+  while (block != nullptr) {
+    // if it is not a func or a loop, break
+    if (block->expr_str() != "FunctionExpr" &&
+        block->expr_str() != "LoopExpr") {
+      break;
+    }
+    // else, get its body
+    std::vector<std::shared_ptr<n::BaseExpr>> body;
+    if (block->expr_str() == "FunctionExpr") {
+      body = std::static_pointer_cast<n::FunctionExpr>(block)->body;
+    } else {
+      body = std::static_pointer_cast<n::LoopExpr>(block)->body;
+    }
+    // for each expr in the body, if it is a loop, add it to the loop_depth
+    bool found = false;
+    for (auto &expr : body) {
+      if (expr->expr_str() == "LoopExpr") {
+        ctx.loop_depth[std::static_pointer_cast<n::LoopExpr>(expr)] =
+            ctx.loop_depth.size();
+        // ASSUME only one loop per block
+        block = expr;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      break;
+    }
+  }
+
+  // preamble with args
+  ctx << "func " + func->name + "(";
+  int argidx = 0;
+  for (auto &arg : func->args) {
+    ctx << "arg" + std::to_string(argidx) + "<" +
+               get_dtype_cpp_str(arg->dtype) + ">";
+    if (argidx != func->args.size() - 1) {
+      ctx << ", ";
+    }
+    argidx++;
+  }
+  ctx << ") {\n";
+  ctx.add_indent();
+  // body
+  for (auto &expr : func->body) {
+    print_new_ir(expr, ctx);
+  }
+  ctx.remove_indent();
+  ctx << "}\n";
+  std::cout << ctx.str;
+}
+
+class IrNewBuilderContext {
+public:
+  std::map<int, std::shared_ptr<n::ArgExpr>> tid_to_arg;
+  std::map<int, std::shared_ptr<n::BaseExpr>> dim_to_idx;
+  std::map<int, std::shared_ptr<n::LoopExpr>> dim_to_loop;
+  std::map<std::shared_ptr<n::ArgExpr>, std::vector<int>> arg_to_strides;
+};
+
+std::shared_ptr<n::BaseExpr> inner(Tensor &curr,
+                                   const std::vector<Tensor> &inputs,
+                                   IrNewBuilderContext ctx) {
+  // if it is in inputs, return a load bound to all the idx of all the loops
+  bool is_input =
+      std::find_if(inputs.begin(), inputs.end(), [&curr](const Tensor &t) {
+        return t.id == curr.id;
+      }) != inputs.end();
+
+  if (is_input) {
+    auto arg = ctx.tid_to_arg.at(curr.id);
+    // at the moment, just sum all the loops
+    std::shared_ptr<n::BaseExpr> sum =
+        ctx.dim_to_idx.at(0) * n::immint(ctx.arg_to_strides.at(arg)[0]);
+    for (int i = 1; i < curr.ndim(); i++) {
+      auto idx = ctx.dim_to_idx.at(i);
+      sum = sum + (idx * n::immint(ctx.arg_to_strides.at(arg)[i]));
+    }
+    auto load = std::make_shared<n::LoadExpr>(arg, sum);
+    ctx.dim_to_loop.at(curr.ndim() - 1)->body.push_back(load);
+    return load;
+  }
+  // if binary ops, recurse on the children
+  auto prim = curr.ad_node()->primitive();
+  if (is_binary_op(prim)) {
+    auto binop = std::make_shared<n::BinaryExpr>();
+    binop->op = op_to_binop_kind_new(*prim);
+    binop->lhs = inner(curr.ad_node()->children()[0], inputs, ctx);
+    binop->rhs = inner(curr.ad_node()->children()[1], inputs, ctx);
+    ctx.dim_to_loop.at(curr.ndim() - 1)->body.push_back(binop);
+    return binop;
+  }
+  if (is_unary_op(prim)) {
+    auto unop = std::make_shared<n::UnaryExpr>();
+    unop->op = op_to_unaryop_kind_new(*prim);
+    unop->src = inner(curr.ad_node()->children()[0], inputs, ctx);
+    ctx.dim_to_loop.at(curr.ndim() - 1)->body.push_back(unop);
+    return unop;
+  }
+  if (is_ternary_op(prim)) {
+    auto ternop = std::make_shared<n::TernaryExpr>();
+    ternop->op = op_to_ternaryop_kind_new(*prim);
+    ternop->first = inner(curr.ad_node()->children()[0], inputs, ctx);
+    ternop->second = inner(curr.ad_node()->children()[1], inputs, ctx);
+    ternop->third = inner(curr.ad_node()->children()[2], inputs, ctx);
+    ctx.dim_to_loop.at(curr.ndim() - 1)->body.push_back(ternop);
+    return ternop;
+  }
+  throw std::runtime_error("Unsupported op");
+}
+void graph_to_ir_new(Tensor &out, std::vector<Tensor> marked_as_out,
+                     const std::vector<Tensor> &inputs) {
+  namespace n = newir;
+  // the result will be a linear IR
+  std::vector<std::shared_ptr<n::BaseExpr>> ir;
+  IrNewBuilderContext ctx;
+
+  std::vector<std::shared_ptr<n::ArgExpr>> args;
+  int i = 0;
+  for (auto &input : inputs) {
+    args.push_back(std::make_shared<n::ArgExpr>(input.dtype(), i++));
+    ctx.tid_to_arg[input.id] = args.back();
+    auto str = input.strides();
+    auto strcopy = std::vector<int>(str.begin(), str.end());
+    for (int i = 0; i < strcopy.size(); i++) {
+      strcopy[i] = strcopy[i] / dtype_to_size(input.dtype());
+    }
+    ctx.arg_to_strides[args.back()] = strcopy;
+  }
+  std::shared_ptr<n::FunctionExpr> func =
+      std::make_shared<n::FunctionExpr>("kernel", args);
+  // for each element of the shape, create a parallel for loop
+  std::map<int, std::shared_ptr<n::LoopExpr>> dim_to_loop;
+  for (int i = 0; i < out.ndim(); i++) {
+    auto start = std::make_shared<n::ImmExpr>(DType::Int32, 0);
+    auto end = std::make_shared<n::ImmExpr>(DType::Int32, out.shape()[i]);
+    auto step = std::make_shared<n::ImmExpr>(DType::Int32, 1);
+    auto loop = std::make_shared<n::LoopExpr>(n::LoopOpKind::Parallel, start,
+                                              end, step);
+    auto bidx = std::make_shared<n::BoundIdxExpr>(loop);
+    dim_to_loop[i] = loop;
+    // if it is the first loop, add it to the function body
+    if (i == 0) {
+      func->body.push_back(loop);
+    }
+    // else, add it to the body of the previous loop
+    else {
+      dim_to_loop[i - 1]->body.push_back(loop);
+    }
+    ctx.dim_to_idx[i] = bidx;
+    ctx.dim_to_loop[i] = loop;
+  }
+  // add to output
+  ctx.tid_to_arg[out.id] = std::make_shared<n::ArgExpr>(out.dtype(), i);
+  auto item = inner(out, inputs, ctx);
+
+  // add store to the output, in the last loop
+  // render the store as a sum of all the idxs
+  auto sum = ctx.dim_to_idx.at(0);
+  for (int i = 1; i < out.ndim(); i++) {
+    auto binop = std::make_shared<n::BinaryExpr>();
+    binop->op = n::BinaryOpKind::Add;
+    binop->lhs = sum;
+    binop->rhs = ctx.dim_to_idx.at(i);
+    sum = binop;
+  }
+  auto store =
+      std::make_shared<n::StoreExpr>(ctx.tid_to_arg.at(out.id), sum, item);
+  dim_to_loop[out.ndim() - 1]->body.push_back(store);
+  // print the function
+  print_function(func);
+}
+
+std::string operator<<(std::string &s, const char *c) {
+  s += c;
+  return s;
+}
+namespace n = newir;
+
+void print_loop(std::shared_ptr<n::LoopExpr> loop, PrinterContext &ctx);
+void print_load(std::shared_ptr<n::LoadExpr> load, PrinterContext &ctx);
+void print_new_ir(std::shared_ptr<n::BaseExpr> expr, PrinterContext &ctx) {
+  if (ctx.expr_to_str.find(expr) != ctx.expr_to_str.end()) {
+    // ctx << ctx.expr_to_str.at(expr);
+    return;
+  }
+  std::stringstream ss;
+  std::string exprstr = expr->expr_str();
+  if (exprstr == "LoopExpr") {
+    print_loop(std::static_pointer_cast<n::LoopExpr>(expr), ctx);
+    return;
+  } else if (exprstr == "ImmExpr") {
+    auto ex = std::static_pointer_cast<n::ImmExpr>(expr);
+    double val = ex->value;
+    if (ex->dtype == DType::Float32) {
+      ss << std::to_string((float)val);
+    } else if (ex->dtype == DType::Int32) {
+      ss << std::to_string((int)val);
+    } else {
+      throw std::runtime_error("Unsupported dtype");
+    }
+    ctx.savevarexpr(expr, ss.str());
+    return;
+  } else if (exprstr == "LoadExpr") {
+    auto load = std::static_pointer_cast<n::LoadExpr>(expr);
+    ss << "load(";
+    // print_new_ir(load->src, ctx);
+    PG_CHECK_RUNTIME(load->src->expr_str() == "ArgExpr",
+                     "load src is not an arg");
+    ss << "arg" + std::to_string(
+                      std::static_pointer_cast<n::ArgExpr>(load->src)->idx);
+    ss << ", ";
+    print_new_ir(load->idx, ctx);
+    ss << ctx.expr_to_str.at(load->idx);
+    ss << ")";
+  } else if (exprstr == "BoundIdxExpr") {
+    ss << "idx"
+       << std::to_string(ctx.loop_depth.at(
+              std::static_pointer_cast<n::BoundIdxExpr>(expr)->loop));
+    ctx.savevarexpr(expr, ss.str());
+    return;
+  } else if (exprstr == "ReturnExpr") {
+    ss << "return ";
+    print_new_ir(std::static_pointer_cast<n::ReturnExpr>(expr)->value, ctx);
+    ss << "\n";
+  } else if (exprstr == "FunctionExpr") {
+    print_function(std::static_pointer_cast<n::FunctionExpr>(expr));
+  } else if (exprstr.find("BinaryExpr") == 0) {
+    auto binop = std::static_pointer_cast<n::BinaryExpr>(expr);
+    ss << "(";
+    print_new_ir(binop->lhs, ctx);
+    ss << ctx.expr_to_str.at(binop->lhs);
+    ss << " ";
+    switch (binop->op) {
+    case n::BinaryOpKind::Add:
+      ss << "+";
+      break;
+    case n::BinaryOpKind::Sub:
+      ss << "-";
+      break;
+    case n::BinaryOpKind::Mul:
+      ss << "*";
+      break;
+    case n::BinaryOpKind::Div:
+      ss << "/";
+      break;
+    case n::BinaryOpKind::Gt:
+      ss << ">";
+      break;
+    case n::BinaryOpKind::Lt:
+      ss << "<";
+      break;
+    case n::BinaryOpKind::Max:
+      ss << "max";
+      break;
+    case n::BinaryOpKind::Eq:
+      ss << "==";
+      break;
+    case n::BinaryOpKind::Pow:
+      ss << "pow";
+      break;
+    default:
+      throw std::runtime_error("Unsupported binary op");
+    }
+    ss << " ";
+    print_new_ir(binop->rhs, ctx);
+    ss << ctx.expr_to_str.at(binop->rhs);
+    ss << ")";
+  } else if (exprstr == "UnaryExpr") {
+    auto unop = std::static_pointer_cast<n::UnaryExpr>(expr);
+    switch (unop->op) {
+    case n::UnaryOpKind::Log:
+      ss << "log(";
+      break;
+    case n::UnaryOpKind::Exp:
+      ss << "exp(";
+      break;
+    default:
+      throw std::runtime_error("Unsupported unary op");
+    }
+    print_new_ir(unop->src, ctx);
+    ss << ")";
+  } else if (exprstr == "TernaryExpr") {
+    auto ternop = std::static_pointer_cast<n::TernaryExpr>(expr);
+    ss << "where(";
+    print_new_ir(ternop->first, ctx);
+    ss << ", ";
+    print_new_ir(ternop->second, ctx);
+    ss << ", ";
+    print_new_ir(ternop->third, ctx);
+    ss << ")";
+  } else if (exprstr == "StoreExpr") {
+    auto store = std::static_pointer_cast<n::StoreExpr>(expr);
+    ss << "store(";
+    print_new_ir(store->dst, ctx);
+    ss << ctx.expr_to_str.at(store->dst);
+    ss << ", ";
+    print_new_ir(store->idx, ctx);
+    ss << ctx.expr_to_str.at(store->idx);
+    ss << ", ";
+    print_new_ir(store->src, ctx);
+    ss << ctx.expr_to_str.at(store->src);
+    ss << ")";
+    ctx << ss.str();
+    return;
+  } else if (exprstr == "ArgExpr") {
+    ss << "arg" +
+              std::to_string(std::static_pointer_cast<n::ArgExpr>(expr)->idx);
+    ctx.savevarexpr(expr, ss.str());
+    return;
+  } else {
+    throw std::runtime_error("Unsupported expr: " + exprstr);
+  }
+
+  ctx.savevar(expr);
+  ctx << ctx.expr_to_str.at(expr) + " = " + ss.str() + "\n";
+}
+// Fixing the syntax of the operator<< overload for appending a char array to a
+// string
+
+void print_loop(std::shared_ptr<n::LoopExpr> loop, PrinterContext &ctx) {
+  ctx << "for (";
+  print_new_ir(loop->start, ctx);
+  ctx << ctx.expr_to_str.at(loop->start) + "; ";
+  print_new_ir(loop->end, ctx);
+  ctx << ctx.expr_to_str.at(loop->end) + "; ";
+  print_new_ir(loop->step, ctx);
+  ctx << ctx.expr_to_str.at(loop->step);
+  ctx << ")->" + ("idx" + std::to_string(ctx.loop_depth.at(loop))) + " {\n";
+  ctx.add_indent();
+  for (auto &expr : loop->body) {
+    print_new_ir(expr, ctx);
+  }
+  ctx.remove_indent();
+  ctx << "}\n";
 }
 
 std::shared_ptr<BaseExpr>
@@ -705,10 +1125,16 @@ graph_to_ir_reduce(Tensor &out, const std::vector<Tensor> &inputs) {
   return {ir, ctx, used_inputs};
 }
 
+#define NEWIR 0
+
 std::tuple<std::vector<std::shared_ptr<BaseExpr>>, IrBuilderContext,
            std::vector<bool>>
 graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
             const std::vector<Tensor> &inputs) {
+#if NEWIR
+  graph_to_ir_new(out, marked_as_out, inputs);
+  throw std::runtime_error("Not implemented");
+#endif
   // out = fn(reduce(fn(inputs), axis=...))
   if (visit_with_condition(
           out,
@@ -881,17 +1307,6 @@ static std::string ternop_kind_to_str(TernaryOpKind op, std::string first,
     return first + " ? " + second + " : " + third;
   default:
     throw std::runtime_error("Unsupported ternary operation");
-  }
-}
-
-std::string get_dtype_cpp_str(DType dtype) {
-  switch (dtype) {
-  case DType::Float32:
-    return "float";
-  case DType::Int32:
-    return "int";
-  default:
-    throw std::runtime_error("Unsupported dtype");
   }
 }
 
@@ -1119,61 +1534,7 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
         (outputs[0].numel() + threads_per_block - 1) / threads_per_block;
     // now do autotuning the threads per block
     double best_time = std::numeric_limits<double>::max();
-    int best_threads_per_block = 0;
-
-    for (int i = 2; i <= prop.maxThreadsPerBlock; i *= 2) {
-      int curr_tpb = i;
-      double total_time = 0.0;
-      int num_repeats =
-          10; // Number of times to repeat the kernel launch for better timing
-
-      for (int j = 0; j < num_repeats; ++j) {
-        // chrono
-        auto start = std::chrono::high_resolution_clock::now();
-
-        // launch
-        dim3 threads_per_block(curr_tpb);
-        size_t num_elements = outputs[0].numel();
-        dim3 blocks_per_grid((num_elements + curr_tpb - 1) / curr_tpb);
-        std::vector<void *> kernel_args;
-        for (const auto &input : inputs) {
-          void *in_data = input.get_base_ptr();
-          kernel_args.push_back(in_data);
-        }
-        for (auto &output : outputs) {
-          void *out_data = output.get_base_ptr();
-          kernel_args.push_back(out_data);
-        }
-
-        // Convert to array of pointers
-        std::vector<void *> kernel_args_ptrs;
-        for (auto &arg : kernel_args) {
-          kernel_args_ptrs.push_back(&arg);
-        }
-        // Launch the kernel
-        // create stream to launch kernel
-        // first check if function is valid
-        auto casted_to_cuda_kernel =
-            std::dynamic_pointer_cast<CudaKernel>(this->jit_kernel);
-        if (casted_to_cuda_kernel == nullptr) {
-          throw std::runtime_error("Kernel is not a CudaKernel");
-        }
-        casted_to_cuda_kernel->set_blocks_per_grid(blocks_per_grid.x);
-        casted_to_cuda_kernel->set_threads_per_block(threads_per_block.x);
-        this->jit_kernel->launch(kernel_args_ptrs);
-        // sync and end chrono
-        cudaDeviceSynchronize();
-        auto end = std::chrono::high_resolution_clock::now();
-        double time = std::chrono::duration<double>(end - start).count();
-        total_time += time;
-      }
-
-      double avg_time = total_time / num_repeats;
-      if (avg_time < best_time) {
-        best_time = avg_time;
-        best_threads_per_block = curr_tpb;
-      }
-    }
+    int best_threads_per_block = prop.maxThreadsPerBlock;
 
     auto casted = std::dynamic_pointer_cast<CudaKernel>(this->jit_kernel);
     casted->set_threads_per_block(best_threads_per_block);

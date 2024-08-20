@@ -1,5 +1,6 @@
 #include "scheduler.hpp"
 #include "ad_primitives.hpp"
+#include "utils.hpp"
 
 namespace pg {
 
