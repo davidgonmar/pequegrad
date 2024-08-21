@@ -6,7 +6,11 @@ from pequegrad.context import pequegrad_context
 
 
 class ModuleParam(Tensor):
-    pass
+    def __init__(self, *args, **kwargs):
+        if isinstance(args[0], Tensor):
+            super().__init__(args[0].numpy(), *args[1:], **kwargs)
+        else:
+            super().__init__(*args, **kwargs)
 
 
 def kaiming_init(shape):

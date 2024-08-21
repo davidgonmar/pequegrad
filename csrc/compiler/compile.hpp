@@ -179,9 +179,9 @@ conv2d_vjp_weight_pattern_matcher(Tensor &out) {
   std::shared_ptr<Tensor> input_ptr = std::make_shared<Tensor>();
   std::shared_ptr<Tensor> out_grad_ptr = std::make_shared<Tensor>();
   std::shared_ptr<Tensor> im2col_ptr = std::make_shared<Tensor>();
-  auto p = pm::Reshape(pm::Permute(pm::Permute(pm::Sum(pm::MatMul(
-      pm::Im2Col(pm::Input(out_grad_ptr)),
-      pm::Permute(pm::Im2Col(pm::Input(input_ptr)) << im2col_ptr))))));
+  auto p = pm::Reshape(pm::Permute(pm::Permute(pm::Sum(
+      pm::MatMul(pm::Im2Col(pm::Input(out_grad_ptr)),
+                 pm::Permute(pm::Im2Col(pm::Input(input_ptr), im2col_ptr)))))));
   if (!p->match(out)) {
     return std::nullopt;
   }

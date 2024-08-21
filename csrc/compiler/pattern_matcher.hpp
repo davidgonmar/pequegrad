@@ -71,7 +71,11 @@ protected:
 public:
   explicit _UnaryOp(std::shared_ptr<_Pattern> operand)
       : operand(std::move(operand)) {}
-
+  explicit _UnaryOp(std::shared_ptr<_Pattern> operand,
+                    std::shared_ptr<Tensor> tensor)
+      : operand(std::move(operand)) {
+    for_capture_tensor = std::move(tensor);
+  }
   virtual const std::string get_op_name() const {
     throw std::runtime_error("Not implemented");
   }
@@ -112,6 +116,9 @@ DEFINE_BINARY_OP_CLASS(MatMul)
   public:                                                                      \
     explicit _##op(std::shared_ptr<_Pattern> operand)                          \
         : _UnaryOp(std::move(operand)) {}                                      \
+    explicit _##op(std::shared_ptr<_Pattern> operand,                          \
+                   std::shared_ptr<Tensor> tensor)                             \
+        : _UnaryOp(std::move(operand), std::move(tensor)) {}                   \
     const std::string get_op_name() const override {                           \
       return std::string(#op);                                                 \
     }                                                                          \
@@ -192,11 +199,14 @@ std::shared_ptr<_Pattern> MaxReduce(std::shared_ptr<_Pattern> operand) {
 std::shared_ptr<_Pattern> Im2Col(std::shared_ptr<_Pattern> operand) {
   return std::make_shared<_Im2Col>(std::move(operand));
 }
-
+std::shared_ptr<_Pattern> Im2Col(std::shared_ptr<_Pattern> operand,
+                                 std::shared_ptr<Tensor> tensor) {
+  return std::make_shared<_Im2Col>(std::move(operand), std::move(tensor));
+}
 // overwrite << of shared_ptr<_Pattern>
 std::shared_ptr<_Pattern> &operator<<(std::shared_ptr<_Pattern> p,
                                       std::shared_ptr<Tensor> t) {
-  p->for_capture_tensor = t;
+  p->for_capture_tensor = std::move(t);
   return p;
 }
 } // namespace pattern_matcher

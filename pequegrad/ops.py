@@ -691,6 +691,22 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
     return out
 
 
+def pad_to(self, i: int, value: float = 0.0):
+    """
+    Pads a vector with value until it reaches the desired length
+    """
+    assert self.dim == 1, "pad_to is only supported for 1d tensors"
+    # use pad constant only on the right
+    # do it in numpy for now
+    npt = self.numpy()
+    if npt.shape[0] >= i:
+        return self
+    return Tensor(
+        np.pad(npt, (0, i - npt.shape[0]), mode="constant", constant_values=value),
+        device=self.device,
+    )
+
+
 def matmul_with_reshapes(self, other):
     assert self.ndim >= 2 and other.ndim >= 2
     a = self.unsqueeze(-1)  # [d1, d2, ..., m, k, 1]

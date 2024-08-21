@@ -1,14 +1,12 @@
 """
 Partially from https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
 """
-
+from pequegrad.compile import jit
 import math
-
 import os
 import sys
 import json
 from ast import literal_eval
-
 import numpy as np
 import pequegrad as pg  # noqa
 import pequegrad.modules as pnn  # noqa
@@ -136,7 +134,7 @@ class CausalSelfAttention(pnn.Module):
         # regularization
         self.attn_dropout = pnn.Dropout(config.attn_pdrop)
         self.resid_dropout = pnn.Dropout(config.resid_pdrop)
-        self.bias = (
+        self.bias = pnn.ModuleParam(
             (
                 pg.tril(pg.Tensor.ones((config.block_size, config.block_size))).reshape(
                     (1, config.block_size, config.block_size)
@@ -144,11 +142,8 @@ class CausalSelfAttention(pnn.Module):
             )
             .astype(pg.dt.float32)
             .eval()
-            .to(device)
+            .to(device.cuda)
         )
-
-        print(self.bias.numpy())
-
         self.n_head = config.n_head
         self.n_embd = config.n_embd
 
@@ -172,9 +167,9 @@ class CausalSelfAttention(pnn.Module):
         # att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
         att = pg.where(
             pg.broadcast_to(self.bias[:, :T, :T] == 0, att.shape),
-            pg.broadcast_to(pg.Tensor([float("-inf")]), att.shape)
-            .eval()
-            .to(att.device),
+            pg.broadcast_to(
+                pg.fill(tuple(), pg.dt.float32, float("-inf"), device.cuda), att.shape
+            ),
             att,
         )
         att = pg.softmax(att, dim=-1)
@@ -208,10 +203,16 @@ class Block(pnn.Module):
         m = self.mlp
         self.mlpf = lambda x: m.dropout(m.c_proj(m.act(m.c_fc(x))))  # MLP forward
 
+        # self.mlpf = jit(self.mlpf, externals=self.parameters())
+        def forward_(x):
+            x = x + self.attn(self.ln_1(x))
+            x = x + self.mlpf(self.ln_2(x))
+            return x
+
+        self.forward_ = jit(forward_, externals=self.parameters(), enabled=True)
+
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlpf(self.ln_2(x))
-        return x
+        return self.forward_(x)
 
 
 class GPT(pnn.Module):
@@ -407,19 +408,36 @@ class GPT(pnn.Module):
         assert idx.dtype == np.int32
         previous_text = tokenizer.decode(idx)
         print(previous_text, end="", flush=True)
+        curr = len(idx) - 1
+
+        @jit
+        def softmaxjitted(x):
+            return pg.softmax(x, dim=-1)
+
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = (
                 idx if idx.shape[0] <= self.block_size else idx[-self.block_size :]
             )  # takes the last block_size elements
-            idx = pg.Tensor(idx_cond).to(device)
+
+            idx = pg.Tensor(idx_cond)
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx.astype(pg.dt.int32).eval().detach())
+            nextpoweroftwo = 2 ** math.ceil(math.log2(idx.size(0) + 1))
+            padded = (
+                idx.astype(pg.dt.int32)
+                .pad_to(max(nextpoweroftwo, 1024))
+                .eval()
+                .detach()
+                .to(device.cuda)
+            )
+
+            logits, _ = self(padded)
+
             # pluck the logits at the final step and scale by desired temperature
-            logits = logits[logits.size(0) - 1] / temperature  # no neg indexing yet
+            logits = logits[curr] / temperature  # no neg indexing yet
             # optionally crop the logits to only the top k options
             # apply softmax to convert logits to (normalized) probabilities
-            probs = pg.softmax(logits, dim=-1).numpy()
+            probs = softmaxjitted(logits).numpy()
             # sample from the distribution
             idx_next = np.random.choice(probs.shape[0], p=probs)
             # append sampled index to the running sequence and continue
@@ -434,6 +452,7 @@ class GPT(pnn.Module):
             if idx_next == tokenizer.encode("<|endoftext|>")[0]:
                 print("found eos token, stopping")
                 break
+            curr += 1
         return idx
 
 
@@ -483,3 +502,20 @@ generate(
     num_samples=10,
     steps=10000,
 )
+"""
+@partial(jit, externals=model.parameters(), enabled=True)
+def model_pass(x):
+    logits, _ = model(x)
+    return logits
+
+
+# time the forward pass
+x = pg.Tensor(np.random.randint(0, 50257, (1024)).astype(np.int32), device=device.cuda).eval().detach()
+print("timing forward pass...")
+
+for _ in range(10):
+    start = time.time()
+    logits = model_pass(x).eval()
+    pg.sync_cuda_device()
+    print("elapsed time: %.2f s" % (time.time() - start))
+"""

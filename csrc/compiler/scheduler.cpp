@@ -13,20 +13,39 @@ constexpr bool ALLOW_REDUCE_EPILOGUE = true;
 static void schedule_inner(Tensor &node, leaf_record_t &leafs,
                            std::vector<Tensor> &marked_as_out,
                            std::unordered_map<int, std::set<int>> &dependents,
-                           bool *allow_reduce) {
+                           std::vector<Tensor> &allgraph, bool *allow_reduce) {
   auto prim = node.ad_node()->primitive();
+  allgraph.push_back(node);
+  // we will not continue recursing if there is some dependents of this node
+  // that are not in the allgraph
+  if (dependents.find(node.id) != dependents.end()) {
+    for (int dep : dependents[node.id]) {
+      bool found = false;
+      for (Tensor &t : allgraph) {
+        if (t.id == dep) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        leafs.push_back(node);
+        return;
+      }
+    }
+  }
   if ((is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) &&
       *allow_reduce) {
     *allow_reduce = false;
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents, allow_reduce); // dont allow more reduce if we
-                                              // already have one
+                   dependents, allgraph,
+                   allow_reduce); // dont allow more reduce if we
+                                  // already have one
     return;
   }
 
   if (is<Log>(prim) || is<Exp>(prim)) {
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents, allow_reduce);
+                   dependents, allgraph, allow_reduce);
     return;
   }
   // allow_reduce =false; // buggy if we allow reduce here
@@ -35,19 +54,19 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs,
       is<Max>(prim) || is<Gt>(prim) || is<Lt>(prim) || is<Eq>(prim) ||
       is<Pow>(prim)) {
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents, allow_reduce);
+                   dependents, allgraph, allow_reduce);
     schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents, allow_reduce);
+                   dependents, allgraph, allow_reduce);
     return;
   }
   if (is<Where>(node.ad_node()->primitive())) {
     auto &where = dynamic_cast<Where &>(*node.ad_node()->primitive());
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
-                   dependents, allow_reduce);
+                   dependents, allgraph, allow_reduce);
     schedule_inner(node.ad_node()->children()[1], leafs, marked_as_out,
-                   dependents, allow_reduce);
+                   dependents, allgraph, allow_reduce);
     schedule_inner(node.ad_node()->children()[2], leafs, marked_as_out,
-                   dependents, allow_reduce);
+                   dependents, allgraph, allow_reduce);
     return;
   }
   // else, we have a leaf
@@ -62,7 +81,9 @@ void schedule(
   leaf_record_t leafs;
   std::vector<Tensor> marked_as_out;
   bool allow_reduce_ptr = true;
-  schedule_inner(out, leafs, marked_as_out, dependents, &allow_reduce_ptr);
+  std::vector<Tensor> allgraph;
+  schedule_inner(out, leafs, marked_as_out, dependents, allgraph,
+                 &allow_reduce_ptr);
   // if leafs is {out}, we failed to schedule and just return early
   if (leafs.size() == 0 | leafs.size() == 1 && leafs[0].id == out.id) {
     return;

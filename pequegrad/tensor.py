@@ -29,6 +29,7 @@ from .ops import (
     gelu,
     silu,
     split,
+    pad_to,
 )
 
 
@@ -54,6 +55,12 @@ bind_method(
     Tensor,
     "split",
     split,
+)
+
+bind_method(
+    Tensor,
+    "pad_to",
+    pad_to,
 )
 
 
