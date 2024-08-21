@@ -1,6 +1,7 @@
 #pragma once
 #include "pattern_matcher.hpp"
 #include "scheduler.hpp"
+#include "utils.hpp"
 
 namespace pg {
 namespace pm = pattern_matcher;
@@ -40,7 +41,8 @@ static void remove_useless_broadcast(Tensor &out, std::set<int> &visited) {
   }
 }
 
-static void rec_schedule(Tensor &root, Tensor &out, std::set<int> &visited) {
+static void rec_schedule(Tensor &root, Tensor &out, std::set<int> &visited,
+                         std::vector<Tensor> &allouts) {
   // get a map of tensor -> tensors that have that tensor as a child (depend on
   // it)
   std::unordered_map<int, std::set<int>>
@@ -67,7 +69,7 @@ static void rec_schedule(Tensor &root, Tensor &out, std::set<int> &visited) {
   schedule(out, root, dependents);
   for (int i = 0; i < out.ad_node()->children().size(); i++) {
     if (i < out.ad_node()->children().size()) {
-      rec_schedule(root, out.ad_node()->children()[i], visited);
+      rec_schedule(root, out.ad_node()->children()[i], visited, allouts);
     }
   }
 }
@@ -286,13 +288,17 @@ bool try_convert_conv2d_vjp_weight(Tensor &out) {
   return true;
 }
 
-void recursive_conv2d_vjp_weight(Tensor &out) {
+void recursive_conv2d_vjp_weight(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
     return;
   }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   try_convert_conv2d_vjp_weight(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_conv2d_vjp_weight(node);
+    recursive_conv2d_vjp_weight(node, visited);
   }
 }
 struct Pooling2dPatternMatcherResult {
@@ -377,13 +383,17 @@ bool try_convert_max_pooling2d_backward(Tensor &out) {
   return true;
 }
 
-void recursive_max_pooling2d_backward(Tensor &out) {
+void recursive_max_pooling2d_backward(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
     return;
   }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   try_convert_max_pooling2d_backward(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_max_pooling2d_backward(node);
+    recursive_max_pooling2d_backward(node, visited);
   }
 }
 
@@ -442,13 +452,18 @@ bool try_convert_local_response_normalization(Tensor &out) {
   return true;
 }
 
-void recursive_local_response_normalization(Tensor &out) {
+void recursive_local_response_normalization(Tensor &out,
+                                            std::set<int> &visited) {
   if (out.device() != device::CUDA) {
     return;
   }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   try_convert_local_response_normalization(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_local_response_normalization(node);
+    recursive_local_response_normalization(node, visited);
   }
 }
 
@@ -517,13 +532,17 @@ bool try_convert_lrn_vjp_input(Tensor &out) {
   return true;
 }
 
-void recursive_lrn_vjp_input(Tensor &out) {
+void recursive_lrn_vjp_input(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
     return;
   }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   try_convert_lrn_vjp_input(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_lrn_vjp_input(node);
+    recursive_lrn_vjp_input(node, visited);
   }
 }
 
@@ -555,33 +574,45 @@ bool try_convert_pooling2d(Tensor &out) {
   return true;
 }
 
-void recursive_conv2d(Tensor &out) {
+void recursive_conv2d(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
+    return;
+  }
+  if (visited.find(out.id) != visited.end()) {
     return;
   }
   try_convert_conv2d(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_conv2d(node);
+    recursive_conv2d(node, visited);
   }
 }
 
-void recursive_conv2d_vjp_input(Tensor &out) {
+void recursive_conv2d_vjp_input(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
+    return;
+  }
+  if (visited.find(out.id) != visited.end()) {
     return;
   }
   try_convert_conv2d_vjp_input(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_conv2d_vjp_input(node);
+    recursive_conv2d_vjp_input(node, visited);
   }
 }
 
-void recursive_pooling2d(Tensor &out) {
+void recursive_pooling2d(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
     return;
   }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   try_convert_pooling2d(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_pooling2d(node);
+    recursive_pooling2d(node, visited);
   }
 }
 
@@ -629,13 +660,17 @@ bool try_convert_fused_linear(Tensor &out) {
   return true;
 }
 
-void recursive_fused_linear(Tensor &out) {
+void recursive_fused_linear(Tensor &out, std::set<int> &visited) {
   if (out.device() != device::CUDA) {
     return;
   }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
   try_convert_fused_linear(out);
+  visited.insert(out.id);
   for (Tensor &node : out.ad_node()->children()) {
-    recursive_fused_linear(node);
+    recursive_fused_linear(node, visited);
   }
 }
 
@@ -645,12 +680,15 @@ bool is_elwise(Tensor &out) {
   return std::find(supported.begin(), supported.end(), str) != supported.end();
 }
 
-void hoist_broadcasts(Tensor &out) {
+void hoist_broadcasts(Tensor &out, std::set<int> &visited) {
   // having a graph like
   // input -> elwise -> broadcast -> elwise into input -> broadcast -> elwise ->
   // elwise this allows for better fusion
 
   if (out.device() != device::CUDA) {
+    return;
+  }
+  if (visited.find(out.id) != visited.end()) {
     return;
   }
 
@@ -687,25 +725,54 @@ void hoist_broadcasts(Tensor &out) {
     }
   }
 
+  visited.insert(out.id);
+
   for (Tensor &node : out.ad_node()->children()) {
-    hoist_broadcasts(node);
+    hoist_broadcasts(node, visited);
   }
 }
+
+#define COMPILER_DBG 1
+#define COMPILER_LOG(x)                                                        \
+  if (COMPILER_DBG) {                                                          \
+    std::cout << "[DEBUG]: " << x << "\n";                                     \
+  }
 static void compile(std::vector<Tensor> &outs) {
   for (Tensor &out : outs) {
+    COMPILER_LOG("compiling " << out.str());
     std::set<int> visited;
     remove_useless_broadcast(out, visited);
-    recursive_fused_linear(out);
-    recursive_conv2d(out);
-    recursive_pooling2d(out);
-    recursive_conv2d_vjp_weight(out);
-    recursive_conv2d_vjp_input(out);
-    recursive_local_response_normalization(out);
-    recursive_lrn_vjp_input(out);
-    recursive_max_pooling2d_backward(out);
-    hoist_broadcasts(out);
+    COMPILER_LOG("removed useless broadcasts");
+    std::set<int> visited1;
+    recursive_fused_linear(out, visited1);
+    COMPILER_LOG("fused linear");
+    visited.clear();
+    recursive_conv2d(out, visited);
+    COMPILER_LOG("conv2d");
+    visited.clear();
+    recursive_pooling2d(out, visited);
+    COMPILER_LOG("pooling2d");
+    visited.clear();
+    recursive_conv2d_vjp_weight(out, visited);
+    COMPILER_LOG("conv2d vjp weight");
+    visited.clear();
+    recursive_conv2d_vjp_input(out, visited);
+    COMPILER_LOG("conv2d vjp input");
+    visited.clear();
+    recursive_local_response_normalization(out, visited);
+    COMPILER_LOG("local response normalization");
+    visited.clear();
+    recursive_lrn_vjp_input(out, visited);
+    COMPILER_LOG("lrn vjp input");
+    visited.clear();
+    recursive_max_pooling2d_backward(out, visited);
+    COMPILER_LOG("max pooling2d backward");
+    visited.clear();
+    hoist_broadcasts(out, visited);
+    COMPILER_LOG("hoist broadcasts");
     std::set<int> visited2;
-    rec_schedule(out, out, visited2);
+    rec_schedule(out, out, visited2, outs);
+    COMPILER_LOG("scheduled");
   }
 }
 } // namespace pg

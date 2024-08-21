@@ -506,6 +506,7 @@ void print_new_ir(std::shared_ptr<n::BaseExpr> expr, PrinterContext &ctx) {
     case n::BinaryOpKind::Lt:
       ss << "<";
       break;
+
     case n::BinaryOpKind::Max:
       ss << "max";
       break;
@@ -721,7 +722,7 @@ static ir_t render_return_guard(int max_val, std::shared_ptr<BaseExpr> idx) {
   auto imm = std::make_shared<ImmExpr>();
   imm->value = max_val;
   auto cmp = std::make_shared<BinaryExpr>();
-  cmp->op = BinaryOpKind::Lt;
+  cmp->op = BinaryOpKind::Lte;
   cmp->lhs = imm;
   cmp->rhs = idx;
   res.push_back(imm);
@@ -1275,6 +1276,8 @@ static std::string binop_kind_to_str(BinaryOpKind op, std::string lhs,
     return lhs + " > " + rhs;
   case BinaryOpKind::Lt:
     return lhs + " < " + rhs;
+  case BinaryOpKind::Lte:
+    return lhs + " <= " + rhs;
   case BinaryOpKind::Max:
     return "max(" + lhs + ", " + rhs + ")";
   case BinaryOpKind::Mod:
@@ -1282,7 +1285,7 @@ static std::string binop_kind_to_str(BinaryOpKind op, std::string lhs,
   case BinaryOpKind::Eq:
     return lhs + " == " + rhs;
   case BinaryOpKind::Pow: // todo - differentiate between int and float pow
-    return "powf(" + lhs + ", " + rhs + ")";
+    return "pow(" + lhs + ", " + rhs + ")";
   default:
     throw std::runtime_error("Unsupported binary operation: " +
                              std::to_string((int)op));
@@ -1409,9 +1412,17 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
           return std::to_string((int)imm->value);
         } else if (imm->dtype == DType::Float32) {
           std::ostringstream oss;
-          oss << std::fixed
-              << std::setprecision(std::numeric_limits<float>::max_digits10)
-              << imm->value;
+          oss << std::fixed;
+          if (std::isinf(imm->value)) {
+            if (imm->value < 0) {
+              oss << "-__int_as_float(0x7f800000)";
+            } else {
+              oss << "__int_as_float(0x7f800000)";
+            }
+          } else {
+            oss << std::setprecision(std::numeric_limits<float>::max_digits10)
+                << imm->value << "f";
+          }
           return oss.str();
         } else {
           PG_CHECK_RUNTIME(false, "Unsupported dtype");
@@ -1529,37 +1540,31 @@ void Compiled::dispatch_cuda(const std::vector<Tensor> &inputs,
     }
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, 0);
-    auto threads_per_block = prop.maxThreadsPerBlock;
+    auto threads_per_block = prop.maxThreadsPerBlock / 2;
     auto blocks_per_grid =
         (outputs[0].numel() + threads_per_block - 1) / threads_per_block;
     // now do autotuning the threads per block
     double best_time = std::numeric_limits<double>::max();
-    int best_threads_per_block = prop.maxThreadsPerBlock;
 
     auto casted = std::dynamic_pointer_cast<CudaKernel>(this->jit_kernel);
-    casted->set_threads_per_block(best_threads_per_block);
-    auto bpg = (outputs[0].numel() + best_threads_per_block - 1) /
-               best_threads_per_block;
-    casted->set_blocks_per_grid(bpg);
+    casted->set_threads_per_block(threads_per_block);
+    casted->set_blocks_per_grid(blocks_per_grid);
   }
 
   std::vector<void *> kernel_args;
-  for (const auto &input : inputs) {
+  for (auto &input : inputs) {
     void *in_data = input.get_base_ptr();
     kernel_args.push_back(in_data);
   }
   for (auto &output : outputs) {
-
     void *out_data = output.get_base_ptr();
     kernel_args.push_back(out_data);
   }
-
   // Convert to array of pointers
   std::vector<void *> kernel_args_ptrs;
   for (auto &arg : kernel_args) {
     kernel_args_ptrs.push_back(&arg);
   }
-
   // Launch the kernel
   this->jit_kernel->launch(kernel_args_ptrs);
 }

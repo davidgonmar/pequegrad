@@ -1,5 +1,8 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
 from pequegrad.viz import viz as v  # noqa
+from contextvars import ContextVar
+
+inside_jit = ContextVar("inside_jit", default=False)
 
 
 def flatten_tree(tree):
@@ -37,40 +40,49 @@ class jit:
         return self.externals() if callable(self.externals) else self.externals
 
     def __call__(self, *args):
-        if not self.enabled:
+        if not self.enabled or inside_jit.get():
+            # handle jitting inside other jits, just use the highest level jit
             return self.f(*args)
-        f = self.f
-        inpshapes = tuple(tuple((tuple(x.shape), x.dtype)) for x in flatten_tree(args))
-        if self.cache.get(inpshapes) is None:
-            outs = f(*args)
-            self.example_outs = outs
-            outs = flatten_tree(outs)
-            inputs = flatten_tree(args)
-            assert all(
-                isinstance(x, Tensor) for x in inputs
-            ), "Only Tensors are supported. Functions must be pure, got {}".format(
-                [type(x) for x in inputs]
+        token = inside_jit.set(True)
+        try:
+            f = self.f
+            inpshapes = tuple(
+                tuple((tuple(x.shape), x.dtype)) for x in flatten_tree(args)
             )
-            outs, inps = clone_graph(outs, list(inputs) + list(self.get_externals()))
+            if self.cache.get(inpshapes) is None:
+                outs = f(*args)
+                self.example_outs = outs
+                outs = flatten_tree(outs)
+                inputs = flatten_tree(args)
+                assert all(
+                    isinstance(x, Tensor) for x in inputs
+                ), "Only Tensors are supported. Functions must be pure, got {}".format(
+                    [type(x) for x in inputs]
+                )
+                outs, inps = clone_graph(
+                    outs, list(inputs) + list(self.get_externals())
+                )
 
-            c = {"outs": outs, "inps": inps}
+                c = {"outs": outs, "inps": inps}
 
-            self.cache[inpshapes] = c
+                self.cache[inpshapes] = c
 
-            compile(outs)
+                compile(outs)
 
-        # now clone c and feed data
+            # now clone c and feed data
 
-        outs, inps = clone_graph(
-            self.cache[inpshapes]["outs"], self.cache[inpshapes]["inps"]
-        )  # inps already contains externals
-        i = 0
-        args = flatten_tree(args)
-        for inp, arg in zip(inps, args):
-            inp.assign(arg)
-            i += 1
+            outs, inps = clone_graph(
+                self.cache[inpshapes]["outs"], self.cache[inpshapes]["inps"]
+            )  # inps already contains externals
+            i = 0
+            args = flatten_tree(args)
+            for inp, arg in zip(inps, args):
+                inp.assign(arg)
+                i += 1
 
-        for inp, arg in zip(inps[i:], self.get_externals()):
-            inp.assign(arg)
+            for inp, arg in zip(inps[i:], self.get_externals()):
+                inp.assign(arg)
 
-        return reconstruct_tree(outs, self.example_outs)
+            return reconstruct_tree(outs, self.example_outs)
+        finally:
+            inside_jit.reset(token)

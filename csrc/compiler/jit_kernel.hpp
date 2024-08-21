@@ -25,8 +25,9 @@ private:
     // extern C to avoid name mangling
     std::string file = "extern \"C\" {\n" + _src + "\n};";
     nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
+    // fast math
     const char *opts[] = {"--use_fast_math"};
-    nvrtcResult compileResult = nvrtcCompileProgram(prog, 1, opts);
+    nvrtcResult compileResult = nvrtcCompileProgram(prog, 0, opts);
 
     // Check for compilation errors
     if (compileResult != NVRTC_SUCCESS) {
@@ -72,7 +73,7 @@ private:
     CUresult R = cuLaunchKernel(_func, _blocks_per_grid.x, _blocks_per_grid.y,
                                 _blocks_per_grid.z, _threads_per_block.x,
                                 _threads_per_block.y, _threads_per_block.z, 0,
-                                nullptr, args.data(), nullptr);
+                                0, args.data(), nullptr);
     PG_CHECK_RUNTIME(R == CUDA_SUCCESS, "Failed to launch kernel: got " +
                                             std::to_string(R) + " for kernel " +
                                             _name);

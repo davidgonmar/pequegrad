@@ -93,7 +93,7 @@ parser.add_argument(
 parser.add_argument(
     "--lr",
     type=float,
-    default=0.005,
+    default=0.0005,
     help="Learning rate for the optimizer",
 )
 

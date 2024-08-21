@@ -18,21 +18,37 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs,
   allgraph.push_back(node);
   // we will not continue recursing if there is some dependents of this node
   // that are not in the allgraph
+  constexpr int THRESHOLD = 3;
   if (dependents.find(node.id) != dependents.end()) {
+    int found = 0;
     for (int dep : dependents[node.id]) {
-      bool found = false;
+      bool dep_in_fuse_region = false;
       for (Tensor &t : allgraph) {
         if (t.id == dep) {
-          found = true;
+          dep_in_fuse_region = true;
           break;
         }
       }
-      if (!found) {
-        leafs.push_back(node);
-        return;
+      if (!dep_in_fuse_region) {
+        found++;
+        if (found >= THRESHOLD) {
+          // if it is a fusable op, get the child
+          if (is<Add>(prim) || is<Mul>(prim) || is<Sub>(prim) ||
+              is<Div>(prim) || is<Max>(prim) || is<Gt>(prim) || is<Lt>(prim) ||
+              is<Eq>(prim) || is<Pow>(prim) || is<Log>(prim) || is<Exp>(prim) ||
+              is<Where>(prim)) {
+            for (Tensor &child : node.ad_node()->children()) {
+              leafs.push_back(child);
+            }
+          } else {
+            leafs.push_back(node);
+          }
+          return;
+        }
       }
     }
   }
+
   if ((is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) &&
       *allow_reduce) {
     *allow_reduce = false;
