@@ -1337,7 +1337,8 @@ std::string render_fn_header(std::string fn_name,
   std::string res = "";
   for (int i = 0; i < args.size(); i++) {
     auto arg = args[i];
-    res += get_dtype_cpp_str(arg->dtype) + " * __restrict__ " + arg->name;
+    res += (i != args.size() - 1 ? "const " : "") +
+           get_dtype_cpp_str(arg->dtype) + " * __restrict__ " + arg->name;
     if (i != args.size() - 1) {
       res += ", ";
     }
