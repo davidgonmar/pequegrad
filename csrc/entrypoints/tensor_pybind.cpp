@@ -115,6 +115,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
     return assign_at(dst, src, parsed);
   });
   m.def("astype", &astype);
+  m.def("as_contiguous", &as_contiguous);
 #define BIND_REDUCE_OP(python_name, name)                                      \
   m.def(                                                                       \
       python_name,                                                             \

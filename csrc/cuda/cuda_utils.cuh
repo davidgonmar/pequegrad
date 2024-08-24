@@ -16,7 +16,6 @@
       std::ostringstream oss;                                                  \
       oss << "CUDA error " << _err << " on file/line " << __FILE__ << ":"      \
           << __LINE__ << " " << cudaGetErrorString(_err);                      \
-      std::cout << oss.str() << std::endl;                                     \
       throw std::runtime_error(oss.str());                                     \
     }                                                                          \
   } while (0)
@@ -72,7 +71,7 @@ cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
                             [](T *ptr) { CHECK_CUDA(cudaFreeAsync(ptr, 0)); });
 }
 
-#define SHOULD_SYNC 0
+#define SHOULD_SYNC 1
 #define PG_CUDA_KERNEL_END                                                     \
   do {                                                                         \
     if (SHOULD_SYNC) {                                                         \

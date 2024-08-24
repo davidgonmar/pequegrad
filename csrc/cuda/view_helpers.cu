@@ -189,6 +189,7 @@ void copy(const View &src, const View &dst) {
     if (src.is_contiguous()) {
       cudaMemcpyAsync(dst.get_base_ptr(), src.get_base_ptr(), src.nbytes(),
                       cudaMemcpyDeviceToDevice);
+      return;
     }
 
     int dts = dtype_to_size(src.dtype());

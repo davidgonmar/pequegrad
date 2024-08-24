@@ -50,6 +50,10 @@ def custom_init(f):
     return p
 
 
+def as_contiguous(x: "Tensor") -> "Tensor":
+    return pg.as_contiguous(x)
+
+
 def tensordot(a: "Tensor", b: "Tensor", dims: Union[int, Tuple[List[int], List[int]]]):
     # Convert dims to a consistent format (it accepts both a single int or a tuple of lists of ints)
     if isinstance(dims, int):
@@ -681,7 +685,6 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
     )
 
     start = 0
-
     for t in tensors:
         slices = [slice(None) for _ in range(t.dim)]
         slices[dim] = slice(start, start + t.shape[dim])

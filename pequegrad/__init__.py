@@ -11,3 +11,4 @@ from pequegrad.backend.c import (
     sync_cuda_device,
 )  # noqa
 from pequegrad.ops import *  # noqa
+from pequegrad.distrib.sharded_tensor import *  # noqa
