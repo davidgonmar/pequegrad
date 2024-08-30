@@ -445,6 +445,8 @@ public:
     // the other tensor
     _view->init_view(other._view);
   }
+
+  void _inplace_as_copy(Tensor other);
   Tensor detach() {
     if (!is_evaled()) {
       throw std::runtime_error("Cannot detach unevaluated tensor.");

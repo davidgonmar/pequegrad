@@ -55,6 +55,12 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
       return;
     }
 
+    // if is FromNumpy, but reached here, throw (unsafe)
+    if (t.ad_node()->primitive()->str() == "FromNumpy") {
+      throw std::runtime_error(
+          "FromNumpy should not be in the graph and not an input: " + t.str());
+    }
+
     for (Tensor &child : t.children()) {
       copy(child);
     }

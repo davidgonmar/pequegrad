@@ -841,4 +841,14 @@ public:
   double p() { return _p; }
 };
 
+class Copy : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Copy)
+  DEFINE_PRECOMPUTE
+  DEFINE_BACKWARD
+  explicit Copy() {}
+};
+
 } // namespace pg

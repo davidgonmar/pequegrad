@@ -116,6 +116,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   });
   m.def("astype", &astype);
   m.def("as_contiguous", &as_contiguous);
+
 #define BIND_REDUCE_OP(python_name, name)                                      \
   m.def(                                                                       \
       python_name,                                                             \
@@ -376,6 +377,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
       .def("children", &Tensor::children)
+      .def("_inplace_as_copy", &Tensor::_inplace_as_copy)
       .def("siblings",
            [](Tensor &t) {
              std::vector<Tensor> sibs = t.ad_node()->siblings();

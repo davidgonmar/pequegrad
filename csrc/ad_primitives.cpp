@@ -837,4 +837,36 @@ std::vector<Tensor> OneHotVector::backward(const std::vector<Tensor> &primals,
                                            const std::vector<Tensor> &outputs) {
   return {pg::sum(tangents[0], {1}, /*keepdims*/ false)};
 }
+
+/*
+class Copy : public ADPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(Copy)
+  DEFINE_PRECOMPUTE
+};*/
+
+std::vector<View> Copy::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like(inputs[0]).build()};
+}
+
+std::vector<Tensor> Copy::backward(const std::vector<Tensor> &primals,
+                                   const std::vector<Tensor> &tangents,
+                                   const std::vector<Tensor> &outputs) {
+  return {tangents[0]};
+}
+
+// implementations
+void Copy::dispatch_cpu(const std::vector<Tensor> &inputs,
+                        std::vector<Tensor> &outputs) {
+  outputs[0].view_ptr()->set_ptr(inputs[0].view().shared_ptr(),
+                                 inputs[0].nbytes());
+}
+
+void Copy::dispatch_cuda(const std::vector<Tensor> &inputs,
+                         std::vector<Tensor> &outputs) {
+  outputs[0].view_ptr()->set_ptr(inputs[0].view().shared_ptr(),
+                                 inputs[0].nbytes());
+}
 } // namespace pg

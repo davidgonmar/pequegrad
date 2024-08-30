@@ -154,6 +154,12 @@ Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
   return tensors;
 }
 
+void Tensor::_inplace_as_copy(Tensor other) {
+  auto newprim = std::make_shared<Copy>();
+  this->ad_node()->set_primitive(newprim);
+  this->ad_node()->set_children({other});
+}
+
 Tensor Tensor::eval(bool detach) {
   if (is_evaled()) {
     if (detach) {

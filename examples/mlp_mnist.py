@@ -4,11 +4,12 @@ from pequegrad.modules import Linear, StatefulModule
 from pequegrad.context import no_grad
 import argparse
 import time
-from pequegrad.backend.c import device, grads
+from pequegrad.backend.c import device
 from pequegrad.optim import Adam, SGD, JittedAdam  # noqa
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.compile import jit
 from pequegrad.tensor import Tensor
+from pequegrad.autodiff import fngrad
 
 np.random.seed(0)
 
@@ -39,11 +40,17 @@ def train(model, ds, epochs=13, batch_size=4096):
 
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
-    def train_step(batch_X, batch_Y):
+    def get_loss(batch_X, batch_Y):
         prediction = model.forward(batch_X)
-        loss = prediction.cross_entropy_loss_probs(batch_Y)
-        g = grads(model.parameters(), loss)
-        return [loss] + g
+        return prediction.cross_entropy_loss_probs(batch_Y)
+
+    loss_and_grads = fngrad(
+        get_loss, wrt=model.parameters(), externals=model.parameters(), return_outs=True
+    )
+
+    def train_step(batch_X, batch_Y):
+        loss, g = loss_and_grads(batch_X, batch_Y)
+        return loss + g
 
     i = 0
 

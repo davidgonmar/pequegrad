@@ -77,11 +77,11 @@ class jit:
             i = 0
             args = flatten_tree(args)
             for inp, arg in zip(inps, args):
-                inp.assign(arg)
+                inp._inplace_as_copy(arg)
                 i += 1
 
             for inp, arg in zip(inps[i:], self.get_externals()):
-                inp.assign(arg)
+                inp._inplace_as_copy(arg)
 
             return reconstruct_tree(outs, self.example_outs)
         finally:
