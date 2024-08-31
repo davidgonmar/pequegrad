@@ -1,6 +1,6 @@
 from pequegrad.backend.c import Tensor
 from typing import List
-from pequegrad.compile import jit
+from pequegrad.transforms.compile import jit
 
 
 class SGD:

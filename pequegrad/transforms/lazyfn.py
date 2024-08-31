@@ -1,0 +1,2 @@
+class LazyFunction:
+    pass

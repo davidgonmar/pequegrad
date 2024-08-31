@@ -7,9 +7,8 @@ import time
 from pequegrad.backend.c import device
 from pequegrad.optim import Adam, SGD, JittedAdam  # noqa
 from pequegrad.data.dataloader import DataLoader
-from pequegrad.compile import jit
 from pequegrad.tensor import Tensor
-from pequegrad.autodiff import fngrad
+from pequegrad import fngrad, jit
 
 np.random.seed(0)
 
@@ -40,31 +39,21 @@ def train(model, ds, epochs=13, batch_size=4096):
 
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
-    def get_loss(batch_X, batch_Y):
+    def get_loss(batch_X, batch_Y, model):
         prediction = model.forward(batch_X)
         return prediction.cross_entropy_loss_probs(batch_Y)
 
-    loss_and_grads = fngrad(
-        get_loss, wrt=model.parameters(), externals=model.parameters(), return_outs=True
-    )
-
-    def train_step(batch_X, batch_Y):
-        loss, g = loss_and_grads(batch_X, batch_Y)
-        return loss + g
+    loss_and_grads = fngrad(get_loss, wrt=model.parameters(), return_outs=True)
 
     i = 0
 
-    train_step = (
-        jit(train_step, externals=model.parameters()) if use_jit else train_step
-    )
+    train_step = jit(loss_and_grads) if use_jit else loss_and_grads
 
     for x, y in loader:
         if i == 1:
             start = time.time()
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
-        outs = train_step(x, batch_y_onehot)
-        loss = outs[0]
-        g = outs[1:]
+        loss, g = train_step(x, batch_y_onehot, model)
         optim.step(g)
 
         print(f"Step {i} | Loss {loss.numpy()}")
@@ -84,7 +73,11 @@ def test_model(model, ds):
     correct = 0
     total = 0
     loader = DataLoader(ds, batch_size=4096)
-    step = jit(model.forward, externals=model.parameters())
+
+    def step(x, model):
+        return model.forward(x)
+
+    step = jit(step)
     start = None
     i = 0
     for i in range(1):
@@ -92,7 +85,7 @@ def test_model(model, ds):
             with no_grad():
                 if i == 1:  # start time after first batch
                     start = time.time()
-                outputs = step(x)
+                outputs = step(x, model)
                 correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
                 total += y.shape[0]
                 i += 1

@@ -4,7 +4,7 @@ from typing import Optional, Tuple, Union, List
 import pequegrad.backend.c as pg
 import math
 from pequegrad.backend.c import custom_prim as _custom_prim, custom_init as _custom_init
-from pequegrad.compile import jit
+from pequegrad.transforms import jit
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
