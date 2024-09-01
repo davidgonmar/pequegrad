@@ -2,10 +2,8 @@ from pequegrad.backend.c import grads  # noqa
 from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
 from .pytree import (
     tree_flatten,
-    tree_unflatten,
     PyTreeDef,
     make_pytree_list,
-    is_module,
 )  # noqa
 from .lazyfn import LazyFunction, GraphTrace, Cache  # noqa
 import itertools
@@ -148,3 +146,5 @@ class fnhessian(LazyFunction):
             outputs=new_outs,
             outputs_pytree=new_outs_pytree,
         )
+
+

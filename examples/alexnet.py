@@ -3,10 +3,10 @@ import pequegrad.modules as nn
 from pequegrad.optim import SGD, Adam, JittedAdam, JittedSGD
 import argparse
 import numpy as np
-import pequegrad.transforms as transforms
+import pequegrad.ds_transforms as transforms
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.extra.cifar_100 import CIFAR100Dataset
-from pequegrad.compile import jit
+from pequegrad.transforms.compile import jit
 
 
 class AlexNet(nn.StatefulModule):
@@ -157,15 +157,15 @@ if not args.test:
     str2 = "adam" if use_sgd else "sgd"
     optim = optims[str1][str2](model.parameters(), lr=args.lr)
 
-    def train_step(x, y):
+    def train_step(x, y, model):
         outs = model(x)
         loss = outs.cross_entropy_loss_probs(y)
         g = grads(model.parameters(), loss)
-        return [loss] + g
+        return loss, g
 
     use_jit = args.jit  # does not work yet
     train_step = (
-        jit(train_step, externals=model.parameters()) if use_jit else train_step
+        jit(train_step) if use_jit else train_step
     )
     import time
 
@@ -177,12 +177,8 @@ if not args.test:
             inputs = inputs.to(DEVICE)
             labels = labels.eval().to(DEVICE)
             labels = Tensor.one_hot(100, labels)
-            outs = train_step(inputs, labels)
-            # import pequegrad.viz as viz
-
-            # viz.viz(outs, name="outs")
-            loss = outs[0]
-            g = outs[1:]
+            loss, g = train_step(inputs, labels, model)
+       
             optim.step(g)
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"

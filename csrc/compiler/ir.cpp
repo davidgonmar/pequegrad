@@ -1468,8 +1468,11 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       auto load = as<LoadExpr>(expr);
       auto x = nmdb.get_with_prefix("load");
       r[expr] = x;
+      /*res += add_indent() + get_dtype_cpp_str(load->dtype) + " " + x + " = " +
+             load->child->name + "[" + r[load->idx] + "]" + ";\n"; */
+      // instead, use __ldg
       res += add_indent() + get_dtype_cpp_str(load->dtype) + " " + x + " = " +
-             load->child->name + "[" + r[load->idx] + "]" + ";\n";
+             "__ldg(" + load->child->name + " + " + r[load->idx] + ")" + ";\n";
     } else if (is<StoreExpr>(expr)) {
       auto store = as<StoreExpr>(expr);
       res += add_indent() + store->ptr->name + "[" + r[store->idx] +

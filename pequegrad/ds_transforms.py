@@ -2,7 +2,6 @@ from pequegrad.modules import NonStatefulModule
 import numpy as np
 from pequegrad.tensor import Tensor
 from PIL import Image
-from pequegrad.compile import jit
 import pequegrad.backend.c as pgb
 
 Mod = NonStatefulModule
@@ -130,21 +129,11 @@ class Compose(Mod):
 class JitCompose(Mod):
     def __init__(self, transforms, enabled=True):
         self.transforms = transforms
-        # find externals
-        externals_map = {
-            Normalize: ["mean", "std"],
-        }
-        externals = []
-        for t in self.transforms:
-            if t.__class__ in externals_map:
-                for attr in externals_map[t.__class__]:
-                    externals.append(getattr(t, attr))
+        # some fns depend on things like self.mean and self.std, etc
+        # so what we do is create new functions that functionalize the forward
+        # TODO -- actually jit the forward function
 
-        self.forward = (
-            jit(self._forward, externals=externals) if enabled else self._forward
-        )
-
-    def _forward(self, x):
+    def forward(self, x):
         for t in self.transforms:
             x = t(x)
         return x
