@@ -49,14 +49,14 @@ def train(model, ds, epochs=13, batch_size=4096):
 
     train_step = jit(loss_and_grads) if use_jit else loss_and_grads
 
-    
     for x, y in loader:
         if i == 1:
             start = time.time()
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         loss, g = train_step(x, batch_y_onehot, model)
         optim.step(g)
-        if i == 0 and use_jit: train_step.print_trace()
+        if i == 0 and use_jit:
+            train_step.print_trace()
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break

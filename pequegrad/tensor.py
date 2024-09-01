@@ -30,6 +30,8 @@ from .ops import (
     silu,
     split,
     pad_to,
+    cat,
+    assign_at,
 )
 
 
@@ -37,18 +39,44 @@ CUDA_AVAILABLE = True
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 
+bind_method(
+    Tensor,
+    "assign_at",
+    lambda self, value, index: assign_at(self, value, index),
+)
 
+
+# fill signature: shape: Tuple[int, ...], dtype: int, value: float, device: int
 bind_method(
     Tensor,
     "zeros",
     classmethod(
-        lambda cls, shape, **kwargs: cls(np.zeros(shape).astype(np.float32), **kwargs)
+        lambda cls, shape, **kwargs: pg.fill(
+            shape,
+            kwargs.get("dtype", pg.dt.float32),
+            0.0,
+            kwargs.get("device", pg.device.cpu),
+        )
     ),
 )
+
+bind_method(
+    Tensor,
+    "zeros_like",
+    lambda self: Tensor.zeros(self.shape, device=self.device),
+)
+
 bind_method(
     Tensor,
     "ones",
-    classmethod(lambda cls, shape, **kwargs: cls(np.ones(shape), **kwargs)),
+    classmethod(
+        lambda cls, shape, **kwargs: pg.fill(
+            shape,
+            kwargs.get("dtype", pg.dt.float32),
+            1.0,
+            kwargs.get("device", pg.device.cpu),
+        )
+    ),
 )
 
 bind_method(
@@ -61,6 +89,13 @@ bind_method(
     Tensor,
     "pad_to",
     pad_to,
+)
+
+# cat
+bind_method(
+    Tensor,
+    "cat",
+    staticmethod(lambda tensors, axis: cat(tensors, axis)),
 )
 
 

@@ -161,6 +161,8 @@ def safetanh(self):
 
 tanh = safetanh
 
+dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+
 
 def one_hot(
     cls,
@@ -169,10 +171,15 @@ def one_hot(
     device=device.cpu,
     dtype=dt.float32,
 ) -> "Tensor":
-    assert indices.ndim == 1, "indices must be a vector"
+    # if indices is an int, fast path
+    if isinstance(indices, int):
+        nparr = np.zeros(num_classes).astype(dtypetonp[dtype])
+        nparr[indices] = 1.0
+        return Tensor(nparr, device=device)
+    assert indices.ndim in [1, 0], "indices must be a vector"
     if indices.device == pg.device.cpu:
         indices = indices.numpy()
-        dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+
         np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])
 
         np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
@@ -596,6 +603,7 @@ def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
     return out
 
 
+assign_at = pg.assign_at
 fill = pg.fill
 
 
