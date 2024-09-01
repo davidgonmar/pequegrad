@@ -32,6 +32,12 @@ def jacrev(out, wrt):
     return jacs if isinstance(wrtorig, list) else jacs[0]
 
 
+def hessian(out, wrt):
+    # hessian can be seen as the jacobian of the gradient!
+    gs = grads(wrt, out)[0]
+    return jacrev(gs, wrt)
+
+
 class fngrad(LazyFunction):
     def __init__(self, f, wrt, enabled=True, return_outs=False):
         self.f = f
@@ -191,6 +197,110 @@ class fnjacobian(LazyFunction):
 
         # return statement
         strres += f"  return {', '.join([n(x) for x in outs])}" + "\n"
+        strres += "}"
+
+        print(strres)
+
+
+class fnhessian(LazyFunction):
+    def __init__(self, f, wrt, enabled=True):
+        self.f = f
+        self.cache = dict()
+        self.outsistuple = False
+        self.enabled = enabled
+        self.graphs = []
+        self.wrt = wrt
+
+    def __call__(self, *args):
+        f = self.f
+        inputs, inputs_pytree = tree_flatten(args)
+        inptensors = extract_input_tensors(inputs)
+        cache_key = get_cache_key(inputs)
+        if self.cache.get(cache_key) is None:
+            outs = f(*args)
+            outs, outs_pytree = tree_flatten(outs)
+            assert len(outs) == 1, "Only one output supported"
+            out = outs[0]
+            wrt = []
+            for w in self.wrt:
+                if isinstance(w, Tensor):
+                    wrt.append(w)
+                elif isinstance(w, int):
+                    wrt.append(inputs[w])
+
+            hess = hessian(out, wrt)
+            hess, inptensors = clone_graph(hess, inptensors)
+
+            c = {"hess": hess, "inps": inptensors}
+
+            self.cache[cache_key] = c
+
+            self.inputs_pytree = inputs_pytree
+
+        # now clone c and feed data
+        hess, inps = clone_graph(
+            self.cache[cache_key]["hess"], self.cache[cache_key]["inps"]
+        )
+
+        args, args_pytree = tree_flatten(args)
+        args = [x for x in args if isinstance(x, Tensor)]
+
+        bridge_args_to_lazy_fn(inps, args)
+
+        return hess
+
+    def print_trace(self):
+        # traverses the graph and prints a function like representation
+        name_map = {}
+        curr = 0
+
+        def n(x):
+            nonlocal curr
+            if x not in name_map:
+                name_map[x] = f"v{curr}"
+                curr += 1
+            return name_map[x]
+
+        cache = self.cache
+        outs = cache[next(iter(cache))]["hess"]
+        inps = cache[next(iter(cache))]["inps"]
+
+        def dtype_name(x):
+            if x.dtype == dt.float32:
+                return "f32"
+            if x.dtype == dt.float64:
+                return "f64"
+            if x.dtype == dt.int32:
+                return "i32"
+
+        def repr_tensor(x):
+            return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
+
+        strres = "f(" + ", ".join([repr_tensor(x) for x in inps]) + "){" + "\n"
+
+        body = []
+
+        visited = set(x for x in inps)
+
+        def recurse(x):
+            nonlocal body
+            if x not in visited:
+                for child in x.children():
+                    recurse(child)
+                body.append(
+                    f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"
+                )
+                visited.add(x)
+
+        for out in outs:
+            recurse(out)
+
+        strres += "  " + "\n  ".join(body) + "\n"
+
+        # return statement
+
+        strres += f"  return {', '.join([n(x) for x in outs])}" + "\n"
+
         strres += "}"
 
         print(strres)

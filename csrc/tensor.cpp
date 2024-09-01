@@ -240,10 +240,13 @@ std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
       [&](std::map<Tensor, Tensor, decltype(tensorComparator)> tangents) {
         std::vector<Tensor> flattened_tangents;
         for (auto tensor : required_tensors) {
-          PG_CHECK_RUNTIME(
-              tangents.count(tensor) == 1,
-              "Tangent not found for required tensor: ", tensor.str());
-          flattened_tangents.push_back(tangents.at(tensor));
+          if (tangents.count(tensor) == 0) {
+            // then gradient is zero
+            flattened_tangents.push_back(
+                fill(tensor.shape(), tensor.dtype(), 0, tensor.device()));
+          } else {
+            flattened_tangents.push_back(tangents.at(tensor));
+          }
         }
         return flattened_tangents;
       };
