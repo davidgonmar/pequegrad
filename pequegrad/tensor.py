@@ -51,11 +51,13 @@ bind_method(
     Tensor,
     "zeros",
     classmethod(
-        lambda cls, shape, **kwargs: pg.fill(
-            shape,
-            kwargs.get("dtype", pg.dt.float32),
-            0.0,
-            kwargs.get("device", pg.device.cpu),
+        lambda cls, shape, **kwargs: cls(
+            pg.fill(
+                shape,
+                kwargs.get("dtype", pg.dt.float32),
+                0.0,
+                kwargs.get("device", pg.device.cpu),
+            )
         )
     ),
 )
@@ -70,11 +72,13 @@ bind_method(
     Tensor,
     "ones",
     classmethod(
-        lambda cls, shape, **kwargs: pg.fill(
-            shape,
-            kwargs.get("dtype", pg.dt.float32),
-            1.0,
-            kwargs.get("device", pg.device.cpu),
+        lambda cls, shape, **kwargs: cls(
+            pg.fill(
+                shape,
+                kwargs.get("dtype", pg.dt.float32),
+                1.0,
+                kwargs.get("device", pg.device.cpu),
+            )
         )
     ),
 )

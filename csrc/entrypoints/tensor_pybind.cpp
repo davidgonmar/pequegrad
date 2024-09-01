@@ -498,6 +498,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
             return Tensor::from_numpy(np_array, device);
           }),
           py::arg("np_array"), py::arg("device") = device::DeviceKind::CPU)
+      .def(py::init([](Tensor &orig) { return Tensor(orig); }))
       .BIND_BINOP_WITH_OVERLOAD_CLASS(add, add)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__add__, add)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__radd__, add)

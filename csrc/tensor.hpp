@@ -675,8 +675,7 @@ public:
       return *this;
     }
     if (!is_initialized()) {
-      throw std::runtime_error(
-          "Cannot move uninitialized tensor. Eval it first : " + str());
+      this->eval();
     }
     if (device() == device::DeviceKind::CUDA) {
       size_t nbytes = this->nbytes();
@@ -701,8 +700,7 @@ public:
       return *this;
     }
     if (!is_initialized()) {
-      throw std::runtime_error(
-          "Cannot move uninitialized tensor. Eval it first: " + str());
+      this->eval();
     }
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
@@ -716,8 +714,7 @@ public:
       return *this;
     }
     if (!is_initialized()) {
-      throw std::runtime_error(
-          "Cannot move uninitialized tensor. Eval it first : " + str());
+      this->eval();
     }
     size_t nbytes = this->nbytes();
     auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);

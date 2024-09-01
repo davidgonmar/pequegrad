@@ -1,9 +1,15 @@
 from pequegrad.backend.c import grads  # noqa
 from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
-from .pytree import tree_flatten, tree_unflatten
-from .utils import get_cache_key, extract_input_tensors, bridge_args_to_lazy_fn
-from .lazyfn import LazyFunction
+from .pytree import (
+    tree_flatten,
+    tree_unflatten,
+    PyTreeDef,
+    make_pytree_list,
+    is_module,
+)  # noqa
+from .lazyfn import LazyFunction, GraphTrace, Cache  # noqa
 import itertools
+from typing import List
 
 
 def ndindex(shape):
@@ -29,7 +35,7 @@ def jacrev(out, wrt):
             jac = jac.assign_at(g, i)
         jacs.append(jac)
 
-    return jacs if isinstance(wrtorig, list) else jacs[0]
+    return jacs
 
 
 def hessian(out, wrt):
@@ -38,269 +44,107 @@ def hessian(out, wrt):
     return jacrev(gs, wrt)
 
 
+def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
+    # flatten the argnums to the flattened structure of the inputs_pytree
+    assert len(argnums) == 1, "Only one argnum supported"
+    argnum = argnums[0]
+    # inputs_pytree = inputs_pytree.structure
+    flat, _ = tree_flatten(inputs_pytree.structure[argnum])
+    flattened_start_index = len(tree_flatten(inputs_pytree.structure[:argnum])[0])
+    flattened_indices = list(
+        range(flattened_start_index, flattened_start_index + len(flat))
+    )
+    return flattened_indices
+
+
 class fngrad(LazyFunction):
-    def __init__(self, f, wrt, enabled=True, return_outs=False):
+    def __init__(self, f, wrt, return_outs=False):
         self.f = f
-        self.cache = dict()
-        self.outsistuple = False
-        self.enabled = enabled
-        self.graphs = []
         self.return_outs = return_outs
         self.wrt = wrt
 
-    def __call__(self, *args):
-        f = self.f
-        inputs, inputs_pytree = tree_flatten(args)
-        inptensors = extract_input_tensors(inputs)
-        cache_key = get_cache_key(inputs)
-        if self.cache.get(cache_key) is None:
-            outs = f(*args)
-            outs, outs_pytree = tree_flatten(outs)
-            assert len(outs) == 1, "Only one output supported"
-            out = outs[0]
-            gs = grads(self.wrt, out)
-            outlen = len(outs)
-            outs, inptensors = clone_graph(list(outs) + list(gs), list(inptensors))
-            gs = outs[outlen:]
-            outs = outs[:outlen]
-
-            c = {"grads": gs, "inps": inptensors}
-
-            if self.return_outs:
-                c["outs"] = outs
-                self.outs_pytree = outs_pytree
-
-            self.cache[cache_key] = c
-
-            self.inputs_pytree = inputs_pytree
-
-        # now clone c and feed data
-        allouts = []
-        outoffset = 0
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        # fngrad returns the same trace, but the outputs -> outputs, grads if return_outs is True, else grads
+        fn_out = trace.outputs
+        assert len(fn_out) == 1, "Only one output supported"
+        flattened_indices = flatten_argnums(trace.inputs_pytree, self.wrt)
+        wrt = [trace.inputs[i] for i in flattened_indices]
+        grad = grads(wrt, fn_out[0])
+        assert len(grad) == len(wrt), "Gradient and wrt must have the same length"
+        new_outs = fn_out + grad if self.return_outs else grad
+        new_outs_pytree = None
         if self.return_outs:
-            allouts.extend(self.cache[cache_key]["outs"])
-            outoffset = len(self.cache[cache_key]["outs"])
+            new_outs_pytree = PyTreeDef(
+                type=tuple, structure=[trace.outputs_pytree, make_pytree_list(wrt)]
+            )
+        else:
+            new_outs_pytree = trace.outputs_pytree
 
-        allouts.extend(self.cache[cache_key]["grads"])
-
-        allouts, inps = clone_graph(allouts, self.cache[cache_key]["inps"])
-
-        outs = allouts[:outoffset]
-        gs = allouts[outoffset:]
-
-        args, args_pytree = tree_flatten(args)
-        args = [x for x in args if isinstance(x, Tensor)]
-
-        bridge_args_to_lazy_fn(inps, args)
-
-        return (
-            gs if not self.return_outs else (tree_unflatten(self.outs_pytree, outs), gs)
+        return GraphTrace(
+            inputs=trace.inputs,
+            inputs_pytree=trace.inputs_pytree,
+            input_tensors=trace.input_tensors,
+            outputs=new_outs,
+            outputs_pytree=new_outs_pytree,
         )
 
 
 class fnjacobian(LazyFunction):
-    def __init__(self, f, wrt, enabled=True):
+    def __init__(self, f, wrt, return_outs=False):
         self.f = f
-        self.cache = dict()
-        self.outsistuple = False
-        self.enabled = enabled
-        self.graphs = []
         self.wrt = wrt
+        self.return_outs = return_outs
 
-    def __call__(self, *args):
-        f = self.f
-        inputs, inputs_pytree = tree_flatten(args)
-        inptensors = extract_input_tensors(inputs)
-        cache_key = get_cache_key(inputs)
-        if self.cache.get(cache_key) is None:
-            outs = f(*args)
-            outs, outs_pytree = tree_flatten(outs)
-            assert len(outs) == 1, "Only one output supported"
-            out = outs[0]
-            wrt = []
-            for w in self.wrt:
-                if isinstance(w, Tensor):
-                    wrt.append(w)
-                elif isinstance(w, int):
-                    wrt.append(inputs[w])
-
-            jac = jacrev(out, wrt)
-            jac, inptensors = clone_graph(jac, inptensors)
-
-            c = {"jac": jac, "inps": inptensors}
-
-            self.cache[cache_key] = c
-
-            self.inputs_pytree = inputs_pytree
-
-        # now clone c and feed data
-        jac, inps = clone_graph(
-            self.cache[cache_key]["jac"], self.cache[cache_key]["inps"]
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        # fnjacobian returns the same trace, but the outputs -> outputs, jacobian
+        fn_out = trace.outputs
+        assert len(fn_out) == 1, "Only one output supported"
+        flattened_indices = flatten_argnums(trace.inputs_pytree, self.wrt)
+        wrt = [trace.inputs[i] for i in flattened_indices]
+        jac = jacrev(fn_out[0], wrt)
+        new_outs = fn_out + jac if self.return_outs else jac
+        new_outs_pytree = None
+        if self.return_outs:
+            new_outs_pytree = PyTreeDef(
+                type=tuple, structure=[trace.outputs_pytree, make_pytree_list(wrt)]
+            )
+        else:
+            new_outs_pytree = trace.outputs_pytree
+        print(new_outs_pytree)
+        return GraphTrace(
+            inputs=trace.inputs,
+            inputs_pytree=trace.inputs_pytree,
+            input_tensors=trace.input_tensors,
+            outputs=new_outs,
+            outputs_pytree=new_outs_pytree,
         )
-
-        args, args_pytree = tree_flatten(args)
-        args = [x for x in args if isinstance(x, Tensor)]
-
-        bridge_args_to_lazy_fn(inps, args)
-
-        return jac
-
-    def print_trace(self):
-        # traverses the graph and prints a function like representation
-        name_map = {}
-        curr = 0
-
-        def n(x):
-            nonlocal curr
-            if x not in name_map:
-                name_map[x] = f"v{curr}"
-                curr += 1
-            return name_map[x]
-
-        cache = self.cache
-        outs = []
-        if cache[next(iter(cache))].get("outs") is not None:
-            outs = cache[next(iter(cache))]["outs"]
-        if cache[next(iter(cache))].get("jac") is not None:
-            outs = cache[next(iter(cache))]["jac"]
-        inps = cache[next(iter(cache))]["inps"]
-
-        def dtype_name(x):
-            if x.dtype == dt.float32:
-                return "f32"
-            if x.dtype == dt.float64:
-                return "f64"
-            if x.dtype == dt.int32:
-                return "i32"
-
-        def repr_tensor(x):
-            return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
-
-        strres = "f(" + ", ".join([repr_tensor(x) for x in inps]) + "){" + "\n"
-
-        body = []
-        visited = set(x for x in inps)
-
-        def recurse(x):
-            nonlocal body
-            if x not in visited:
-                for child in x.children():
-                    recurse(child)
-                body.append(
-                    f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"
-                )
-                visited.add(x)
-
-        for out in outs:
-            recurse(out)
-        strres += "  " + "\n  ".join(body) + "\n"
-
-        # return statement
-        strres += f"  return {', '.join([n(x) for x in outs])}" + "\n"
-        strres += "}"
-
-        print(strres)
 
 
 class fnhessian(LazyFunction):
-    def __init__(self, f, wrt, enabled=True):
+    def __init__(self, f, wrt, return_outs=False):
         self.f = f
-        self.cache = dict()
-        self.outsistuple = False
-        self.enabled = enabled
-        self.graphs = []
         self.wrt = wrt
+        self.return_outs = return_outs
 
-    def __call__(self, *args):
-        f = self.f
-        inputs, inputs_pytree = tree_flatten(args)
-        inptensors = extract_input_tensors(inputs)
-        cache_key = get_cache_key(inputs)
-        if self.cache.get(cache_key) is None:
-            outs = f(*args)
-            outs, outs_pytree = tree_flatten(outs)
-            assert len(outs) == 1, "Only one output supported"
-            out = outs[0]
-            wrt = []
-            for w in self.wrt:
-                if isinstance(w, Tensor):
-                    wrt.append(w)
-                elif isinstance(w, int):
-                    wrt.append(inputs[w])
-
-            hess = hessian(out, wrt)
-            hess, inptensors = clone_graph(hess, inptensors)
-
-            c = {"hess": hess, "inps": inptensors}
-
-            self.cache[cache_key] = c
-
-            self.inputs_pytree = inputs_pytree
-
-        # now clone c and feed data
-        hess, inps = clone_graph(
-            self.cache[cache_key]["hess"], self.cache[cache_key]["inps"]
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        # fnhessian returns the same trace, but the outputs -> outputs, hessian
+        fn_out = trace.outputs
+        assert len(fn_out) == 1, "Only one output supported"
+        flattened_indices = flatten_argnums(trace.inputs_pytree, self.wrt)
+        wrt = [trace.inputs[i] for i in flattened_indices]
+        hess = hessian(fn_out[0], wrt)
+        new_outs = fn_out + hess if self.return_outs else hess
+        new_outs_pytree = None
+        if self.return_outs:
+            new_outs_pytree = PyTreeDef(
+                type=tuple, structure=[trace.outputs_pytree, make_pytree_list(wrt)]
+            )
+        else:
+            new_outs_pytree = trace.outputs_pytree
+        return GraphTrace(
+            inputs=trace.inputs,
+            inputs_pytree=trace.inputs_pytree,
+            input_tensors=trace.input_tensors,
+            outputs=new_outs,
+            outputs_pytree=new_outs_pytree,
         )
-
-        args, args_pytree = tree_flatten(args)
-        args = [x for x in args if isinstance(x, Tensor)]
-
-        bridge_args_to_lazy_fn(inps, args)
-
-        return hess
-
-    def print_trace(self):
-        # traverses the graph and prints a function like representation
-        name_map = {}
-        curr = 0
-
-        def n(x):
-            nonlocal curr
-            if x not in name_map:
-                name_map[x] = f"v{curr}"
-                curr += 1
-            return name_map[x]
-
-        cache = self.cache
-        outs = cache[next(iter(cache))]["hess"]
-        inps = cache[next(iter(cache))]["inps"]
-
-        def dtype_name(x):
-            if x.dtype == dt.float32:
-                return "f32"
-            if x.dtype == dt.float64:
-                return "f64"
-            if x.dtype == dt.int32:
-                return "i32"
-
-        def repr_tensor(x):
-            return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
-
-        strres = "f(" + ", ".join([repr_tensor(x) for x in inps]) + "){" + "\n"
-
-        body = []
-
-        visited = set(x for x in inps)
-
-        def recurse(x):
-            nonlocal body
-            if x not in visited:
-                for child in x.children():
-                    recurse(child)
-                body.append(
-                    f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"
-                )
-                visited.add(x)
-
-        for out in outs:
-            recurse(out)
-
-        strres += "  " + "\n  ".join(body) + "\n"
-
-        # return statement
-
-        strres += f"  return {', '.join([n(x) for x in outs])}" + "\n"
-
-        strres += "}"
-
-        print(strres)

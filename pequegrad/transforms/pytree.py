@@ -2,11 +2,12 @@ from collections.abc import Mapping, Sequence
 from collections import namedtuple
 from pequegrad.modules import StatefulModule, NonStatefulModule
 
+
+PyTreeDef = namedtuple("PyTreeDef", ["type", "structure"])
+
 is_module = lambda x: isinstance(x, (StatefulModule, NonStatefulModule)) or issubclass(
     type(x), (StatefulModule, NonStatefulModule)
 )
-
-PyTreeDef = namedtuple("PyTreeDef", ["type", "structure"])
 
 
 def is_leaf(node):
@@ -14,8 +15,32 @@ def is_leaf(node):
     return not (isinstance(node, (Mapping, Sequence)) or is_module(node))
 
 
+def make_pytree_list(l):
+    lfs = [PyTreeDef(type=None, structure=None) for _ in l]
+    return PyTreeDef(type=list, structure=lfs)
+
+
+def is_pytree(x):
+    """Check if x is a PyTree type."""
+    return isinstance(x, PyTreeDef)
+
+
 def tree_flatten(pytree):
     """Flatten a PyTree into a list of leaves and a PyTreeDef."""
+    if is_pytree(pytree):
+        # if is None, return empty list
+        if pytree.type is None:
+            return [pytree], pytree
+
+        leaves = []
+        for i, child_def in pytree.structure:
+            leaves.extend(tree_flatten(i)[0])
+        return leaves, pytree
+
+    if is_module(pytree):
+        params = pytree.parameters()
+        child_struct = [PyTreeDef(type=None, structure=None) for _ in params]
+        return params, PyTreeDef(type=list, structure=child_struct)
     if is_leaf(pytree):
         return [pytree], PyTreeDef(type=None, structure=None)
     if isinstance(pytree, Mapping):
@@ -34,9 +59,6 @@ def tree_flatten(pytree):
             leaves.extend(flattened)
             structure.append(child_structure)
         return leaves, PyTreeDef(type=type(pytree), structure=structure)
-    elif is_module(pytree):
-        params = pytree.parameters()
-        return params, PyTreeDef(type="_module", structure=None)
 
 
 def tree_unflatten(pytree_def, leaves):
@@ -63,9 +85,7 @@ def tree_unflatten(pytree_def, leaves):
         return pytree_def.type(result)
 
     elif pytree_def.type == "_module":
-        raise NotImplementedError(
-            "tree_unflatten for modules is not implemented. Can only flatten modules."
-        )
+        raise NotImplementedError("Module unflattening not implemented yet.")
 
 
 def count_leaves(pytree_def):

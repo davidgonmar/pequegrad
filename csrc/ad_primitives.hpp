@@ -792,6 +792,8 @@ public:
   DEFINE_BACKWARD
 
   DEFINE_PRECOMPUTE
+
+  DType dtype_to() { return _dtype_to; }
 };
 
 class Fill : public ADPrimitive {

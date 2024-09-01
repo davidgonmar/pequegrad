@@ -33,7 +33,7 @@ class MLP(StatefulModule):
 def train(model, ds, epochs=13, batch_size=4096):
     start = None
     # weights of the network printed
-    use_jit = True
+    use_jit = False
     optcls = Adam if not use_jit else JittedAdam
     optim = optcls(model.parameters(), lr=0.021)
 
@@ -43,7 +43,7 @@ def train(model, ds, epochs=13, batch_size=4096):
         prediction = model.forward(batch_X)
         return prediction.cross_entropy_loss_probs(batch_Y)
 
-    loss_and_grads = fngrad(get_loss, wrt=model.parameters(), return_outs=True)
+    loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
 
     i = 0
 
@@ -55,8 +55,7 @@ def train(model, ds, epochs=13, batch_size=4096):
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         loss, g = train_step(x, batch_y_onehot, model)
         optim.step(g)
-        if i == 0 and use_jit:
-            train_step.print_trace()
+
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break

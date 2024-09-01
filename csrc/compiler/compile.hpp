@@ -41,6 +41,27 @@ static void remove_useless_broadcast(Tensor &out, std::set<int> &visited) {
   }
 }
 
+// remove useless astype
+static void remove_useless_astype(Tensor &out, std::set<int> &visited) {
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
+  visited.insert(out.id);
+  for (Tensor &node : out.ad_node()->children()) {
+    if (node.ad_node()->primitive()->str() == "AsType") {
+      auto &astype = dynamic_cast<AsType &>(*node.ad_node()->primitive().get());
+      if (astype.dtype_to() == node.children()[0].dtype()) {
+        Tensor &child = node.ad_node()->children()[0];
+        out.ad_node()->replace_child(node, child);
+      }
+    }
+  }
+
+  for (Tensor &node : out.ad_node()->children()) {
+    remove_useless_astype(node, visited);
+  }
+}
+
 static void rec_schedule(Tensor &root, Tensor &out, std::set<int> &visited,
                          std::vector<Tensor> &allouts) {
   // get a map of tensor -> tensors that have that tensor as a child (depend on
@@ -743,6 +764,9 @@ static void compile(std::vector<Tensor> &outs) {
     std::set<int> visited;
     remove_useless_broadcast(out, visited);
     COMPILER_LOG("removed useless broadcasts");
+    visited.clear();
+    remove_useless_astype(out, visited);
+    COMPILER_LOG("removed useless astype");
     std::set<int> visited1;
     recursive_fused_linear(out, visited1);
     COMPILER_LOG("fused linear");

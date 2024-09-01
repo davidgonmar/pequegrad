@@ -121,7 +121,7 @@ class Linear(StatefulModule):
     def __init__(self, in_features, out_features, bias=True):
         super().__init__()
         self.weight = kaiming_init((in_features, out_features))
-        self.bias = ModuleParam.zeros(out_features) if bias else None
+        self.bias = ModuleParam.zeros((out_features,)) if bias else None
 
     def forward(self, input):
         a = input @ self.weight
@@ -145,7 +145,7 @@ class Conv2d(StatefulModule):
         self.kernel = kaiming_init(
             (out_channels, in_channels, kernel_size, kernel_size)
         )
-        self.bias = ModuleParam.zeros(out_channels) if bias else None
+        self.bias = ModuleParam.zeros((out_channels,)) if bias else None
         assert isinstance(self.kernel, ModuleParam)
         assert isinstance(self.bias, ModuleParam) or self.bias is None
         self.stride = stride
@@ -251,7 +251,7 @@ class LayerNorm(StatefulModule):
             if isinstance(normalized_shape, (tuple, list))
             else (normalized_shape,)
         )
-        self.bias = ModuleParam.zeros(normalized_shape)
+        self.bias = ModuleParam.zeros((normalized_shape,))
 
     def forward(self, input: Tensor) -> Tensor:
         return input.layer_norm(self.normalized_shape, self.eps, self.weight, self.bias)
