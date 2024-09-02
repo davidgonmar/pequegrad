@@ -16,6 +16,61 @@ class GraphTrace:
     outputs_pytree: PyTreeDef
 
 
+def print_trace(trace):
+    # traverses the graph and prints a function like representation
+    name_map = {}
+    curr = 0
+
+    def n(x):
+        nonlocal curr
+        if x.id not in name_map:
+            name_map[x.id] = f"v{curr}"
+            curr += 1
+        return name_map[x.id]
+
+    inps = trace.inputs
+    outs = trace.outputs
+
+    def dtype_name(x):
+        if x.dtype == dt.float32:
+            return "f32"
+        if x.dtype == dt.float64:
+            return "f64"
+        if x.dtype == dt.int32:
+            return "i32"
+
+    def repr_tensor(x):
+        return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
+
+    strres = "f(" + ", ".join([repr_tensor(x) for x in inps]) + "){" + "\n"
+
+    body = []
+    visited = set(x for x in inps)
+
+    def recurse(x):
+        nonlocal body
+        if x.id not in visited:
+            for child in x.children():
+                recurse(child)
+            # if it is in the inputs, do not print it
+            if x.id in [x.id for x in inps]:
+                return
+            body.append(
+                f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"
+            )
+            visited.add(x.id)
+
+    for out in outs:
+        recurse(out)
+    strres += "  " + "\n  ".join(body) + "\n"
+
+    # return statement
+    strres += f"  return {', '.join([n(x) for x in outs])}" + "\n"
+    strres += "}"
+
+    print(strres)
+
+
 class Cache(dict):
     def __getitem__(self, __key: Any) -> GraphTrace:
         return super().get(__key, None)
@@ -23,6 +78,11 @@ class Cache(dict):
 
 class LazyFunction:
     cache = Cache()
+
+    def get_last_trace(self):
+        assert len(self.cache) > 0, "No cache entries"
+        last_key = list(self.cache.keys())[-1]
+        return self.cache[last_key]
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         raise NotImplementedError
@@ -84,57 +144,9 @@ class LazyFunction:
         return tree_unflatten(trace.outputs_pytree, trace.outputs)
 
     def print_trace(self):
-        # traverses the graph and prints a function like representation
-        name_map = {}
-        curr = 0
-
-        def n(x):
-            nonlocal curr
-            if x not in name_map:
-                name_map[x] = f"v{curr}"
-                curr += 1
-            return name_map[x]
-
         # get last key in cache
         assert len(self.cache) > 0, "No cache entries"
         last_key = list(self.cache.keys())[-1]
         trace = self.cache[last_key]
 
-        inps = trace.inputs
-        outs = trace.outputs
-
-        def dtype_name(x):
-            if x.dtype == dt.float32:
-                return "f32"
-            if x.dtype == dt.float64:
-                return "f64"
-            if x.dtype == dt.int32:
-                return "i32"
-
-        def repr_tensor(x):
-            return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
-
-        strres = "f(" + ", ".join([repr_tensor(x) for x in inps]) + "){" + "\n"
-
-        body = []
-        visited = set(x for x in inps)
-
-        def recurse(x):
-            nonlocal body
-            if x not in visited:
-                for child in x.children():
-                    recurse(child)
-                body.append(
-                    f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"
-                )
-                visited.add(x)
-
-        for out in outs:
-            recurse(out)
-        strres += "  " + "\n  ".join(body) + "\n"
-
-        # return statement
-        strres += f"  return {', '.join([n(x) for x in outs])}" + "\n"
-        strres += "}"
-
-        print(strres)
+        print_trace(trace)
