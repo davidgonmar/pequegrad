@@ -33,7 +33,7 @@ class LazyFunction:
         cache_key = get_cache_key(inputs)
         if self.cache[cache_key] is not None:
             cached = self.cache[cache_key]
-            inputs = cached.inputs
+            inputs = [x for x in cached.inputs]
             cloned_outputs, cloned_input_tensors = clone_graph(
                 cached.outputs, cached.input_tensors
             )
@@ -57,6 +57,14 @@ class LazyFunction:
             )
 
         outs, outs_pytree = tree_flatten(self.f(*args))
+        outs, input_tensors = clone_graph(outs, input_tensors)
+        inputs = [x for x in inputs]
+        x = 0
+        for i, inp in enumerate(inputs):
+            if isinstance(inp, Tensor):
+                inputs[i] = input_tensors[x]
+                x += 1
+
         orig_trace = GraphTrace(
             inputs=inputs,
             inputs_pytree=inputs_pytree,

@@ -1,4 +1,4 @@
-from pequegrad import Tensor, device, grads
+from pequegrad import Tensor, device, fngrad
 import pequegrad.modules as nn
 from pequegrad.optim import SGD, Adam, JittedAdam, JittedSGD
 import argparse
@@ -157,16 +157,13 @@ if not args.test:
     str2 = "adam" if use_sgd else "sgd"
     optim = optims[str1][str2](model.parameters(), lr=args.lr)
 
-    def train_step(x, y, model):
+    def get_loss(x, y, model):
         outs = model(x)
-        loss = outs.cross_entropy_loss_probs(y)
-        g = grads(model.parameters(), loss)
-        return loss, g
+        return outs.cross_entropy_loss_probs(y)
 
+    val_and_grad = fngrad(get_loss, wrt=[2], return_outs=True)
     use_jit = args.jit  # does not work yet
-    train_step = (
-        jit(train_step) if use_jit else train_step
-    )
+    train_step = jit(val_and_grad) if use_jit else val_and_grad
     import time
 
     for epoch in range(args.epochs):
@@ -178,7 +175,6 @@ if not args.test:
             labels = labels.eval().to(DEVICE)
             labels = Tensor.one_hot(100, labels)
             loss, g = train_step(inputs, labels, model)
-       
             optim.step(g)
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"

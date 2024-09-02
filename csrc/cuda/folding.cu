@@ -414,6 +414,8 @@ void CudnnPooling2D::dispatch_cuda(const std::vector<Tensor> &inputs,
     PG_CHECK_CUDNN(cudnnSetPooling2dDescriptor(
         pooling_desc, CUDNN_POOLING_MAX, CUDNN_PROPAGATE_NAN, kernel_shape[0],
         kernel_shape[1], padding[0], padding[1], strides[0], strides[1]));
+
+    this->initialized = true;
   }
 
   float alpha = 1.0f, beta = 0.0f;

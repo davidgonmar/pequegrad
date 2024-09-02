@@ -19,5 +19,5 @@ class jit(LazyFunction):
             outputs_pytree=trace.outputs_pytree,
         )
         compile(new_trace.outputs)
-        
+
         return new_trace

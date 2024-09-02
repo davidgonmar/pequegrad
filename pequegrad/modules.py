@@ -81,7 +81,7 @@ class StatefulModule:
                         pp.to_(backend)
         return self
 
-    def _search_parameters_and_submodules(self):
+    def _search_parameters_and_submodules(self, root=False):
         params = []
         submodules = []
         for p in self.__dict__.values():
@@ -97,21 +97,17 @@ class StatefulModule:
                         submodules.append(pp)
                     elif isinstance(pp, ModuleParam):
                         params.append(pp)
-
-        self._parameters = params
-        self._submodules = submodules
+        if root:
+            self._parameters = params
+            self._submodules = submodules
 
         return params, submodules
 
     def parameters(self):
         # first call to parameters, we need to retrieve them, then they are cached
         if not self._parameters:
-            self._search_parameters_and_submodules()
+            self._search_parameters_and_submodules(root=True)
         return self._parameters
-
-    def reset_grad(self):
-        for p in self.parameters():
-            p.reset_grad()
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)

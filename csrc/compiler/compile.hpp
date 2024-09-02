@@ -772,10 +772,13 @@ static void compile(std::vector<Tensor> &outs) {
     COMPILER_LOG("fused linear");
     visited.clear();
     recursive_conv2d(out, visited);
+    /**/
     COMPILER_LOG("conv2d");
     visited.clear();
+
     recursive_pooling2d(out, visited);
     COMPILER_LOG("pooling2d");
+
     visited.clear();
     recursive_conv2d_vjp_weight(out, visited);
     COMPILER_LOG("conv2d vjp weight");

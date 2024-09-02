@@ -146,5 +146,3 @@ class fnhessian(LazyFunction):
             outputs=new_outs,
             outputs_pytree=new_outs_pytree,
         )
-
-
