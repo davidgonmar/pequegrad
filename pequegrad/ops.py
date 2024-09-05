@@ -674,11 +674,13 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
 
     if n == 1:
         return tensors[0]
-
     assert all(
-        tensors[0].shape == t.shape for t in tensors[1:]
-    ), "all input tensors must have the same shape, got {}".format(
-        [t.shape for t in tensors]
+        tensors[0].shape[i] == t.shape[i]
+        for t in tensors[1:]
+        for i in range(len(tensors[0].shape))
+        if i != dim
+    ), "all input tensors must have the same shape in dimensions other than {}, got {}".format(
+        dim, [t.shape for t in tensors]
     )
 
     new_shape = list(tensors[0].shape)
@@ -716,8 +718,6 @@ def pad_to(self, i: int, value: float = 0.0):
         np.pad(npt, (0, i - npt.shape[0]), mode="constant", constant_values=value),
         device=self.device,
     )
-
-
 
 
 def matmul_with_reshapes(self, other):

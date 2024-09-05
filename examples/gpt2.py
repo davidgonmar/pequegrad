@@ -163,7 +163,6 @@ class CausalSelfAttention(pnn.Module):
         )  # (B, nh, T, hs)
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        # att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
         att = pg.where(
             pg.broadcast_to(self.bias[:, :T, :T] == 0, att.shape),
             pg.broadcast_to(
@@ -402,11 +401,18 @@ class GPT(pnn.Module):
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
-        idx = idx.numpy()
-        assert idx.dtype == np.int32
-        previous_text = tokenizer.decode(idx)
+        assert idx.dtype == pg.dt.int32
+        previous_text = tokenizer.decode(idx.numpy())
         print(previous_text, end="", flush=True)
         curr = len(idx) - 1
+        # pad idx to max block size
+        idx = (
+            idx.astype(pg.dt.int32)
+            .pad_to(self.block_size)
+            .eval()
+            .detach()
+            .to(device.cuda)
+        )
 
         @pg.jit
         def runmodel(x, model, curridx, temperature):
@@ -416,51 +422,54 @@ class GPT(pnn.Module):
 
             return probs.squeeze(0)
 
+        import sys
+        import time
+        def update_top_line(message):
+            # Save the current cursor position
+            sys.stdout.write("\033[s")
+            
+            # Move cursor to the first line (where the program started), clear it, and print the new message
+            sys.stdout.write("\033[1;1H\033[K")  # Move cursor to row 1, column 1 and clear the line
+            sys.stdout.write(message + "\n")     # Print the updated message
+            
+            # Restore the cursor to its original position
+            sys.stdout.write("\033[u")
+            
+            sys.stdout.flush()
         for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = (
-                idx if idx.shape[0] <= self.block_size else idx[-self.block_size :]
-            )  # takes the last block_size elements
-
-            idx = pg.Tensor(idx_cond)
+            start = time.time()
             # forward the model to get the logits for the index in the sequence
-            nextpoweroftwo = 1024
-            padded = (
-                idx.astype(pg.dt.int32)
-                .pad_to(max(nextpoweroftwo, 1024))
-                .eval()
-                .detach()
-                .to(device.cuda)
-            )
-
             probs = runmodel(
-                padded,
+                idx,
                 self,
                 pg.Tensor([curr], device=device.cuda).astype(pg.dt.int32),
                 temperature,
             ).numpy()
             # sample from the distribution
             idx_next = np.random.choice(probs.shape[0], p=probs)
+            if curr + 1 < len(idx):
+                curr += 1
+            else:
+                idx = pg.pad_to(idx[1:], self.block_size)
             # append sampled index to the running sequence and continue
-            idx = np.concatenate([idx.numpy(), [idx_next]], axis=0)
-
-            current_text = tokenizer.decode(idx)
-            # print only the new text generated
-            print(current_text[len(previous_text) :], end="", flush=True)
-            previous_text = current_text
+            idx = pg.assign_at(
+                idx, pg.Tensor(idx_next, device=device.cuda).astype(pg.dt.int32), curr
+            )
+            last_token_decoded = tokenizer.decode([idx_next])
+            print(last_token_decoded, end="", flush=True)
 
             # if the last idx is an eos token, we're done
-            if idx_next == tokenizer.encode("<|endoftext|>")[0]:
+            if last_token_decoded == "<|endoftext|>":
                 print("found eos token, stopping")
                 break
-            curr += 1
-        return idx
+
+            update_top_line(f"elapsed time for last token: {time.time() - start:.5f} s")
 
 
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 use_mingpt = True  # use minGPT or huggingface/transformers model?
-model_type = "gpt2"
+model_type = "gpt2-medium"
 device = pg.device.cuda
 
 if use_mingpt:
@@ -474,7 +483,7 @@ model.to(device)
 model.eval()
 
 
-def generate(prompt="", num_samples=10, steps=10000, do_sample=True):
+def generate(prompt="", num_samples=50, steps=100000, do_sample=True):
     tokenizer = GPT2Tokenizer.from_pretrained(model_type)
     if prompt == "":
         # to create unconditional samples...
@@ -490,12 +499,9 @@ def generate(prompt="", num_samples=10, steps=10000, do_sample=True):
     x = x.reshape((-1,))
 
     # forward the model `steps` times to get samples, in a batch
-    y = model.generate(
+    model.generate(
         x, max_new_tokens=steps, do_sample=do_sample, top_k=40, tokenizer=tokenizer
     )
-
-    out = tokenizer.decode(y.squeeze())
-    print(out)
 
 
 generate(

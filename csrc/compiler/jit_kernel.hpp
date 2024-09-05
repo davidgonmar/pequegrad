@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-
 // We keep a global kernel database of all the kernels that have been compiled
 // Avoids recompiling the same kernel multiple times
 class KernelDatabase {
@@ -16,10 +15,10 @@ private:
 
 public:
   // Delete copy constructor and assignment operator to prevent copying
-  KernelDatabase(const KernelDatabase&) = delete;
-  KernelDatabase& operator=(const KernelDatabase&) = delete;
+  KernelDatabase(const KernelDatabase &) = delete;
+  KernelDatabase &operator=(const KernelDatabase &) = delete;
 
-  static KernelDatabase& get_instance() {
+  static KernelDatabase &get_instance() {
     static KernelDatabase instance;
     return instance;
   }

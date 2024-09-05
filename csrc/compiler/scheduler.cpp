@@ -51,6 +51,13 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs,
 
   if ((is<Sum>(prim) || is<MaxReduce>(prim) || is<Mean>(prim)) &&
       *allow_reduce) {
+    // if the reduction has too many elements, dont fuse for now (slower than
+    // pre-compiled kernel)
+    auto reduce_prim = dynamic_cast<Reduce &>(*prim);
+    if (reduce_prim.total_reduce_numel() >= 1024) {
+      leafs.push_back(node);
+      return;
+    }
     *allow_reduce = false;
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
                    dependents, allgraph,
