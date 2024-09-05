@@ -103,11 +103,6 @@ class LazyFunction:
                 if isinstance(inp, Tensor):
                     inputs[i] = cloned_input_tensors[x]
                     x += 1
-            assert len(inputs) == len(
-                cloned_input_tensors
-            ), "Mismatch in input tensors: {} vs {}".format(
-                len(inputs), len(cloned_input_tensors)
-            )
             return GraphTrace(
                 inputs=inputs,
                 inputs_pytree=cached.inputs_pytree,

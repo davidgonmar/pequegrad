@@ -1,7 +1,6 @@
 """
 Partially from https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
 """
-from pequegrad.compile import jit
 import math
 import os
 import sys
@@ -202,8 +201,6 @@ class Block(pnn.Module):
         )
         m = self.mlp
         self.mlpf = lambda x: m.dropout(m.c_proj(m.act(m.c_fc(x))))
-
-        self.mlpf = jit(self.mlpf, externals=self.parameters())
 
         def forward_(x):
             x = x + self.attn(self.ln_1(x))
@@ -410,16 +407,18 @@ class GPT(pnn.Module):
         previous_text = tokenizer.decode(idx)
         print(previous_text, end="", flush=True)
         curr = len(idx) - 1
-        from functools import partial
 
         def softmaxjitted(x):
             return pg.softmax(x, dim=-1)
 
-        @partial(jit, externals=self.parameters(), enabled=True)
-        def runmodel(x):
-            return self(x)
+        @pg.jit
+        def runmodel(x, model, curridx, temperature):
+            logits = model(x)
+            logits = logits[curridx] / temperature
+            probs = pg.softmax(logits, dim=-1)
 
-        jitted = runmodel
+            return probs.squeeze(0)
+
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = (
@@ -437,13 +436,12 @@ class GPT(pnn.Module):
                 .to(device.cuda)
             )
 
-            logits = jitted(padded)
-
-            # pluck the logits at the final step and scale by desired temperature
-            logits = logits[curr] / temperature  # no neg indexing yet
-            # optionally crop the logits to only the top k options
-            # apply softmax to convert logits to (normalized) probabilities
-            probs = softmaxjitted(logits).numpy()
+            probs = runmodel(
+                padded,
+                self,
+                pg.Tensor([curr], device=device.cuda).astype(pg.dt.int32),
+                temperature,
+            ).numpy()
 
             # sample from the distribution
             idx_next = np.random.choice(probs.shape[0], p=probs)

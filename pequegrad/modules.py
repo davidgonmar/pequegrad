@@ -31,7 +31,7 @@ class StatefulModule:
 
     def _propagate_training(self):
         if self._submodules is None:
-            self._search_parameters_and_submodules()
+            self._search_parameters_and_submodules(root=True)
         for m in self._submodules:
             m._training = self._training
             m._propagate_training()
