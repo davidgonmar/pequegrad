@@ -1368,8 +1368,6 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
   if (is_reduce) {
     kernel_name = "reduce_kernel";
   }
-  // add random id
-  kernel_name += "_" + std::to_string(rand());
   std::string res = render_fn_header("", ir) + "\n";
   res = "__global__ void __launch_bounds__(1024, 1) " + kernel_name + "(" +
         res + ")";

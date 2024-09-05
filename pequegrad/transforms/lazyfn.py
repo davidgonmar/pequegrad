@@ -28,7 +28,7 @@ def print_trace(trace):
             curr += 1
         return name_map[x.id]
 
-    inps = trace.inputs
+    inps = trace.input_tensors
     outs = trace.outputs
 
     def dtype_name(x):
@@ -42,7 +42,19 @@ def print_trace(trace):
     def repr_tensor(x):
         return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
 
-    strres = "f(" + ", ".join([repr_tensor(x) for x in inps]) + "){" + "\n"
+    def non_tensors_dtype(x):
+        if isinstance(x, int):
+            return f"{x}: i32"
+        if isinstance(x, float):
+            return f"{x}: f32"
+        return type(x).__name__
+
+    def repr_arg(x):
+        if isinstance(x, Tensor):
+            return repr_tensor(x)
+        return non_tensors_dtype(x)
+
+    strres = "f(" + ", ".join([repr_arg(x) for x in inps]) + ") {\n"
 
     body = []
     visited = set(x for x in inps)

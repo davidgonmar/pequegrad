@@ -6,6 +6,36 @@
 #include <string>
 #include <vector>
 
+
+// We keep a global kernel database of all the kernels that have been compiled
+// Avoids recompiling the same kernel multiple times
+class KernelDatabase {
+private:
+  std::unordered_map<std::string, void *> _kernels;
+  KernelDatabase() {} // private constructor to prevent instantiation
+
+public:
+  // Delete copy constructor and assignment operator to prevent copying
+  KernelDatabase(const KernelDatabase&) = delete;
+  KernelDatabase& operator=(const KernelDatabase&) = delete;
+
+  static KernelDatabase& get_instance() {
+    static KernelDatabase instance;
+    return instance;
+  }
+
+  void add_kernel(const std::string &src, void *kernel) {
+    _kernels[src] = kernel;
+  }
+
+  void *get_kernel(const std::string &src) {
+    if (_kernels.find(src) == _kernels.end()) {
+      return nullptr;
+    }
+    return _kernels[src];
+  }
+};
+
 class AbstractKernel {
 public:
   virtual void launch(std::vector<void *> &args) = 0;
@@ -82,7 +112,14 @@ private:
 public:
   CudaKernel(const std::string &name, const std::string &src)
       : _name(name), _src(src) {
-    this->compile();
+    // if the kernel has already been compiled, get the function pointer
+    void *kernel = KernelDatabase::get_instance().get_kernel(src);
+    if (kernel != nullptr) {
+      _func = reinterpret_cast<CUfunction>(kernel);
+    } else {
+      this->compile();
+      KernelDatabase::get_instance().add_kernel(src, _func);
+    }
   }
 
   dim3 blocks_per_grid() const { return _blocks_per_grid; }

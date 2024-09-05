@@ -408,9 +408,6 @@ class GPT(pnn.Module):
         print(previous_text, end="", flush=True)
         curr = len(idx) - 1
 
-        def softmaxjitted(x):
-            return pg.softmax(x, dim=-1)
-
         @pg.jit
         def runmodel(x, model, curridx, temperature):
             logits = model(x)
@@ -442,7 +439,6 @@ class GPT(pnn.Module):
                 pg.Tensor([curr], device=device.cuda).astype(pg.dt.int32),
                 temperature,
             ).numpy()
-
             # sample from the distribution
             idx_next = np.random.choice(probs.shape[0], p=probs)
             # append sampled index to the running sequence and continue
