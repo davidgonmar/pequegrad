@@ -402,6 +402,7 @@ class GPT(pnn.Module):
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
         assert idx.dtype == pg.dt.int32
+        self.block_size = 512
         previous_text = tokenizer.decode(idx.numpy())
         print(previous_text, end="", flush=True)
         curr = len(idx) - 1
@@ -469,7 +470,7 @@ class GPT(pnn.Module):
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 use_mingpt = True  # use minGPT or huggingface/transformers model?
-model_type = "gpt2-medium"
+model_type = "gpt2"
 device = pg.device.cuda
 
 if use_mingpt:
