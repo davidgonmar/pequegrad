@@ -89,7 +89,11 @@ class Cache(dict):
 
 
 class LazyFunction:
-    cache = Cache()
+    cache: Cache
+
+    def __init__(self, f):
+        self.f = f
+        self.cache = Cache()
 
     def get_last_trace(self):
         assert len(self.cache) > 0, "No cache entries"

@@ -1,9 +1,6 @@
 from pequegrad.backend.c import grads  # noqa
 from pequegrad.backend.c import (
-    compile,
-    clone_graph,
     Tensor,
-    dt,
     custom_prim as _custom_prim,
 )  # noqa
 from .pytree import (
@@ -15,9 +12,6 @@ from .lazyfn import (
     LazyFunction,
     GraphTrace,
     Cache,
-    print_trace,
-    bridge_args_to_lazy_fn,
-    clone_graph,
     get_cache_key,
 )  # noqa
 import itertools
@@ -70,9 +64,9 @@ def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
 
 class fngrad(LazyFunction):
     def __init__(self, f, wrt, return_outs=False):
-        self.f = f
-        self.return_outs = return_outs
+        super().__init__(f)
         self.wrt = wrt
+        self.return_outs = return_outs
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # fngrad returns the same trace, but the outputs -> outputs, grads if return_outs is True, else grads
@@ -104,7 +98,7 @@ class fngrad(LazyFunction):
 
 class fnjacobian(LazyFunction):
     def __init__(self, f, wrt, return_outs=False):
-        self.f = f
+        super().__init__(f)
         self.wrt = wrt
         self.return_outs = return_outs
 
@@ -112,7 +106,9 @@ class fnjacobian(LazyFunction):
         # fnjacobian returns the same trace, but the outputs -> outputs, jacobian
         fn_out = trace.outputs
         assert len(fn_out) == 1, "Only one output supported"
-        flattened_indices = flatten_argnums(trace.inputs_pytree, self.wrt)
+        flattened_indices = []
+        for xxx in self.wrt:
+            flattened_indices.extend(flatten_argnums(trace.inputs_pytree, [xxx]))
         wrt = [trace.inputs[i] for i in flattened_indices]
         jac = jacrev(fn_out[0], wrt)
         new_outs = fn_out + jac if self.return_outs else jac

@@ -425,18 +425,22 @@ class GPT(pnn.Module):
 
         import sys
         import time
+
         def update_top_line(message):
             # Save the current cursor position
             sys.stdout.write("\033[s")
-            
+
             # Move cursor to the first line (where the program started), clear it, and print the new message
-            sys.stdout.write("\033[1;1H\033[K")  # Move cursor to row 1, column 1 and clear the line
-            sys.stdout.write(message + "\n")     # Print the updated message
-            
+            sys.stdout.write(
+                "\033[1;1H\033[K"
+            )  # Move cursor to row 1, column 1 and clear the line
+            sys.stdout.write(message + "\n")  # Print the updated message
+
             # Restore the cursor to its original position
             sys.stdout.write("\033[u")
-            
+
             sys.stdout.flush()
+
         for _ in range(max_new_tokens):
             start = time.time()
             # forward the model to get the logits for the index in the sequence
