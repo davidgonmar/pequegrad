@@ -181,6 +181,91 @@ class fnhessian(LazyFunction):
         )
 
 
+_vjp = grads
+
+
+def _vhp(out, wrt, v):
+    # vhp = hessian(out, wrt) @ v
+    # assuming out is a scalar, vhp = vjp(vjp(out, wrt), v)
+    # to match the torch behaviour, we accumulate the second derivatives
+    assert len(out.shape) == 0, "Output must be a scalar"
+    res = []
+
+    def _acc(x, y):
+        return x + y
+
+    for arg in wrt:
+        vjp = _vjp([arg], out)[0]
+        curres = Tensor.zeros(arg.shape, device=arg.device)
+        for arg2 in wrt:
+            vjp2 = _vjp([arg2], vjp, v)[0]
+            curres = _acc(curres, vjp2)
+        res.append(curres)  # as seen, we accumulate over the second derivatives
+    return res
+
+
+# Vector-Hessian product
+class fnvhp(LazyFunction):
+    def __init__(self, f, wrt, return_outs=False):
+        super().__init__(f)
+        self.wrt = wrt
+        self.return_outs = return_outs
+
+    def _get_args_for_original_fn(self, args):
+        # all args except last one
+        return args[:-1]
+
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        # fnvhp returns the same trace, but the outputs -> outputs, vhp
+        fn_out = trace.outputs
+
+        """
+        def f(a, b):
+            return (a * b).sum()
+
+        hessianfn = fnhessian(f, wrt=[0, 1], return_outs=True)
+
+        # transformed fn
+        def f(a, b, v): # notice the extra v
+            return (a * b).sum(), some_computation(a, b, v)
+
+        """
+        assert len(fn_out) == 1, "Only one output supported"
+        flattened_indices = []
+        for xxx in self.wrt:
+            flattened_indices.extend(flatten_argnums(trace.inputs_pytree, [xxx]))
+        wrt = [trace.inputs[i] for i in flattened_indices]
+        v = trace.inputs[-1]
+        vhp = _vhp(fn_out[0], wrt, v)
+        new_outs = fn_out + vhp if self.return_outs else vhp
+        new_outs_pytree = None
+        if self.return_outs:
+            new_outs_pytree = PyTreeDef(
+                type=tuple,
+                structure=[
+                    trace.outputs_pytree,
+                    make_pytree_list(wrt),
+                ],
+            )
+        else:
+            new_outs_pytree = PyTreeDef(
+                type=list,
+                structure=[
+                    PyTreeDef(
+                        type=list,
+                        structure=[make_pytree_list(wrt)],
+                    )
+                ],
+            )
+        return GraphTrace(
+            inputs=trace.inputs,
+            inputs_pytree=trace.inputs_pytree,
+            input_tensors=trace.input_tensors,
+            outputs=new_outs,
+            outputs_pytree=new_outs_pytree,
+        )
+
+
 # Given a graph, to compute its gradients we usually keep the graphs' intermediate values in memory.
 # Gradient checkpointing can be seen as 'duplicating' the graph, then computing the gradients of the duplicated graph.
 

@@ -13,7 +13,7 @@ def function2(a, b):
 
 
 def function3(a, b):
-    return a ** 2 + b ** 2
+    return a**2 + b**2
 
 
 @pytest.fixture

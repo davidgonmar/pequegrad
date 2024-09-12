@@ -103,6 +103,9 @@ class LazyFunction:
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         raise NotImplementedError
 
+    def _get_args_for_original_fn(self, args: Any) -> List[Any]:
+        return args
+
     def _get_maybe_cached_transformed_trace(self, args: List[Any]) -> GraphTrace:
         inputs, inputs_pytree = tree_flatten(args)
         input_tensors = extract_input_tensors(inputs)
@@ -127,7 +130,7 @@ class LazyFunction:
                 outputs_pytree=cached.outputs_pytree,
             )
 
-        outs, outs_pytree = tree_flatten(self.f(*args))
+        outs, outs_pytree = tree_flatten(self.f(*self._get_args_for_original_fn(args)))
         outs, input_tensors = clone_graph(outs, input_tensors)
         inputs = [x for x in inputs]
         x = 0

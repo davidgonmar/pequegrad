@@ -1,4 +1,4 @@
-from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device
+from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device, fnvhp
 import numpy as np
 import torch
 
@@ -63,3 +63,26 @@ for i in range(3):
         np.testing.assert_allclose(
             hessians[i][j].numpy(), torch_hessian[i][j].detach().numpy(), rtol=1e-5
         )
+
+# VECTOR HESSIAN PRODUCT
+
+
+# needs a scalar function
+def f_scalar(a, b):
+    x = a * b
+    return x.sum()
+
+
+v = Tensor(np.random.rand(5, 5), device=device.cuda).astype(dt.float32)
+vtorch = torch.tensor(v.numpy(), requires_grad=True)
+
+f_and_vhp = fnvhp(f_scalar, wrt=[0, 1], return_outs=True)
+
+res, vhp = f_and_vhp(a, b, v)
+
+torch_res, torch_vhp = torch.autograd.functional.vhp(
+    f_scalar, (at, bt), (vtorch, vtorch)
+)
+
+for i in range(2):
+    np.testing.assert_allclose(vhp[i].numpy(), torch_vhp[i].detach().numpy(), rtol=1e-5)
