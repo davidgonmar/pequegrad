@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from PIL import Image
 from pequegrad.tensor import Tensor
-from pequegrad.transforms import Resize, ToTensor, Normalize, EvalAndDetach
+from pequegrad.ds_transforms import Resize, ToTensor, Normalize, EvalAndDetach
 
 
 @pytest.fixture

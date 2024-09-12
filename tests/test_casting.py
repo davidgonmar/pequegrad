@@ -1,4 +1,4 @@
-from pequegrad.autodiff import grads
+from pequegrad.transforms.autodiff import grads
 from pequegrad.tensor import Tensor
 from pequegrad import device, dt
 import numpy as np
