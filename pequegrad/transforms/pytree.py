@@ -20,6 +20,11 @@ def make_pytree_list(l):
     return PyTreeDef(type=list, structure=lfs)
 
 
+def make_pytree_nested_list(rows, cols):
+    lfs = [make_pytree_list(range(cols)) for _ in range(rows)]
+    return PyTreeDef(type=list, structure=lfs)
+
+
 def is_pytree(x):
     """Check if x is a PyTree type."""
     return isinstance(x, PyTreeDef)

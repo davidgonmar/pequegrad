@@ -4,6 +4,7 @@ from pequegrad.backend.c import (
     custom_prim as _custom_prim,
 )  # noqa
 from .pytree import (
+    make_pytree_nested_list,
     tree_flatten,
     PyTreeDef,
     make_pytree_list,
@@ -44,9 +45,12 @@ def jacrev(out, wrt):
 
 
 def hessian(out, wrt):
-    # hessian can be seen as the jacobian of the gradient!
-    gs = grads(wrt, out)[0]
-    return jacrev(gs, wrt)
+    # hessian can be seen as the jacobian of the jacobian
+    jacs = jacrev(out, wrt)
+    hesss = []
+    for jac in jacs:
+        hesss.append(jacrev(jac, wrt))
+    return hesss
 
 
 def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
@@ -130,7 +134,7 @@ class fnjacobian(LazyFunction):
 
 class fnhessian(LazyFunction):
     def __init__(self, f, wrt, return_outs=False):
-        self.f = f
+        super().__init__(f)
         self.wrt = wrt
         self.return_outs = return_outs
 
@@ -138,17 +142,36 @@ class fnhessian(LazyFunction):
         # fnhessian returns the same trace, but the outputs -> outputs, hessian
         fn_out = trace.outputs
         assert len(fn_out) == 1, "Only one output supported"
-        flattened_indices = flatten_argnums(trace.inputs_pytree, self.wrt)
+        flattened_indices = []
+        for xxx in self.wrt:
+            flattened_indices.extend(flatten_argnums(trace.inputs_pytree, [xxx]))
         wrt = [trace.inputs[i] for i in flattened_indices]
         hess = hessian(fn_out[0], wrt)
-        new_outs = fn_out + hess if self.return_outs else hess
+        flattened_hess = []
+        for h in hess:
+            for hh in h:
+                flattened_hess.append(hh)
+        new_outs = fn_out + flattened_hess if self.return_outs else flattened_hess
         new_outs_pytree = None
         if self.return_outs:
             new_outs_pytree = PyTreeDef(
-                type=tuple, structure=[trace.outputs_pytree, make_pytree_list(wrt)]
+                type=tuple,
+                structure=[
+                    trace.outputs_pytree,
+                    make_pytree_nested_list(len(wrt), len(wrt)),
+                ],
             )
         else:
-            new_outs_pytree = trace.outputs_pytree
+            # if we have 3 argnums, the result is a list of lists of tensors of size (3, 3)
+            new_outs_pytree = PyTreeDef(
+                type=list,
+                structure=[
+                    PyTreeDef(
+                        type=list,
+                        structure=[make_pytree_nested_list(len(wrt), len(wrt))],
+                    )
+                ],
+            )
         return GraphTrace(
             inputs=trace.inputs,
             inputs_pytree=trace.inputs_pytree,

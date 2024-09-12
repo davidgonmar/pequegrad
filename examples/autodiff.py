@@ -1,4 +1,4 @@
-from pequegrad import fngrad, fnjacobian, Tensor, dt
+from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device
 import numpy as np
 import torch
 
@@ -9,9 +9,9 @@ def f(a, b, c):
 
 
 a, b, c = (
-    Tensor(np.random.rand(5, 5)),
-    Tensor(np.random.rand(5, 5)),
-    Tensor(np.random.rand(5, 5)),
+    Tensor(np.random.rand(5, 5), device=device.cuda),
+    Tensor(np.random.rand(5, 5), device=device.cuda),
+    Tensor(np.random.rand(5, 5), device=device.cuda),
 )
 a, b, c = a.astype(dt.float32), b.astype(dt.float32), c.astype(dt.float32)
 
@@ -48,3 +48,18 @@ for i in range(3):
     np.testing.assert_allclose(
         jacobian[i].numpy(), torch_jacobian[i].detach().numpy(), rtol=1e-5
     )
+
+
+# HESSIAN (this one takes a while :( )
+
+f_and_hessian = fnhessian(f, wrt=[0, 1, 2], return_outs=True)
+
+res, hessians = f_and_hessian(a, b, c)
+
+torch_hessian = torch.func.hessian(f, argnums=(0, 1, 2))(at, bt, ct)
+
+for i in range(3):
+    for j in range(3):
+        np.testing.assert_allclose(
+            hessians[i][j].numpy(), torch_hessian[i][j].detach().numpy(), rtol=1e-5
+        )
