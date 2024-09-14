@@ -6,8 +6,9 @@ inside_jit = ContextVar("inside_jit", default=False)
 
 
 class jit(LazyFunction):
-    def __init__(self, f):
+    def __init__(self, f, opts=None):
         super().__init__(f)
+        self.opts = opts
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph
@@ -18,6 +19,6 @@ class jit(LazyFunction):
             outputs=trace.outputs,
             outputs_pytree=trace.outputs_pytree,
         )
-        compile(new_trace.outputs)
+        compile(new_trace.outputs, self.opts)
 
         return new_trace

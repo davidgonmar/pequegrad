@@ -852,60 +852,127 @@ static void remove_useless_copy(Tensor &out, std::set<int> &visited) {
   }
 }
 
+
+class CompileOptions {
+public:
+  bool remove_useless_copy = true;
+  bool remove_useless_broadcast = true;
+  bool remove_useless_astype = true;
+  bool recursive_fused_linear = true;
+  bool recursive_conv2d = true;
+  bool recursive_pooling2d = true;
+  bool recursive_conv2d_vjp_weight = true;
+  bool recursive_conv2d_vjp_input = true;
+  bool recursive_local_response_normalization = true;
+  bool recursive_lrn_vjp_input = true;
+  bool recursive_max_pooling2d_backward = true;
+  bool hoist_broadcasts = true;
+  bool common_subexpr_elim = true;
+  bool fuser = true;
+};
+
 #define COMPILER_DBG 1
 #define COMPILER_LOG(x)                                                        \
   if (COMPILER_DBG) {                                                          \
     std::cout << "[DEBUG]: " << x << "\n";                                     \
   }
-static void compile(std::vector<Tensor> &outs) {
+static void _compile(std::vector<Tensor> &outs, CompileOptions options = CompileOptions()) {
   for (Tensor &out : outs) {
     COMPILER_LOG("compiling " << out.str());
     std::set<int> visited;
-    // remove copies
-    visited.clear();
-    remove_useless_copy(out, visited);
-    COMPILER_LOG("removed useless copy");
-    visited.clear();
-    remove_useless_broadcast(out, visited);
-    COMPILER_LOG("removed useless broadcasts");
-    visited.clear();
-    remove_useless_astype(out, visited);
-    COMPILER_LOG("removed useless astype");
+    if (options.remove_useless_copy) {
+      visited.clear();
+      remove_useless_copy(out, visited);
+      COMPILER_LOG("removed useless copy");
+    }
+    if (options.remove_useless_broadcast) {
+      visited.clear();
+      remove_useless_broadcast(out, visited);
+      COMPILER_LOG("removed useless broadcasts");
+    }
+    if (options.remove_useless_astype) {
+      visited.clear();
+      remove_useless_astype(out, visited);
+      COMPILER_LOG("removed useless astype");
+    }
     std::set<int> visited1;
-    recursive_fused_linear(out, visited1);
-    COMPILER_LOG("fused linear");
+    if (options.recursive_fused_linear) {
+      recursive_fused_linear(out, visited1);
+      COMPILER_LOG("fused linear");
+    }
     visited.clear();
-    recursive_conv2d(out, visited);
-    /**/
-    COMPILER_LOG("conv2d");
+    if (options.recursive_conv2d) {
+      recursive_conv2d(out, visited);
+      COMPILER_LOG("conv2d");
+    }
     visited.clear();
-
-    recursive_pooling2d(out, visited);
-    COMPILER_LOG("pooling2d");
-
+    if (options.recursive_pooling2d) {
+      recursive_pooling2d(out, visited);
+      COMPILER_LOG("pooling2d");
+    }
     visited.clear();
-    recursive_conv2d_vjp_weight(out, visited);
-    COMPILER_LOG("conv2d vjp weight");
+    if (options.recursive_conv2d_vjp_weight) {
+      recursive_conv2d_vjp_weight(out, visited);
+      COMPILER_LOG("conv2d vjp weight");
+    }
     visited.clear();
-    recursive_conv2d_vjp_input(out, visited);
-    COMPILER_LOG("conv2d vjp input");
+    if (options.recursive_conv2d_vjp_input) {
+      recursive_conv2d_vjp_input(out, visited);
+      COMPILER_LOG("conv2d vjp input");
+    }
     visited.clear();
-    recursive_local_response_normalization(out, visited);
-    COMPILER_LOG("local response normalization");
+    if (options.recursive_local_response_normalization) {
+      recursive_local_response_normalization(out, visited);
+      COMPILER_LOG("local response normalization");
+    }
     visited.clear();
-    recursive_lrn_vjp_input(out, visited);
-    COMPILER_LOG("lrn vjp input");
+    if (options.recursive_lrn_vjp_input) {
+      recursive_lrn_vjp_input(out, visited);
+      COMPILER_LOG("lrn vjp input");
+    }
     visited.clear();
-    recursive_max_pooling2d_backward(out, visited);
-    COMPILER_LOG("max pooling2d backward");
+    if (options.recursive_max_pooling2d_backward) {
+      recursive_max_pooling2d_backward(out, visited);
+      COMPILER_LOG("max pooling2d backward");
+    }
     visited.clear();
-    hoist_broadcasts(out, visited);
-    COMPILER_LOG("hoist broadcasts");
+    if (options.hoist_broadcasts) {
+      hoist_broadcasts(out, visited);
+      COMPILER_LOG("hoist broadcasts");
+    }
     std::set<int> visited2;
-    rec_schedule(out, out, visited2, outs);
-    COMPILER_LOG("scheduled");
+    if (options.fuser) {
+      rec_schedule(out, out, visited2, outs);
+      COMPILER_LOG("scheduled");
+    }
   }
-  common_subexpr_elim(outs);
-  COMPILER_LOG("common subexpr elim");
+  if (options.common_subexpr_elim) {
+    common_subexpr_elim(outs);
+    COMPILER_LOG("common subexpr elim");
+  }
 }
+
+static void compile(std::vector<Tensor> &outs, std::map<std::string, bool> options = {}) {
+  CompileOptions compile_options;
+  compile_options.remove_useless_copy = options.find("remove_useless_copy") != options.end() ? options["remove_useless_copy"] : true;
+  compile_options.remove_useless_broadcast = options.find("remove_useless_broadcast") != options.end() ? options["remove_useless_broadcast"] : true;
+  compile_options.remove_useless_astype = options.find("remove_useless_astype") != options.end() ? options["remove_useless_astype"] : true;
+  compile_options.recursive_fused_linear = options.find("recursive_fused_linear") != options.end() ? options["recursive_fused_linear"] : true;
+  compile_options.recursive_conv2d = options.find("recursive_conv2d") != options.end() ? options["recursive_conv2d"] : true;
+  compile_options.recursive_pooling2d = options.find("recursive_pooling2d") != options.end() ? options["recursive_pooling2d"] : true;
+  compile_options.recursive_conv2d_vjp_weight =
+      options.find("recursive_conv2d_vjp_weight") != options.end() ? options["recursive_conv2d_vjp_weight"] : true;
+  compile_options.recursive_conv2d_vjp_input =
+      options.find("recursive_conv2d_vjp_input") != options.end() ? options["recursive_conv2d_vjp_input"] : true;
+  compile_options.recursive_local_response_normalization =
+      options.find("recursive_local_response_normalization") != options.end() ? options["recursive_local_response_normalization"] : true;
+  compile_options.recursive_lrn_vjp_input = options.find("recursive_lrn_vjp_input") != options.end() ? options["recursive_lrn_vjp_input"] : true;
+  compile_options.recursive_max_pooling2d_backward =
+      options.find("recursive_max_pooling2d_backward") != options.end() ? options["recursive_max_pooling2d_backward"] : true;
+  compile_options.hoist_broadcasts = options.find("hoist_broadcasts") != options.end() ? options["hoist_broadcasts"] : true;
+  compile_options.common_subexpr_elim = options.find("common_subexpr_elim") != options.end() ? options["common_subexpr_elim"] : true;
+  compile_options.fuser = options.find("fuser") != options.end() ? options["fuser"] : true;
+  _compile(outs, compile_options);
+}
+
 } // namespace pg

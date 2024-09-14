@@ -415,7 +415,7 @@ class GPT(pnn.Module):
             .to(device.cuda)
         )
 
-        @pg.jit
+        @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
         def runmodel(x, model, curridx, temperature):
             logits = model(x)
             logits = logits[curridx] / temperature

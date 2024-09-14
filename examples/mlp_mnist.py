@@ -55,9 +55,6 @@ def train(model, ds, epochs=13, batch_size=4096):
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         loss, g = train_step(x, batch_y_onehot, model)
         optim.step(g)
-        import pequegrad.viz as viz
-
-        viz.viz([loss] + g, name="loss")
 
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:

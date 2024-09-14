@@ -5,6 +5,7 @@ from typing import List, Any
 from dataclasses import dataclass
 from .utils import bridge_args_to_lazy_fn
 from .pytree import tree_unflatten
+import functools
 
 
 @dataclass
@@ -94,6 +95,10 @@ class LazyFunction:
     def __init__(self, f):
         self.f = f
         self.cache = Cache()
+
+    @classmethod
+    def withargs(cls, *args, **kwargs):
+        return functools.partial(cls, *args, **kwargs)
 
     def get_last_trace(self):
         assert len(self.cache) > 0, "No cache entries"
