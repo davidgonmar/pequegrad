@@ -753,6 +753,105 @@ void hoist_broadcasts(Tensor &out, std::set<int> &visited) {
   }
 }
 
+// COMMON SUBEXPRESSION ELIMINATION
+// hash a tensor
+static std::string hash_tensor(Tensor &t, std::map<std::string, Tensor> &hash2ten, std::map<int, std::string> &ten2hash, int* nonelim_count) {
+  // if visited, return
+  if (ten2hash.find(t.id) != ten2hash.end()) {
+    return ten2hash[t.id];
+  }
+  std::string hash = t.ad_node()->primitive()->str();
+  // if we are using non-eliminable primitives, we need to add a random number
+  std::array<std::string, 4> nonelim = {"ADPrimitive", "FromNumpy", "Compiled", "JitBoundary"};
+  for (const auto& substr : nonelim) {
+    if (hash.find(substr) != std::string::npos) {
+      hash += "--" + std::to_string(*nonelim_count) + "--";
+      (*nonelim_count)++;
+      break;
+    }
+  }
+  // add shape, stride, dtype to hash
+  auto get_str = [](const std::vector<unsigned long long> &shape) {
+    std::string str = "";
+    for (auto &s : shape) {
+      str += std::to_string(s) + ",";
+    }
+    return str;
+  };
+
+  auto get_str2 = [](const std::vector<long> &shape) {
+    std::string str = "";
+    for (auto &s : shape) {
+      str += std::to_string(s) + ",";
+    }
+    return str;
+  };
+
+  hash += get_str(t.shape());
+  hash += get_str2(t.strides());
+
+  hash += int(t.dtype());
+
+
+  for (Tensor &child : t.ad_node()->children()) {
+    hash += hash_tensor(child, hash2ten, ten2hash, nonelim_count);
+  }
+  hash2ten[hash] = t;
+  ten2hash[t.id] = hash;
+  return hash;
+}
+
+void _common_subexpr_elim_recursive(Tensor &out, std::map<std::string, Tensor> &hash2ten, std::map<int, std::string> &ten2hash) {
+  for (Tensor &child : out.ad_node()->children()) {
+    out.ad_node()->replace_child(child, hash2ten[ten2hash[child.id]]);
+  }
+  for (Tensor &child : out.ad_node()->children()) {
+    _common_subexpr_elim_recursive(child, hash2ten, ten2hash);
+  }
+}
+void common_subexpr_elim(std::vector<Tensor> &outs) {
+  // This automatically removes common subexpressions
+  // Since for any 2 tensors, if they have the same hash, they are the same
+  // Since it is a map, the contents of hashes[hash] will be canonical
+  std::map<std::string, Tensor> hash2ten;
+  std::map<int, std::string> ten2hash;
+  int nonelim_count = 0;
+  for (Tensor &out : outs) {
+    hash_tensor(out, hash2ten, ten2hash, &nonelim_count);
+  }
+  for (Tensor &out : outs) {
+    _common_subexpr_elim_recursive(out, hash2ten, ten2hash);
+  }
+}
+
+static bool is_copy(ADPrimitive &primitive) {
+  return dynamic_cast<Copy *>(&primitive) != nullptr;
+}
+
+static bool is_copy(Tensor &tensor) {
+  return is_copy(*tensor.ad_node()->primitive().get());
+}
+
+static void remove_useless_copy(Tensor &out, std::set<int> &visited) {
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
+  for (Tensor &node : out.ad_node()->children()) {
+    visited.insert(out.id);
+    if (is_copy(node)) {
+        Tensor &child = node.ad_node()->children()[0];
+        // connect out with the child
+        out.ad_node()->replace_child(node, child);
+        continue;
+      }
+  }
+  
+
+  for (Tensor &node : out.ad_node()->children()) {
+    remove_useless_copy(node, visited);
+  }
+}
+
 #define COMPILER_DBG 1
 #define COMPILER_LOG(x)                                                        \
   if (COMPILER_DBG) {                                                          \
@@ -762,6 +861,11 @@ static void compile(std::vector<Tensor> &outs) {
   for (Tensor &out : outs) {
     COMPILER_LOG("compiling " << out.str());
     std::set<int> visited;
+    // remove copies
+    visited.clear();
+    remove_useless_copy(out, visited);
+    COMPILER_LOG("removed useless copy");
+    visited.clear();
     remove_useless_broadcast(out, visited);
     COMPILER_LOG("removed useless broadcasts");
     visited.clear();
@@ -801,5 +905,7 @@ static void compile(std::vector<Tensor> &outs) {
     rec_schedule(out, out, visited2, outs);
     COMPILER_LOG("scheduled");
   }
+  common_subexpr_elim(outs);
+  COMPILER_LOG("common subexpr elim");
 }
 } // namespace pg

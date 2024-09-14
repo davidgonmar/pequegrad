@@ -1,5 +1,5 @@
 import pequegrad as pg
-from pequegrad.compile import jit
+from pequegrad.transforms.compile import jit
 import numpy as np
 import pequegrad.viz as viz
 import torch
@@ -20,13 +20,13 @@ torchx = torch.tensor(x.numpy(), requires_grad=True)
 def lrn(x):
     out = pg.local_response_norm(x, size=5, k=2, alpha=1e-4, beta=0.75)
     g = pg.grads([x], out, pg.fill(out.shape, pg.dt.float32, 12222.0, pg.device.cuda))
-    return out, *g
+    return out + 2, g[0] + 2
 
 
 def torchlrn(x):
     out = torch.nn.LocalResponseNorm(size=5, k=2, alpha=1e-4, beta=0.75)(x)
     out.backward(torch.ones_like(out))
-    return out, x.grad
+    return out + 2, x.grad + 2
 
 
 out = jit(lrn)(x)

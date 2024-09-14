@@ -33,7 +33,7 @@ class MLP(StatefulModule):
 def train(model, ds, epochs=13, batch_size=4096):
     start = None
     # weights of the network printed
-    use_jit = False
+    use_jit = True
     optcls = Adam if not use_jit else JittedAdam
     optim = optcls(model.parameters(), lr=0.021)
 
@@ -55,6 +55,9 @@ def train(model, ds, epochs=13, batch_size=4096):
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         loss, g = train_step(x, batch_y_onehot, model)
         optim.step(g)
+        import pequegrad.viz as viz
+
+        viz.viz([loss] + g, name="loss")
 
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:

@@ -203,7 +203,7 @@ public:
 
 class CudnnLRNVjpInput : public ADPrimitive {
   DEFINE_DISPATCH_CUDA
-  DEFINE_STR_NAME(CudnnLRN)
+  DEFINE_STR_NAME(CudnnLRNVjpInput)
   cudnnHandle_t handle;
   cudnnTensorDescriptor_t input_grad_desc;
   cudnnTensorDescriptor_t input_desc;
