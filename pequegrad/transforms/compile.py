@@ -8,7 +8,7 @@ inside_jit = ContextVar("inside_jit", default=False)
 class jit(LazyFunction):
     def __init__(self, f, opts=None):
         super().__init__(f)
-        self.opts = opts
+        self.opts = opts if opts is not None else {}
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph

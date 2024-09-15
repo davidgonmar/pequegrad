@@ -176,6 +176,7 @@ if not args.test:
             labels = Tensor.one_hot(100, labels)
             loss, g = train_step(inputs, labels, model)
             optim.step(g)
+
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
