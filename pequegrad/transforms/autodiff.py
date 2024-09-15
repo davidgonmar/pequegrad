@@ -89,7 +89,7 @@ class fngrad(LazyFunction):
                 type=tuple, structure=[trace.outputs_pytree, make_pytree_list(wrt)]
             )
         else:
-            new_outs_pytree = PyTreeDef(type=list, structure=[make_pytree_list(wrt)])
+            new_outs_pytree = make_pytree_list(wrt)
 
         return GraphTrace(
             inputs=trace.inputs,

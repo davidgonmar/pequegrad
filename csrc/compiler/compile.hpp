@@ -755,15 +755,19 @@ void hoist_broadcasts(Tensor &out, std::set<int> &visited) {
 
 // COMMON SUBEXPRESSION ELIMINATION
 // hash a tensor
-static std::string hash_tensor(Tensor &t, std::map<std::string, Tensor> &hash2ten, std::map<int, std::string> &ten2hash, int* nonelim_count) {
+static std::string hash_tensor(Tensor &t,
+                               std::map<std::string, Tensor> &hash2ten,
+                               std::map<int, std::string> &ten2hash,
+                               int *nonelim_count) {
   // if visited, return
   if (ten2hash.find(t.id) != ten2hash.end()) {
     return ten2hash[t.id];
   }
   std::string hash = t.ad_node()->primitive()->str();
   // if we are using non-eliminable primitives, we need to add a random number
-  std::array<std::string, 4> nonelim = {"ADPrimitive", "FromNumpy", "Compiled", "JitBoundary"};
-  for (const auto& substr : nonelim) {
+  std::array<std::string, 4> nonelim = {"ADPrimitive", "FromNumpy", "Compiled",
+                                        "JitBoundary"};
+  for (const auto &substr : nonelim) {
     if (hash.find(substr) != std::string::npos) {
       hash += "--" + std::to_string(*nonelim_count) + "--";
       (*nonelim_count)++;
@@ -792,7 +796,6 @@ static std::string hash_tensor(Tensor &t, std::map<std::string, Tensor> &hash2te
 
   hash += int(t.dtype());
 
-
   for (Tensor &child : t.ad_node()->children()) {
     hash += hash_tensor(child, hash2ten, ten2hash, nonelim_count);
   }
@@ -801,7 +804,9 @@ static std::string hash_tensor(Tensor &t, std::map<std::string, Tensor> &hash2te
   return hash;
 }
 
-void _common_subexpr_elim_recursive(Tensor &out, std::map<std::string, Tensor> &hash2ten, std::map<int, std::string> &ten2hash) {
+void _common_subexpr_elim_recursive(Tensor &out,
+                                    std::map<std::string, Tensor> &hash2ten,
+                                    std::map<int, std::string> &ten2hash) {
   for (Tensor &child : out.ad_node()->children()) {
     out.ad_node()->replace_child(child, hash2ten[ten2hash[child.id]]);
   }
@@ -839,19 +844,17 @@ static void remove_useless_copy(Tensor &out, std::set<int> &visited) {
   for (Tensor &node : out.ad_node()->children()) {
     visited.insert(out.id);
     if (is_copy(node)) {
-        Tensor &child = node.ad_node()->children()[0];
-        // connect out with the child
-        out.ad_node()->replace_child(node, child);
-        continue;
-      }
+      Tensor &child = node.ad_node()->children()[0];
+      // connect out with the child
+      out.ad_node()->replace_child(node, child);
+      continue;
+    }
   }
-  
 
   for (Tensor &node : out.ad_node()->children()) {
     remove_useless_copy(node, visited);
   }
 }
-
 
 class CompileOptions {
 public:
@@ -876,7 +879,8 @@ public:
   if (COMPILER_DBG) {                                                          \
     std::cout << "[DEBUG]: " << x << "\n";                                     \
   }
-static void _compile(std::vector<Tensor> &outs, CompileOptions options = CompileOptions()) {
+static void _compile(std::vector<Tensor> &outs,
+                     CompileOptions options = CompileOptions()) {
   for (Tensor &out : outs) {
     COMPILER_LOG("compiling " << out.str());
     std::set<int> visited;
@@ -952,26 +956,63 @@ static void _compile(std::vector<Tensor> &outs, CompileOptions options = Compile
   }
 }
 
-static void compile(std::vector<Tensor> &outs, std::map<std::string, bool> options = {}) {
+static void compile(std::vector<Tensor> &outs,
+                    std::map<std::string, bool> options = {}) {
   CompileOptions compile_options;
-  compile_options.remove_useless_copy = options.find("remove_useless_copy") != options.end() ? options["remove_useless_copy"] : true;
-  compile_options.remove_useless_broadcast = options.find("remove_useless_broadcast") != options.end() ? options["remove_useless_broadcast"] : true;
-  compile_options.remove_useless_astype = options.find("remove_useless_astype") != options.end() ? options["remove_useless_astype"] : true;
-  compile_options.recursive_fused_linear = options.find("recursive_fused_linear") != options.end() ? options["recursive_fused_linear"] : true;
-  compile_options.recursive_conv2d = options.find("recursive_conv2d") != options.end() ? options["recursive_conv2d"] : true;
-  compile_options.recursive_pooling2d = options.find("recursive_pooling2d") != options.end() ? options["recursive_pooling2d"] : true;
+  compile_options.remove_useless_copy =
+      options.find("remove_useless_copy") != options.end()
+          ? options["remove_useless_copy"]
+          : true;
+  compile_options.remove_useless_broadcast =
+      options.find("remove_useless_broadcast") != options.end()
+          ? options["remove_useless_broadcast"]
+          : true;
+  compile_options.remove_useless_astype =
+      options.find("remove_useless_astype") != options.end()
+          ? options["remove_useless_astype"]
+          : true;
+  compile_options.recursive_fused_linear =
+      options.find("recursive_fused_linear") != options.end()
+          ? options["recursive_fused_linear"]
+          : true;
+  compile_options.recursive_conv2d =
+      options.find("recursive_conv2d") != options.end()
+          ? options["recursive_conv2d"]
+          : true;
+  compile_options.recursive_pooling2d =
+      options.find("recursive_pooling2d") != options.end()
+          ? options["recursive_pooling2d"]
+          : true;
   compile_options.recursive_conv2d_vjp_weight =
-      options.find("recursive_conv2d_vjp_weight") != options.end() ? options["recursive_conv2d_vjp_weight"] : true;
+      options.find("recursive_conv2d_vjp_weight") != options.end()
+          ? options["recursive_conv2d_vjp_weight"]
+          : true;
   compile_options.recursive_conv2d_vjp_input =
-      options.find("recursive_conv2d_vjp_input") != options.end() ? options["recursive_conv2d_vjp_input"] : true;
+      options.find("recursive_conv2d_vjp_input") != options.end()
+          ? options["recursive_conv2d_vjp_input"]
+          : true;
   compile_options.recursive_local_response_normalization =
-      options.find("recursive_local_response_normalization") != options.end() ? options["recursive_local_response_normalization"] : true;
-  compile_options.recursive_lrn_vjp_input = options.find("recursive_lrn_vjp_input") != options.end() ? options["recursive_lrn_vjp_input"] : true;
+      options.find("recursive_local_response_normalization") != options.end()
+          ? options["recursive_local_response_normalization"]
+          : true;
+  compile_options.recursive_lrn_vjp_input =
+      options.find("recursive_lrn_vjp_input") != options.end()
+          ? options["recursive_lrn_vjp_input"]
+          : true;
   compile_options.recursive_max_pooling2d_backward =
-      options.find("recursive_max_pooling2d_backward") != options.end() ? options["recursive_max_pooling2d_backward"] : true;
-  compile_options.hoist_broadcasts = options.find("hoist_broadcasts") != options.end() ? options["hoist_broadcasts"] : true;
-  compile_options.common_subexpr_elim = options.find("common_subexpr_elim") != options.end() ? options["common_subexpr_elim"] : true;
-  compile_options.fuser = options.find("fuser") != options.end() ? options["fuser"] : true;
+      options.find("recursive_max_pooling2d_backward") != options.end()
+          ? options["recursive_max_pooling2d_backward"]
+          : true;
+  compile_options.hoist_broadcasts =
+      options.find("hoist_broadcasts") != options.end()
+          ? options["hoist_broadcasts"]
+          : true;
+  compile_options.common_subexpr_elim =
+      options.find("common_subexpr_elim") != options.end()
+          ? options["common_subexpr_elim"]
+          : true;
+  compile_options.fuser =
+      options.find("fuser") != options.end() ? options["fuser"] : true;
   _compile(outs, compile_options);
 }
 
