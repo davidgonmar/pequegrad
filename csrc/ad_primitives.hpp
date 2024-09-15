@@ -688,11 +688,14 @@ public:
   DEFINE_PRECOMPUTE
 };
 
-class FusedLinearBiasReLU : public ADPrimitive {
+class FusedLinearBiasAct : public ADPrimitive {
 public:
-  bool is_relu;
+  std::string activation;
+
+  explicit FusedLinearBiasAct(std::string activation)
+      : activation(activation) {}
   DEFINE_DISPATCH_CUDA
-  DEFINE_STR_NAME(FusedLinearBiasReLU)
+  std::string str() { return "FusedLinearBiasAct<" + activation + ">"; }
 };
 
 // SLICING

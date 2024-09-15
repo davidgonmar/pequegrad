@@ -584,12 +584,15 @@ def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
     for i, (padleft, padright) in enumerate(padpairs):
         new_shape[i] += padleft + padright
 
-    out = pg.broadcast_to(pg.fill(
-        (),
-        x.dtype,
-        constant,
-        x.device,
-    ), new_shape)
+    out = pg.broadcast_to(
+        pg.fill(
+            (),
+            x.dtype,
+            constant,
+            x.device,
+        ),
+        new_shape,
+    )
     slices = [slice(int(pad[0]), int(-pad[1])) for pad in padpairs]
 
     for i, _slice in enumerate(slices):

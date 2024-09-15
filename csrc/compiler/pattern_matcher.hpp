@@ -109,6 +109,7 @@ DEFINE_BINARY_OP_CLASS(Mul)
 DEFINE_BINARY_OP_CLASS(Div)
 DEFINE_BINARY_OP_CLASS(Max)
 DEFINE_BINARY_OP_CLASS(MatMul)
+DEFINE_BINARY_OP_CLASS(Pow)
 
 // Unary Operation Classes
 #define DEFINE_UNARY_OP_CLASS(op)                                              \
@@ -133,6 +134,87 @@ DEFINE_UNARY_OP_CLASS(Sum)
 DEFINE_UNARY_OP_CLASS(MaxReduce)
 DEFINE_UNARY_OP_CLASS(Im2Col)
 
+// Fill
+class _Scalar : public _Pattern {
+  float value;
+
+public:
+  explicit _Scalar(float value) : value(value) {}
+
+  bool match(Tensor &t) override {
+    if (t.ad_node()->primitive()->str().find("Fill") != 0 &&
+        ((t.ad_node()->primitive()->str().find("Broadcast") != 0) ||
+         (t.ad_node()->children()[0].ad_node()->primitive()->str().find(
+              "Fill") != 0))) {
+      return false;
+    }
+
+    // if it is broadcast, fill is the child;
+    if (t.ad_node()->primitive()->str().find("Broadcast") == 0) {
+      auto fill = dynamic_cast<Fill &>(
+          *t.ad_node()->children()[0].ad_node()->primitive());
+      if (fill.value() != value) {
+        return false;
+      }
+
+      if (this->for_capture_tensor) {
+        *this->for_capture_tensor = t;
+      }
+      return true;
+    }
+
+    auto fill = dynamic_cast<Fill &>(*t.ad_node()->primitive());
+    if (fill.value() != value) {
+      return false;
+    }
+
+    if (this->for_capture_tensor) {
+      *this->for_capture_tensor = t;
+    }
+
+    return true;
+  }
+};
+
+class _ScalarApprox : public _Pattern {
+  float value;
+
+public:
+  explicit _ScalarApprox(float value) : value(value) {}
+
+  bool match(Tensor &t) override {
+    if (t.ad_node()->primitive()->str().find("Fill") != 0 &&
+        ((t.ad_node()->primitive()->str().find("Broadcast") != 0) ||
+         (t.ad_node()->children()[0].ad_node()->primitive()->str().find(
+              "Fill") != 0))) {
+      return false;
+    }
+    // if it is broadcast, fill is the child;
+    if (t.ad_node()->primitive()->str().find("Broadcast") == 0) {
+      auto fill = dynamic_cast<Fill &>(
+          *t.ad_node()->children()[0].ad_node()->primitive());
+      if (std::abs(fill.value() - value) > 1e-3) {
+        return false;
+      }
+
+      if (this->for_capture_tensor) {
+        *this->for_capture_tensor = t;
+      }
+      return true;
+    }
+
+    auto fill = dynamic_cast<Fill &>(*t.ad_node()->primitive());
+    if (std::abs(fill.value() - value) > 1e-3) {
+      return false;
+    }
+
+    if (this->for_capture_tensor) {
+      *this->for_capture_tensor = t;
+    }
+
+    return true;
+  }
+};
 // Factory Functions
 std::shared_ptr<_Pattern> Input(std::shared_ptr<Tensor> tensor) {
   return std::make_shared<_Input>(std::move(tensor));
@@ -141,6 +223,11 @@ std::shared_ptr<_Pattern> Input(std::shared_ptr<Tensor> tensor) {
 std::shared_ptr<_Pattern> Add(std::shared_ptr<_Pattern> lhs,
                               std::shared_ptr<_Pattern> rhs) {
   return std::make_shared<_Add>(std::move(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> Pow(std::shared_ptr<_Pattern> lhs,
+                              std::shared_ptr<_Pattern> rhs) {
+  return std::make_shared<_Pow>(std::move(lhs), std::move(rhs));
 }
 
 std::shared_ptr<_Pattern> Sub(std::shared_ptr<_Pattern> lhs,
@@ -209,6 +296,96 @@ std::shared_ptr<_Pattern> &operator<<(std::shared_ptr<_Pattern> p,
   p->for_capture_tensor = std::move(t);
   return p;
 }
+
+std::shared_ptr<_Pattern> Scalar(float value) {
+  return std::make_shared<_Scalar>(value);
+}
+
+// Overloaded binary ops
+
+std::shared_ptr<_Pattern> operator+(std::shared_ptr<_Pattern> lhs,
+                                    std::shared_ptr<_Pattern> rhs) {
+  return Add(std::move(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator-(std::shared_ptr<_Pattern> lhs,
+                                    std::shared_ptr<_Pattern> rhs) {
+  return Sub(std::move(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator*(std::shared_ptr<_Pattern> lhs,
+                                    std::shared_ptr<_Pattern> rhs) {
+  return Mul(std::move(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator/(std::shared_ptr<_Pattern> lhs,
+                                    std::shared_ptr<_Pattern> rhs) {
+  return Div(std::move(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator^(std::shared_ptr<_Pattern> lhs,
+                                    std::shared_ptr<_Pattern> rhs) {
+  return Pow(std::move(lhs), std::move(rhs));
+}
+
+// with floats, it is a scalar approx
+
+std::shared_ptr<_Pattern> ScalarApprox(float value) {
+  return std::make_shared<_ScalarApprox>(value);
+}
+
+std::shared_ptr<_Pattern> operator+(std::shared_ptr<_Pattern> lhs, float rhs) {
+  return Add(std::move(lhs), ScalarApprox(rhs));
+}
+
+std::shared_ptr<_Pattern> operator-(std::shared_ptr<_Pattern> lhs, float rhs) {
+  return Sub(std::move(lhs), ScalarApprox(rhs));
+}
+
+std::shared_ptr<_Pattern> operator*(std::shared_ptr<_Pattern> lhs, float rhs) {
+  return Mul(std::move(lhs), ScalarApprox(rhs));
+}
+
+std::shared_ptr<_Pattern> operator/(std::shared_ptr<_Pattern> lhs, float rhs) {
+  return Div(std::move(lhs), ScalarApprox(rhs));
+}
+
+std::shared_ptr<_Pattern> operator+(float lhs, std::shared_ptr<_Pattern> rhs) {
+  return Add(ScalarApprox(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator-(float lhs, std::shared_ptr<_Pattern> rhs) {
+  return Sub(ScalarApprox(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator*(float lhs, std::shared_ptr<_Pattern> rhs) {
+  return Mul(ScalarApprox(lhs), std::move(rhs));
+}
+
+std::shared_ptr<_Pattern> operator/(float lhs, std::shared_ptr<_Pattern> rhs) {
+
+  return Div(ScalarApprox(lhs), std::move(rhs));
+}
+
+// pow
+std::shared_ptr<_Pattern> operator^(std::shared_ptr<_Pattern> lhs, float rhs) {
+  return Pow(std::move(lhs), ScalarApprox(rhs));
+}
+
+std::shared_ptr<_Pattern> operator^(float lhs, std::shared_ptr<_Pattern> rhs) {
+  return Pow(ScalarApprox(lhs), std::move(rhs));
+}
+/*
+def tanh(self):
+  # 2 / (1 + torch.exp(-2 * x)) - 1
+  return 2 / (1 + pg.exp(-2 * self)) - 1
+*/
+
+std::shared_ptr<_Pattern> Tanh(std::shared_ptr<_Pattern> operand) {
+  return Div(Scalar(2), Add(Exp(Mul(operand, Scalar(-2))), Scalar(1))) -
+         Scalar(1);
+}
+
 } // namespace pattern_matcher
 
 } // namespace pg

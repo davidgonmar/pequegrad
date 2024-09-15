@@ -637,25 +637,61 @@ void recursive_pooling2d(Tensor &out, std::set<int> &visited) {
   }
 }
 
-class FusedLinearBiasReLUPatternMatcherResult {
+enum class ActivationKind {
+  ReLU,
+  GeLU,
+  None,
+};
+class FusedLinearBiasActPatternMatcherResult {
 public:
   Tensor input;
   Tensor weight;
   Tensor bias;
+  ActivationKind kind;
 };
 
-Maybe<FusedLinearBiasReLUPatternMatcherResult>
+Maybe<FusedLinearBiasActPatternMatcherResult>
 fused_linear_pattern_matcher(Tensor &out) {
 
   std::shared_ptr<Tensor> input_ptr = std::make_shared<Tensor>();
   std::shared_ptr<Tensor> weight_ptr = std::make_shared<Tensor>();
   std::shared_ptr<Tensor> bias_ptr = std::make_shared<Tensor>();
 
-  pm::Pattern p =
-      pm::Add(pm::MatMul(pm::Input(input_ptr), pm::Input(weight_ptr)),
-              pm::Broadcast(pm::Input(bias_ptr)));
+  auto linear_p = pm::MatMul(pm::Input(input_ptr), pm::Input(weight_ptr)) +
+                  pm::Broadcast(pm::Input(bias_ptr));
+  pm::Pattern relu_p = pm::Max(linear_p, pm::Scalar(0)); // ReLU activation
 
-  if (!p->match(out)) {
+  /*
+  def gelu(self, approximate: str = None):
+    if not approximate:
+        # raise NotImplementedError("gelu not implemented yet without
+  approximation") approximate = "tanh" if approximate == "tanh": return (
+  0.5
+            * self
+            * (
+                1.0
+                + pg.tanh(math.sqrt(2 / math.pi) * (self + 0.044715 *
+  (self**3.0)))
+            )
+        )
+*/
+
+  float M_PI = 3.14159265358979323846;
+  float sc = sqrt(2.f / M_PI);
+  auto inp = linear_p;
+  auto tanh = pm::Tanh(sc * (inp + 0.044715 * (inp ^ 3)));
+
+  pm::Pattern gelu_p = 0.5 * inp * (1.0 + tanh);
+
+  pm::Pattern only_linear = linear_p;
+  ActivationKind kind = ActivationKind::ReLU;
+  if (gelu_p->match(out)) {
+    kind = ActivationKind::GeLU;
+  } else if (relu_p->match(out)) {
+    kind = ActivationKind::ReLU;
+  } else if (only_linear->match(out)) {
+    kind = ActivationKind::None;
+  } else {
     return std::nullopt;
   }
 
@@ -666,8 +702,8 @@ fused_linear_pattern_matcher(Tensor &out) {
   if (m % 16 != 0 || n % 8 != 0 || k % 8 != 0) {
     return std::nullopt;
   }
-  return FusedLinearBiasReLUPatternMatcherResult{*input_ptr, *weight_ptr,
-                                                 *bias_ptr};
+  return FusedLinearBiasActPatternMatcherResult{*input_ptr, *weight_ptr,
+                                                *bias_ptr, kind};
 }
 
 bool try_convert_fused_linear(Tensor &out) {
@@ -676,7 +712,13 @@ bool try_convert_fused_linear(Tensor &out) {
     return false;
   }
   auto result = maybe_result.value();
-  out.ad_node()->set_primitive(std::make_shared<FusedLinearBiasReLU>());
+  std::map<ActivationKind, std::string> act2str = {
+      {ActivationKind::ReLU, "ReLU"},
+      {ActivationKind::GeLU, "GeLU"},
+      {ActivationKind::None, "None"}};
+  std::cout << "Fused with activation " << act2str[result.kind] << std::endl;
+  out.ad_node()->set_primitive(
+      std::make_shared<FusedLinearBiasAct>(act2str[result.kind]));
   out.ad_node()->set_children({result.input, result.weight, result.bias});
   return true;
 }

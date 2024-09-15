@@ -163,7 +163,13 @@ if not args.test:
 
     val_and_grad = fngrad(get_loss, wrt=[2], return_outs=True)
     use_jit = args.jit  # does not work yet
-    train_step = jit(val_and_grad) if use_jit else val_and_grad
+    train_step = (
+        jit(
+            val_and_grad,
+        )
+        if use_jit
+        else val_and_grad
+    )
     import time
 
     for epoch in range(args.epochs):
@@ -176,7 +182,7 @@ if not args.test:
             labels = Tensor.one_hot(100, labels)
             loss, g = train_step(inputs, labels, model)
             optim.step(g)
-            #if i == 100: raise Exception("stop")
+            # if i == 100: raise Exception("stop")
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
