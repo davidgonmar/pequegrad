@@ -49,6 +49,7 @@ find_package(CUDAToolkit REQUIRED)
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 # cutlass
 include_directories(external/cutlass/include)
+include_directories(external/cudnn-frontend/include)
 file(GLOB PG_SOURCES
         csrc/dtype.cpp
         csrc/shape.cpp
@@ -127,6 +128,7 @@ set(CUDNN_LIB "C:\\Program Files\\NVIDIA\\CUDNN\\v9.2\\lib\\12.5\\x64\\cudnn.lib
 
 # Add include directories for cuDNN
 include_directories(${CUDNN_INCLUDE_DIR})
+
 
 # Link cuDNN library with your target
 target_link_libraries(pequegrad_c PRIVATE ${CUDNN_LIB})

@@ -738,10 +738,13 @@ def scaled_dot_product_attention(
     value: "Tensor",
     mask: "Tensor" = None,
     dropout_p: float = 0.0,
+    is_causal: bool = False,
 ) -> "Tensor":
     """
     Scaled dot-product attention mechanism
     """
+    if is_causal:
+        raise NotImplementedError("Causal attention not implemented yet, use a mask")
     d_k = key.shape[-1]
     scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
     if mask is not None:

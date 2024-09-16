@@ -567,6 +567,101 @@ void recursive_lrn_vjp_input(Tensor &out, std::set<int> &visited) {
   }
 }
 
+// SCALED DOT PRODUCT ATTENTION
+struct CudnnSdpaPatternMatcherResult {
+  Tensor input;
+  Tensor weight;
+  Tensor bias;
+  float scale;
+};
+
+/*
+f(v0: f32[5, 5], v1: f32[5, 5], v2: f32[5, 5]) {
+  v3: f32[5, 5] = Permute(v1)
+  v4: f32[5, 5] = MatMul(v0, v3)
+  v5: f32[] = Fill<2.236068>() // scale
+  v6: f32[5, 5] = Broadcast(v5)
+  v7: f32[5, 5] = Div(v4, v6)
+  v8: f32[5, 1] = MaxReduce(v7)
+  v9: f32[5, 5] = Broadcast(v8)
+  v10: f32[5, 5] = Sub(v7, v9)
+  v11: f32[5, 5] = Exp(v10)
+  v12: f32[5, 1] = Sum(v11)
+  v13: f32[5, 5] = Broadcast(v12)
+  v14: f32[5, 5] = Div(v11, v13)
+  v15: f32[5, 5] = MatMul(v14, v2)
+  return v15
+}*/
+Maybe<CudnnSdpaPatternMatcherResult> cudnn_sdpa_pattern_matcher(Tensor &out) {
+  std::shared_ptr<Tensor> query_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> key_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> value_ptr = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> scale_ptr = std::make_shared<Tensor>();
+  auto matmul =
+      pm::MatMul(pm::Input(query_ptr), pm::Permute(pm::Input(key_ptr))) /
+      pm::Broadcast(pm::Input(scale_ptr));
+  auto max = pm::Broadcast(pm::MaxReduce(matmul));
+  auto shifted = pm::Exp(matmul - max);
+  auto sum = pm::Broadcast(pm::Sum(shifted));
+  auto attn_scores = shifted / sum;
+  auto res = pm::MatMul(attn_scores, pm::Input(value_ptr));
+
+  if (!res->match(out)) {
+    return std::nullopt;
+  }
+  // scale should be fill
+  if (scale_ptr->ad_node()->primitive()->str().find("Fill") ==
+      std::string::npos) {
+    return std::nullopt;
+  }
+
+  float scale =
+      dynamic_cast<Fill &>(*scale_ptr->ad_node()->primitive().get()).value();
+
+  // should be 4 dims for query, key, value
+  if (query_ptr->shape().size() != 4 || key_ptr->shape().size() != 4 ||
+      value_ptr->shape().size() != 4) {
+    return std::nullopt;
+  }
+  // hidden_dim shoud be less than 256 and hidden_dim should be multiple of 8
+  if (query_ptr->shape()[3] > 256 || query_ptr->shape()[3] % 8 != 0) {
+    return std::nullopt;
+  }
+
+  // arch needs to be >=  8
+  cudaDeviceProp prop;
+  auto deviceprops = cudaGetDeviceProperties(&prop, 0);
+  if (prop.major < 8) {
+    return std::nullopt;
+  }
+  return CudnnSdpaPatternMatcherResult{*query_ptr, *key_ptr, *value_ptr, scale};
+}
+
+bool try_convert_cudnn_sdpa(Tensor &out) {
+  auto maybe_result = cudnn_sdpa_pattern_matcher(out);
+  if (!maybe_result.has_value()) {
+    return false;
+  }
+  auto result = maybe_result.value();
+  out.ad_node()->set_primitive(std::make_shared<CudnnSdpa>());
+  out.ad_node()->set_children({result.input, result.weight, result.bias});
+  return true;
+}
+
+void recursive_cudnn_sdpa(Tensor &out, std::set<int> &visited) {
+  if (out.device() != device::CUDA) {
+    return;
+  }
+  if (visited.find(out.id) != visited.end()) {
+    return;
+  }
+  try_convert_cudnn_sdpa(out);
+  visited.insert(out.id);
+  for (Tensor &node : out.ad_node()->children()) {
+    recursive_cudnn_sdpa(node, visited);
+  }
+}
+
 bool try_convert_conv2d(Tensor &out) {
   auto maybe_result = conv2d_pattern_matcher(out);
   if (!maybe_result.has_value()) {
@@ -941,6 +1036,8 @@ static void _compile(std::vector<Tensor> &outs,
       remove_useless_astype(out, visited);
       COMPILER_LOG("removed useless astype");
     }
+    visited.clear();
+    recursive_cudnn_sdpa(out, visited);
     std::set<int> visited1;
     if (options.recursive_fused_linear) {
       recursive_fused_linear(out, visited1);
