@@ -223,6 +223,18 @@ public:
       : size(size), alpha(alpha), beta(beta), k(k) {}
 };
 
+class CudnnSdpa : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnSdpa)
+
+  // CUDNN ATTRIBUTES
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_desc;
+  cudnnActivationDescriptor_t act_desc;
+  bool initialized = false;
+};
+
 class FromFunctions : public ADPrimitive {
 
   std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>

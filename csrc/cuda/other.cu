@@ -97,9 +97,9 @@ void FusedLinearBiasAct::dispatch_cuda(const std::vector<Tensor> &inputs,
 
   cutlass::gemm::GemmCoord problem_size(m, n, k);
 
-  cudaMemsetAsync(d_output, 0, m * n * sizeof(ElementOutput));
   ElementComputeEpilogue alpha = ElementComputeEpilogue(1);
 
+  // select optimal number of splits for k dimension
   int split_k_slices = 1;
   if (this->activation == "ReLU") {
     typename GemmReLU::Arguments arguments{

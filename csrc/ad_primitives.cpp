@@ -869,4 +869,16 @@ void Copy::dispatch_cuda(const std::vector<Tensor> &inputs,
   outputs[0].view_ptr()->set_ptr(inputs[0].view().shared_ptr(),
                                  inputs[0].nbytes());
 }
+
+class CudnnSdpa : public ADPrimitive {
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(CudnnSdpa)
+
+  // CUDNN ATTRIBUTES
+  cudnnHandle_t handle;
+  cudnnTensorDescriptor_t input_desc;
+  cudnnTensorDescriptor_t output_desc;
+  cudnnActivationDescriptor_t act_desc;
+  bool initialized = false;
+};
 } // namespace pg

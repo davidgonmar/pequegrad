@@ -16,6 +16,10 @@ Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
   return Tensor::from_primitive_one(std::make_shared<BroadcastTo>(shape), {a});
 }
 
+Tensor _cudnn_sdpa(const Tensor &q, const Tensor &k, const Tensor &v) {
+  return Tensor::from_primitive_one(std::make_shared<CudnnSdpa>(), {q, k, v});
+}
+
 static shape_t get_broadcasted_shapes(const shape_t &_a, const shape_t &_b) {
   auto a = shape_t(_a);
   auto b = shape_t(_b);

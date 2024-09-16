@@ -732,6 +732,32 @@ def matmul_with_reshapes(self, other):
     return x
 
 
+def scaled_dot_product_attention(
+    query: "Tensor",
+    key: "Tensor",
+    value: "Tensor",
+    mask: "Tensor" = None,
+    dropout_p: float = 0.0,
+) -> "Tensor":
+    """
+    Scaled dot-product attention mechanism
+    """
+    d_k = key.shape[-1]
+    scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
+    if mask is not None:
+        scores = pg.where(
+            mask,
+            scores,
+            pg.broadcast_to(
+                pg.fill((), scores.dtype, -1e9, scores.device), scores.shape
+            ),
+        )
+    p_attn = softmax(scores, dim=-1)
+    if dropout_p > 0.0:
+        p_attn = dropout(p_attn, dropout_p)
+    return p_attn @ value
+
+
 """pg.matmul = matmul_with_reshapes
 
 Tensor.__matmul__ = matmul_with_reshapes"""

@@ -1,7 +1,6 @@
 """
 Partially from https://github.com/karpathy/minGPT/blob/master/mingpt/model.py
 """
-import math
 import os
 import sys
 import json
@@ -162,18 +161,11 @@ class CausalSelfAttention(pnn.Module):
             0, 1
         )  # (B, nh, T, hs)
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = pg.where(
-            pg.broadcast_to(self.bias[:, :T, :T] == 0, att.shape),
-            pg.broadcast_to(
-                pg.fill(tuple(), pg.dt.float32, float(-1000000), device.cuda), att.shape
-            ),
-            att,
-        )
-        att = pg.softmax(att, dim=-1)
-        att = self.attn_dropout(att)
-        y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(0, 1).reshape(
+        att_shape = (self.n_head, T, T)
+        mask = pg.broadcast_to(self.bias[:, :T, :T], att_shape)
+        att = pg.scaled_dot_product_attention(q, k, v, mask, 0.0)
+        #  (B, nh, T, hs)
+        y = att.transpose(0, 1).reshape(
             (T, C)
         )  # re-assemble all head outputs side by side
         # output projection
