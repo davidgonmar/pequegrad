@@ -35,8 +35,8 @@ def custom_prim(f, compile_jit=False):
 
 
 def custom_init(f):
-    def ff(*args):
-        res = f(*args)
+    def ff(*args, **kwargs):
+        res = f(*args, **kwargs)
         if isinstance(res, tuple):
             return res
         if isinstance(res, Tensor):
@@ -613,6 +613,21 @@ fill = pg.fill
 @custom_init
 def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device=device.cpu):
     return Tensor(np.arange(start, end, step).astype(dtypetonp[dtype]), device=device)
+
+
+@custom_init
+def randn(shape: int, dtype=dt.float32, device=device.cpu):
+    return Tensor(np.random.randn(*shape).astype(dtypetonp[dtype]), device=device)
+
+
+@custom_init
+def rand(shape: int, dtype=dt.float32, device=device.cpu):
+    return Tensor(np.random.rand(*shape).astype(dtypetonp[dtype]), device=device).to(
+        device
+    )
+
+
+mean = lambda t, *args, **kwargs: t.mean(*args, **args)
 
 
 def local_response_norm(

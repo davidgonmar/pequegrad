@@ -127,6 +127,20 @@ bind_method(
 )
 
 
+# device method
+bind_method(
+    Tensor,
+    "cuda",
+    lambda self: self.to(pg.device.cuda),
+)
+
+bind_method(
+    Tensor,
+    "cpu",
+    lambda self: self.to(pg.device.cpu),
+)
+
+
 def relu(self):
     return pg.max(self, 0)
 
