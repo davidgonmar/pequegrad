@@ -627,6 +627,10 @@ def rand(shape: int, dtype=dt.float32, device=device.cpu):
     )
 
 
+def outer_prod(v1, v2):
+    return v1.reshape((v1.shape[0], 1)) * v2.reshape((1, v2.shape[0]))
+
+
 mean = lambda t, *args, **kwargs: t.mean(*args, **args)
 
 
