@@ -135,6 +135,22 @@ void MatMul::dispatch_cuda(const std::vector<Tensor> &inputs,
     if (res != CUBLAS_STATUS_SUCCESS) {
       PG_CHECK_RUNTIME(false, "CUBLAS error: ", res);
     }
+  } else if (a.dtype() == DType::Float16) {
+    half alpha = 1.0f;
+    half beta = 0.0f;
+    half *a_ptr = a.get_casted_base_ptr<half>();
+    half *b_ptr = b.get_casted_base_ptr<half>();
+    half *out_ptr = outputs[0].get_casted_base_ptr<half>();
+
+    // remember we use column major, so the order is reversed
+    long long stride_out = M * N; // size of out
+    long long stride_a = M * K;   // size of a
+    long long stride_b = K * N;   // size of b
+    auto res = cublasHgemmStridedBatched(
+        cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, b_ptr, N,
+        stride_b, a_ptr, K, stride_a, &beta, out_ptr, N, stride_out, B);
+
+    PG_CUDA_KERNEL_END;
 
   } else {
     PG_CHECK_RUNTIME(

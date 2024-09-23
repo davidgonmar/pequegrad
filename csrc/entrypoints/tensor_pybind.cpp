@@ -397,7 +397,18 @@ PYBIND11_MODULE(pequegrad_c, m) {
            })
       .def("ad_context",
            [](const Tensor &t) { return t.ad_node()->primitive()->str(); })
-      .def("to", &Tensor::to)
+      .def("to",
+           [](Tensor &t, device::DeviceKind device) { return t.to(device); })
+      .def("to",
+           [](Tensor &t, std::string device) {
+             if (device == "cuda") {
+               return t.to(device::DeviceKind::CUDA);
+             } else if (device == "cpu") {
+               return t.to(device::DeviceKind::CPU);
+             } else {
+               throw std::runtime_error("Unsupported device: " + device);
+             }
+           })
       .def("from_numpy",
            [](py::array_t<float> np_array) {
              return Tensor::from_numpy(np_array);
@@ -439,7 +450,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
           "eval", [](Tensor &t, bool detach) { return t.eval(detach); },
           py::arg("detach") = true)
       .def("numel", &Tensor::numel)
-      .def("astype", &Tensor::astype)
+      .def("astype", [](Tensor &t, DType dtype) { return t.astype(dtype); })
+      .def("astype",
+           [](Tensor &t, std::string dtype) {
+             return t.astype(dtype_from_string(dtype));
+           })
       .def("to_numpy",
            [](Tensor &arr) -> NpArrayVariant {
              if (!arr.is_evaled())

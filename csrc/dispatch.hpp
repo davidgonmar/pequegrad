@@ -1,5 +1,7 @@
 #pragma once
+#include "cuda_runtime.h"
 #include "dtype.hpp"
+#include <cuda_fp16.h>
 
 #define PG_DISPATCH_CASE(TYPE, CTYPE, ...)                                     \
   case TYPE: {                                                                 \
@@ -65,7 +67,7 @@
   PG_DISPATCH_SWITCH(                                                          \
       TYPE1,                                                                   \
       PG_DISPATCH_CASE_TYPE1(                                                  \
-          DType::Float32, float,                                               \
+          DType::Float16, half,                                                \
           PG_DISPATCH_SWITCH(                                                  \
               TYPE2,                                                           \
               PG_DISPATCH_CASE_TYPE2(DType::Float32, float, __VA_ARGS__();)    \
@@ -73,23 +75,28 @@
                                          __VA_ARGS__();)                       \
                       PG_DISPATCH_CASE_TYPE2(DType::Int32, int,                \
                                              __VA_ARGS__();)                   \
-                          PG_DISPATCH_DEFAULT(                                 \
-                              THROW_NOT_IMPLEMENTED_ERROR_PAIRS(NAME, TYPE1,   \
-                                                                TYPE2))))      \
+                          PG_DISPATCH_CASE_TYPE2(DType::Float16, half,         \
+                                                 __VA_ARGS__();)               \
+                              PG_DISPATCH_DEFAULT(                             \
+                                  THROW_NOT_IMPLEMENTED_ERROR_PAIRS(           \
+                                      NAME, TYPE1, TYPE2))))                   \
           PG_DISPATCH_CASE_TYPE1(                                              \
-              DType::Float64, double,                                          \
+              DType::Float32, float,                                           \
               PG_DISPATCH_SWITCH(                                              \
-                  TYPE2, PG_DISPATCH_CASE_TYPE2(DType::Float32, float,         \
-                                                __VA_ARGS__();)                \
-                             PG_DISPATCH_CASE_TYPE2(DType::Float64, double,    \
-                                                    __VA_ARGS__();)            \
-                                 PG_DISPATCH_CASE_TYPE2(DType::Int32, int,     \
-                                                        __VA_ARGS__();)        \
-                                     PG_DISPATCH_DEFAULT(                      \
-                                         THROW_NOT_IMPLEMENTED_ERROR_PAIRS(    \
-                                             NAME, TYPE1, TYPE2))))            \
+                  TYPE2,                                                       \
+                  PG_DISPATCH_CASE_TYPE2(DType::Float32, float,                \
+                                         __VA_ARGS__();)                       \
+                      PG_DISPATCH_CASE_TYPE2(DType::Float64, double,           \
+                                             __VA_ARGS__();)                   \
+                          PG_DISPATCH_CASE_TYPE2(DType::Int32, int,            \
+                                                 __VA_ARGS__();)               \
+                              PG_DISPATCH_CASE_TYPE2(DType::Float16, half,     \
+                                                     __VA_ARGS__();)           \
+                                  PG_DISPATCH_DEFAULT(                         \
+                                      THROW_NOT_IMPLEMENTED_ERROR_PAIRS(       \
+                                          NAME, TYPE1, TYPE2))))               \
               PG_DISPATCH_CASE_TYPE1(                                          \
-                  DType::Int32, int,                                           \
+                  DType::Float64, double,                                      \
                   PG_DISPATCH_SWITCH(                                          \
                       TYPE2,                                                   \
                       PG_DISPATCH_CASE_TYPE2(DType::Float32, float,            \
@@ -98,8 +105,93 @@
                                                  __VA_ARGS__();)               \
                               PG_DISPATCH_CASE_TYPE2(DType::Int32, int,        \
                                                      __VA_ARGS__();)           \
-                                  PG_DISPATCH_DEFAULT(                         \
-                                      THROW_NOT_IMPLEMENTED_ERROR_PAIRS(       \
-                                          NAME, TYPE1, TYPE2))))               \
-                  PG_DISPATCH_DEFAULT(                                         \
-                      THROW_NOT_IMPLEMENTED_ERROR_PAIRS(NAME, TYPE1, TYPE2)))
+                                  PG_DISPATCH_CASE_TYPE2(DType::Float16, half, \
+                                                         __VA_ARGS__();)       \
+                                      PG_DISPATCH_DEFAULT(                     \
+                                          THROW_NOT_IMPLEMENTED_ERROR_PAIRS(   \
+                                              NAME, TYPE1, TYPE2))))           \
+                  PG_DISPATCH_CASE_TYPE1(                                      \
+                      DType::Int32, int,                                       \
+                      PG_DISPATCH_SWITCH(                                      \
+                          TYPE2,                                               \
+                          PG_DISPATCH_CASE_TYPE2(DType::Float32, float,        \
+                                                 __VA_ARGS__();)               \
+                              PG_DISPATCH_CASE_TYPE2(DType::Float64, double,   \
+                                                     __VA_ARGS__();)           \
+                                  PG_DISPATCH_CASE_TYPE2(DType::Int32, int,    \
+                                                         __VA_ARGS__();)       \
+                                      PG_DISPATCH_DEFAULT(                     \
+                                          THROW_NOT_IMPLEMENTED_ERROR_PAIRS(   \
+                                              NAME, TYPE1, TYPE2))))           \
+                      PG_DISPATCH_DEFAULT(THROW_NOT_IMPLEMENTED_ERROR_PAIRS(   \
+                          NAME, TYPE1, TYPE2)))
+
+#define PG_DISPATCH_ALL_TYPES_TWO_TYPES_AND_FP16(TYPE1, TYPE2, NAME, ...)        \
+  PG_DISPATCH_SWITCH(                                                            \
+      TYPE1,                                                                     \
+      PG_DISPATCH_CASE_TYPE1(                                                    \
+          DType::Float16, half,                                                  \
+          PG_DISPATCH_SWITCH(                                                    \
+              TYPE2,                                                             \
+              PG_DISPATCH_CASE_TYPE2(DType::Float32, float, __VA_ARGS__();)      \
+                  PG_DISPATCH_CASE_TYPE2(DType::Float64, double,                 \
+                                         __VA_ARGS__();)                         \
+                      PG_DISPATCH_CASE_TYPE2(DType::Int32, int,                  \
+                                             __VA_ARGS__();)                     \
+                          PG_DISPATCH_DEFAULT(                                   \
+                              THROW_NOT_IMPLEMENTED_ERROR_PAIRS(NAME, TYPE1,     \
+                                                                TYPE2))))        \
+          PG_DISPATCH_CASE_TYPE1(                                                \
+              DType::Float16, half,                                              \
+              PG_DISPATCH_SWITCH(                                                \
+                  TYPE2, PG_DISPATCH_CASE_TYPE2(DType::Float32, float,           \
+                                                __VA_ARGS__();)                  \
+                             PG_DISPATCH_CASE_TYPE2(DType::Float64, double,      \
+                                                    __VA_ARGS__();)              \
+                                 PG_DISPATCH_CASE_TYPE2(DType::Int32, int,       \
+                                                        __VA_ARGS__();)          \
+                                     PG_DISPATCH_DEFAULT(                        \
+                                         THROW_NOT_IMPLEMENTED_ERROR_PAIRS(      \
+                                             NAME, TYPE1, TYPE2))))              \
+              PG_DISPATCH_CASE_TYPE1(                                            \
+                  DType::Float32, float,                                         \
+                  PG_DISPATCH_SWITCH(                                            \
+                      TYPE2,                                                     \
+                      PG_DISPATCH_CASE_TYPE2(DType::Float32, float,              \
+                                             __VA_ARGS__();)                     \
+                          PG_DISPATCH_CASE_TYPE2(DType::Float64, double,         \
+                                                 __VA_ARGS__();)                 \
+                              PG_DISPATCH_CASE_TYPE2(DType::Int32, int,          \
+                                                     __VA_ARGS__();)             \
+                                  PG_DISPATCH_DEFAULT(                           \
+                                      THROW_NOT_IMPLEMENTED_ERROR_PAIRS(         \
+                                          NAME, TYPE1, TYPE2))))                 \
+                  PG_DISPATCH_CASE_TYPE1(                                        \
+                      DType::Float64, double,                                    \
+                      PG_DISPATCH_SWITCH(                                        \
+                          TYPE2,                                                 \
+                          PG_DISPATCH_CASE_TYPE2(DType::Float32, float,          \
+                                                 __VA_ARGS__();)                 \
+                              PG_DISPATCH_CASE_TYPE2(DType::Float64, double,     \
+                                                     __VA_ARGS__();)             \
+                                  PG_DISPATCH_CASE_TYPE2(DType::Int32, int,      \
+                                                         __VA_ARGS__();)         \
+                                      PG_DISPATCH_DEFAULT(                       \
+                                          THROW_NOT_IMPLEMENTED_ERROR_PAIRS(     \
+                                              NAME, TYPE1, TYPE2))))             \
+                      PG_DISPATCH_CASE_TYPE1(                                    \
+                          DType::Int32, int,                                     \
+                          PG_DISPATCH_SWITCH(                                    \
+                              TYPE2,                                             \
+                              PG_DISPATCH_CASE_TYPE2(DType::Float32, float,      \
+                                                     __VA_ARGS__();)             \
+                                  PG_DISPATCH_CASE_TYPE2(                        \
+                                      DType::Float64, double, __VA_ARGS__();)    \
+                                      PG_DISPATCH_CASE_TYPE2(                    \
+                                          DType::Int32, int, __VA_ARGS__();)     \
+                                          PG_DISPATCH_DEFAULT(                   \
+                                              THROW_NOT_IMPLEMENTED_ERROR_PAIRS( \
+                                                  NAME, TYPE1, TYPE2))))         \
+                          PG_DISPATCH_DEFAULT(                                   \
+                              THROW_NOT_IMPLEMENTED_ERROR_PAIRS(NAME, TYPE1,     \
+                                                                TYPE2)))

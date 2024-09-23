@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cuda_fp16.h"
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -7,6 +8,7 @@
 
 enum class DType {
   Int32,
+  Float16,
   Float32,
   Float64,
 };
@@ -28,6 +30,9 @@ template <typename T> DType dtype_from_pytype() {
     return DType::Float32;
   } else if (std::is_same<T, double>::value) {
     return DType::Float64;
+  } else if (std::is_same<T, half>::value) {
+    return DType::Float16;
+
   } else {
     throw std::runtime_error("Unknown dtype: " + std::string(typeid(T).name()));
   }
@@ -40,7 +45,12 @@ template <typename T> DType dtype_from_cpptype() {
     return DType::Float32;
   } else if (std::is_same<T, double>::value) {
     return DType::Float64;
+  } else if (std::is_same<T, half>::value) {
+    return DType::Float16;
+
   } else {
     throw std::runtime_error("Unknown dtype: " + std::string(typeid(T).name()));
   }
 }
+
+DType dtype_from_string(const std::string &dtype_str);
