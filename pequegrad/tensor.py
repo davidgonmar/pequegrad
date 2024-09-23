@@ -206,3 +206,32 @@ bind_method(pg, "tanh", tanh)
 bind_method(Tensor, "erf", erf)
 bind_method(Tensor, "gelu", gelu)
 bind_method(Tensor, "silu", silu)
+
+
+# SETTITEM
+# we follow a similar pattern to jax settitem
+
+"""
+usage
+------
+x = Tensor(np.ones((3, 3)))
+x.at[0, 0].set(0.0)
+"""
+
+
+class _SetItemPartial:
+    def __init__(self, tensor):
+        self.tensor = tensor
+        self.key = None
+
+    def __getitem__(self, index):
+        self.index = index
+        return self
+
+    def set(self, value):
+        if self.index is None:
+            raise ValueError("Cannot set value without index")
+        return assign_at(self.tensor, value, self.index)
+
+
+bind_method(Tensor, "at", lambda self: _SetItemPartial(self))
