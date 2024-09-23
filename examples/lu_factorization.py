@@ -1,6 +1,7 @@
 from pequegrad.linalg import lu_factorization
 from pequegrad import Tensor, device
 import numpy as np
+import pequegrad as pg
 
 print("LU factorization")
 A = np.array([[2, 3, 1], [4, 7, 2], [6, 18, 5]], dtype=float)
@@ -37,6 +38,7 @@ for i in range(100):
     r = jitted(t)
     r[0].eval()
     r[1].eval()
+    pg.sync_cuda_device()
 t1 = time.time()
 
 print(f"Pequegrad: {t1 - t0:.4f} seconds")
@@ -44,6 +46,7 @@ print(f"Pequegrad: {t1 - t0:.4f} seconds")
 t0 = time.time()
 for i in range(100):
     torch.lu(torcht)
+    torch.cuda.synchronize()
 t1 = time.time()
 
 print(f"Torch: {t1 - t0:.4f} seconds")
