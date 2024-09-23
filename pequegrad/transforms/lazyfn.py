@@ -177,6 +177,7 @@ class LazyFunction:
 
 # recurses the graph and executes a lambda passed as argument
 
+
 def topo_recurse(x, fn):
     visited = set()
 
@@ -193,12 +194,15 @@ def topo_recurse(x, fn):
     else:
         recurse(x)
 
+
 def get_consumers(xs):
     consumers = {}
+
     def add_consumer(x):
         for child in x.children():
             if child.id not in consumers:
                 consumers[child.id] = []
             consumers[child.id].append(x)
+
     topo_recurse(xs, add_consumer)
     return consumers

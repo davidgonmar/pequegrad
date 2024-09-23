@@ -8,7 +8,7 @@ from pequegrad.backend.c import device
 from pequegrad.optim import Adam, SGD, JittedAdam  # noqa
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.tensor import Tensor
-from pequegrad import fngrad, jit
+from pequegrad import fngrad, jit, amp
 
 np.random.seed(0)
 
@@ -34,6 +34,7 @@ def train(model, ds, epochs=13, batch_size=4096):
     start = None
     # weights of the network printed
     use_jit = True
+    do_amp = False
     optcls = Adam if not use_jit else JittedAdam
     optim = optcls(model.parameters(), lr=0.021)
 
@@ -46,8 +47,8 @@ def train(model, ds, epochs=13, batch_size=4096):
     loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
 
     i = 0
-
-    train_step = jit(loss_and_grads) if use_jit else loss_and_grads
+    _amp = amp if do_amp else lambda x: x
+    train_step = jit(_amp(loss_and_grads)) if use_jit else loss_and_grads
 
     for x, y in loader:
         if i == 1:
@@ -77,10 +78,10 @@ def test_model(model, ds):
     def step(x, model):
         return model.forward(x)
 
-    step = jit(step)
+    step = jit(amp(step))
     start = None
     i = 0
-    for i in range(1):
+    for xx in range(1):
         for x, y in loader:
             with no_grad():
                 if i == 1:  # start time after first batch

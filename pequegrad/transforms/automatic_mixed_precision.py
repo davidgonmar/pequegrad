@@ -6,23 +6,27 @@ import pequegrad.ops as ops
 inside_jit = ContextVar("inside_jit", default=False)
 
 
+_ops_cast_to_fp16 = {"MatMul"}
+_str_to_op = {"MatMul": ops.matmul}
 
-_ops_cast_to_fp16 = {
-    "MatMul"
-}
-_str_to_op = {
-    "MatMul": ops.matmul
-}
 
 def get_new_op(tensor):
     if tensor.ad_context() in _ops_cast_to_fp16 and tensor.dtype == dt.float32:
         tchildren = tensor.children()
-        casted = [t.astype("float16") for t in tchildren]  
+        casted = [t.astype("float16") for t in tchildren]
 
         new_op = _str_to_op[tensor.primitive().str()]
 
-        return new_op(*casted).astype("float32")    
+        return new_op(*casted).astype("float32")
     return None
+
+
+def _index(tensor, collection):
+    for i, t in enumerate(collection):
+        if t.id == tensor.id:
+            return i
+    return None
+
 
 class amp(LazyFunction):
     def __init__(self, f, opts=None):
@@ -33,6 +37,7 @@ class amp(LazyFunction):
         # same as autograd, but it just compiles the graph
 
         consumers = get_consumers(trace.outputs)
+
         def recurse_fn(tensor):
             new_t = get_new_op(tensor)
             if new_t is not None:
@@ -40,9 +45,10 @@ class amp(LazyFunction):
                 for consumer in consumers.get(tensor, []):
                     consumer.replace_child(tensor, new_t)
                 # if it is an output, replace it in the outputs
-                
-                if (any(tensor.id ==  t.id for t in trace.outputs)):
-                    trace.outputs[trace.outputs.index(tensor)] = new_t
+
+                if any(tensor.id == t.id for t in trace.outputs):
+                    trace.outputs[_index(tensor, trace.outputs)] = new_t
+
         topo_recurse(trace.outputs, recurse_fn)
         new_trace = GraphTrace(
             inputs=trace.inputs,
