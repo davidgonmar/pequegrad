@@ -30,8 +30,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
   py::enum_<DType>(m, "dt")
       .value("float32", DType::Float32)
       .value("int32", DType::Int32)
-      .value("float64", DType::Float64);
-
+      .value("float64", DType::Float64)
+      .value("float16", DType::Float16);
   py::enum_<device::DeviceKind>(m, "device")
       .value("cpu", device::DeviceKind::CPU)
       .value("cuda", device::DeviceKind::CUDA);
@@ -471,6 +471,10 @@ PYBIND11_MODULE(pequegrad_c, m) {
                throw std::runtime_error("Unsupported data type: " +
                                         dtype_to_string(arr.dtype()));
              }
+           })
+      .def("replace_child",
+           [](Tensor &t, const Tensor &old_child, const Tensor &new_child) {
+             t.ad_node()->replace_child(old_child, new_child);
            })
       .def("is_evaled", &Tensor::is_evaled)
       .def("__hash__", [](const Tensor &t) { return t.id; })

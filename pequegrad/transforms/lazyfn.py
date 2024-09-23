@@ -39,6 +39,8 @@ def print_trace(trace):
             return "f64"
         if x.dtype == dt.int32:
             return "i32"
+        if x.dtype == dt.float16:
+            return "f16"
 
     def repr_tensor(x):
         return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
@@ -169,3 +171,34 @@ class LazyFunction:
         trace = self.cache[last_key]
 
         print_trace(trace)
+
+
+# utils
+
+# recurses the graph and executes a lambda passed as argument
+
+def topo_recurse(x, fn):
+    visited = set()
+
+    def recurse(x):
+        if x.id not in visited:
+            for child in x.children():
+                recurse(child)
+            fn(x)
+            visited.add(x.id)
+
+    if isinstance(x, list):
+        for xx in x:
+            recurse(xx)
+    else:
+        recurse(x)
+
+def get_consumers(xs):
+    consumers = {}
+    def add_consumer(x):
+        for child in x.children():
+            if child.id not in consumers:
+                consumers[child.id] = []
+            consumers[child.id].append(x)
+    topo_recurse(xs, add_consumer)
+    return consumers
