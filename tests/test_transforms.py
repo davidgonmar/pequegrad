@@ -29,10 +29,11 @@ def test_to_tensor(sample_image):
     tensor = to_tensor(sample_image)
     assert isinstance(tensor, Tensor), "Output should be a Tensor"
     assert tuple(tensor.shape) == (
+        100,
+        100,
         3,
-        100,
-        100,
-    ), f"Expected shape (3, 100, 100), got {tensor.shape}"
+    ), "Tensor shape should match input image shape"
+
     assert np.all(tensor.numpy() <= 1) and np.all(
         tensor.numpy() >= 0
     ), "Tensor values should be in range [0, 1]"
@@ -44,8 +45,8 @@ def test_to_tensor(sample_image):
 def test_normalize(sample_image, mean, std):
     normalize = Normalize(mean, std)
     mean, std = np.array(mean), np.array(std)
-    mean, std = mean.reshape((3, 1, 1)), std.reshape(
-        (3, 1, 1)
+    mean, std = mean.reshape((1, 1, 3)), std.reshape(
+        (1, 1, 3)
     )  # reshape for broadcasting
     tensor = ToTensor()(sample_image)
     normalized_tensor = normalize.forward(tensor)

@@ -59,7 +59,7 @@ class ToTensor(Mod):
             type(x)
         )
 
-        return Tensor((np.array(x) / 255.0), device=self.device)
+        return Tensor((np.array(x).astype(np.float32) / 255.0), device=self.device)
 
 
 class PermuteFromTo(Mod):
@@ -74,8 +74,8 @@ class PermuteFromTo(Mod):
 class Normalize(Mod):
     def __init__(self, mean, std):
         # stats per channel
-        self.mean = Tensor(mean)
-        self.std = Tensor(std)
+        self.mean = Tensor(mean).astype(pgb.dt.float32).eval().detach()
+        self.std = Tensor(std).astype(pgb.dt.float32).eval().detach()
 
     def forward(self, x: Image.Image or np.ndarray or Tensor):
         if isinstance(x, Image.Image):
@@ -108,7 +108,7 @@ class Normalize(Mod):
                     (1, 3, 1, 1)
                 )
                 return a
-            return (x - self.mean.reshape((3, 1, 1))) / self.std.reshape((3, 1, 1))
+            return (x - self.mean.reshape((1, 1, 3))) / self.std.reshape((1, 1, 3))
 
 
 class EvalAndDetach(Mod):

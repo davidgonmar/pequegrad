@@ -32,9 +32,8 @@ class TestCompile:
         y = pg.Tensor(arr2).to(pg.device.cuda)
         x_ = pg.Tensor(arr1).to(pg.device.cuda)
         y_ = pg.Tensor(arr2).to(pg.device.cuda)
-        x2 = fn(x, y)
+        x2 = pg.jit(fn)(x, y)
         x3 = fn(x_, y_)
-        pg.compile(x2)
         np.testing.assert_allclose(x2.numpy(), x3.numpy(), atol=1e-5)
 
     def test_compile3(self):
@@ -44,9 +43,8 @@ class TestCompile:
         y = pg.Tensor(arr2).to(pg.device.cuda)
         x_ = pg.Tensor(arr1).to(pg.device.cuda)
         y_ = pg.Tensor(arr2).to(pg.device.cuda)
-        x2 = _fn5(x, y)
+        x2 = pg.jit(_fn5)(x, y)
         x3 = _fn5(x_, y_)
-        pg.compile(x2)
         np.testing.assert_allclose(x2.numpy(), x3.numpy(), atol=1e-5)
 
     @pytest.mark.parametrize("fn", [_fn1, _fn2, _fn3])
@@ -54,7 +52,6 @@ class TestCompile:
         arr1 = np.random.randn(200).astype(np.float32)
         x = pg.Tensor(arr1).to(pg.device.cuda)
         x_ = pg.Tensor(arr1).to(pg.device.cuda)
-        x2 = fn(x)
+        x2 = pg.jit(fn)(x)
         x3 = fn(x_)
-        pg.compile(x2)
         np.testing.assert_allclose(x2.numpy(), x3.numpy(), atol=1e-5)

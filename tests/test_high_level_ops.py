@@ -12,6 +12,8 @@ dtypemapt = {
     dt.int32: torch.int32,
 }
 
+# raise pytest.skip("Not implemented yet", allow_module_level=True)
+
 
 def _compare_fn_with_torch(
     shapes,
@@ -77,6 +79,20 @@ def _compare_fn_with_torch(
 
 
 class TestNew:
+    @pytest.fixture(autouse=True)
+    def catch_exceptions(self, request):
+        test_function = request.node.function
+        # catch exception while running the test function
+        try:
+            # write to a file the name and args of the function
+            """with open("test_results.txt", "a") as f:
+            f.write(f"Running {test_function.__name__}\n")
+            """
+            yield
+        except Exception as e:
+            print(f"Exception in {test_function.__name__}")
+            raise e
+
     @pytest.mark.parametrize(
         "data",
         # shape_input, normalized_shape, eps

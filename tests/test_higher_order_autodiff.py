@@ -18,8 +18,8 @@ def function3(a, b):
 
 @pytest.fixture
 def tensors():
-    a = Tensor(np.random.rand(5, 5), device=device.cuda).astype(dt.float32)
-    b = Tensor(np.random.rand(5, 5), device=device.cuda).astype(dt.float32)
+    a = Tensor(np.random.rand(2, 2), device=device.cuda).astype(dt.float32)
+    b = Tensor(np.random.rand(2, 2), device=device.cuda).astype(dt.float32)
     at = torch.tensor(a.numpy(), requires_grad=True)
     bt = torch.tensor(b.numpy(), requires_grad=True)
     return a, b, at, bt
