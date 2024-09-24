@@ -64,7 +64,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
   py::class_<device::Device, std::shared_ptr<device::Device>>(m, "Device")
       .def("allocate", &device::Device::allocate)
       .def("memset", &device::Device::memset)
-      .def("str", &device::Device::str);
+      .def("str", &device::Device::str)
+      .def("__repr__", &device::Device::str);
 
   // device utils
   m.def("default_device", &device::get_default_device);
@@ -72,7 +73,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("from_str", &device::from_str);
   m.def("is_cuda", &device::is_cuda);
   m.def("is_cpu", &device::is_cpu);
-
+  m.def("force_emulated_devices", &device::force_emulated_devices);
+  m.def("get_available_devices", &device::get_available_devices);
   m.def("log", &pg::log);
   m.def("exp", &pg::exp);
   m.def("im2col", &pg::im2col, py::arg("a"), py::arg("kernel_shape"),

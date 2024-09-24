@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace pg {
 
@@ -59,9 +60,13 @@ public:
 };
 class CPUDevice : public Device {
   int _idx;
-
+  int _emulated_idx = -1; // -1 means no emulation. Otherwise it means the
+                          // "real" cuda device id is _emulated_id
 public:
-  CPUDevice(int _idx) : _idx(_idx) { _kind = DeviceKind::CPU; }
+  CPUDevice(int idx, int emulated_idx = -1)
+      : _idx(idx), _emulated_idx(emulated_idx) {
+    _kind = DeviceKind::CPU;
+  }
 
   std::shared_ptr<void> allocate(const size_t nbytes,
                                  bool pinned = false) const override {
@@ -79,9 +84,14 @@ public:
 
 class CudaDevice : public Device {
   int _idx;
+  int _emulated_idx = -1; // -1 means no emulation. Otherwise it means the
+                          // "real" cuda device id is _emulated_id
 
 public:
-  CudaDevice(int _idx) : _idx(_idx) { _kind = DeviceKind::CUDA; }
+  CudaDevice(int _idx, int _emulated_idx = -1)
+      : _idx(_idx), _emulated_idx(_emulated_idx) {
+    _kind = DeviceKind::CUDA;
+  }
 
   std::shared_ptr<void> allocate(const size_t nbytes,
                                  bool pinned = false) const override {
@@ -126,12 +136,26 @@ public:
     return _devices.at(key);
   }
 
+  bool has(std::string key) { return _devices.find(key) != _devices.end(); }
+
   std::shared_ptr<Device> get(DeviceKind kind, int idx = 0) {
     if (kind == DeviceKind::CPU) {
       return _devices.at("cpu:0");
     } else if (kind == DeviceKind::CUDA) {
       return _devices.at("cuda:0");
     }
+  }
+
+  void register_device(std::string key, std::shared_ptr<Device> device) {
+    _devices[key] = device;
+  }
+
+  std::vector<std::shared_ptr<Device>> get_available_devices() {
+    std::vector<std::shared_ptr<Device>> res;
+    for (auto &kv : _devices) {
+      res.push_back(kv.second);
+    }
+    return res;
   }
 };
 
@@ -167,6 +191,30 @@ static bool is_cpu(const std::shared_ptr<Device> &device) {
 std::shared_ptr<Device> from_str(std::string str);
 
 std::shared_ptr<Device> from_kind(DeviceKind kind);
+
+static void force_emulated_devices(int num_devices, std::string orig) {
+  // registers them in the device registry
+  for (int i = 0; i < num_devices; i++) {
+    std::string key = orig + ":" + std::to_string(i);
+    // skip if already registered
+    if (DeviceRegistry::get_instance().has(key)) {
+      continue;
+    }
+    if (orig == "cpu") {
+      DeviceRegistry::get_instance().register_device(
+          key, std::make_shared<CPUDevice>(i, 0));
+    } else if (orig == "cuda") {
+      DeviceRegistry::get_instance().register_device(
+          key, std::make_shared<CudaDevice>(i, 0)); // emulate cuda device 0
+    } else {
+      throw std::runtime_error("Unknown device type: " + orig);
+    }
+  }
+}
+
+static std::vector<std::shared_ptr<Device>> get_available_devices() {
+  return DeviceRegistry::get_instance().get_available_devices();
+}
 
 } // namespace device
 

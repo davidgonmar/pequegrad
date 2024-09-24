@@ -4,6 +4,8 @@ from pequegrad.backend.c import (
     device as device_kind,
     custom_prim as _custom_prim,
     sync_cuda_device,
+    get_available_devices,
+    force_emulated_devices,
     Device,
     from_str,
 )  # noqa
@@ -26,6 +28,14 @@ class DeviceModule:
     @staticmethod
     def cpu(idx: int = 0) -> Device:
         return from_str(f"cpu:{idx}")
+
+    @staticmethod
+    def get_available_devices():
+        return get_available_devices()
+
+    @staticmethod
+    def force_emulated_devices(num, str):
+        return force_emulated_devices(num, str)
 
 
 device = DeviceModule
