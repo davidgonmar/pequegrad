@@ -4,7 +4,9 @@ from typing import Any, Tuple
 
 def _cache_individual_item(item: Any):
     if isinstance(item, Tensor):
-        return tuple((tuple(item.shape), tuple(item.strides), item.dtype, item.device))
+        return tuple(
+            (tuple(item.shape), tuple(item.strides), item.dtype, item.device.str())
+        )
     return item
 
 

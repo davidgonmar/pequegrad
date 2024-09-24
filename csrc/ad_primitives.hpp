@@ -306,19 +306,19 @@ class UnaryPrimitive : public ADPrimitive {};
 class FromNumpy : public ADPrimitive {
 protected:
   shape_t _shape;
-  device::DeviceKind _device;
+  std::shared_ptr<device::Device> _device;
   DType _dtype;
   strides_t _strides;
   void *_data_ptr;
   size_t _buffer_size;
   void _dispatch_general(std::vector<Tensor> &outputs,
-                         device::DeviceKind device);
+                         std::shared_ptr<device::Device> device);
 
 public:
   bool eager() { return true; }
   explicit FromNumpy(shape_t shape, DType dtype, strides_t strides,
                      void *data_ptr, size_t buffer_size,
-                     device::DeviceKind device)
+                     std::shared_ptr<device::Device> device)
       : _shape(shape), _dtype(dtype), _strides(strides), _data_ptr(data_ptr),
         _buffer_size(buffer_size), _device(device) {}
   DEFINE_DISPATCH_CPU

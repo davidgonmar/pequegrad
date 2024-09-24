@@ -28,9 +28,9 @@ hl_select_t parse_pybind_slice_item(const pybind_slice_item_t &item,
     throw std::runtime_error("[parse_pybind_slice_item] Invalid slice");
   }
 }
-std::vector<hl_select_t> parse_pybind_slices(const py::tuple &slices,
-                                             const shape_t &arr_shape,
-                                             device::DeviceKind inp_device) {
+std::vector<hl_select_t>
+parse_pybind_slices(const py::tuple &slices, const shape_t &arr_shape,
+                    std::shared_ptr<device::Device> inp_device) {
   std::vector<hl_select_t> parsed_slices;
 
   // If user passed a single slice, convert it to a vector of slices

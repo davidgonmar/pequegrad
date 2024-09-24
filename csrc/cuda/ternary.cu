@@ -24,7 +24,7 @@ void Where::dispatch_cuda(const std::vector<Tensor> &inputs,
   CHECK_SAME_SHAPE(a, b);
   CHECK_SAME_SHAPE(condition, a);
   outputs[0].init_view(
-      std::make_shared<View>(a.shape(), a.dtype(), device::CUDA));
+      std::make_shared<View>(a.shape(), a.dtype(), a.device()));
   size_t numels = a.numel();
   auto d_strides_a =
       cuda_unique_ptr_from_host<stride_t>(a.ndim(), a.strides().data());

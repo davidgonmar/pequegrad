@@ -47,7 +47,7 @@ void MatMul::dispatch_cuda(const std::vector<Tensor> &inputs,
                vec_to_string(a.shape()), " and ", vec_to_string(b.shape()));
   new_shape.push_back(M);
   new_shape.push_back(N);
-  View out_view(new_shape, a.dtype(), device::CUDA);
+  View out_view(new_shape, a.dtype(), a.device());
   auto d_strides_a =
       cuda_unique_ptr_from_host<stride_t>(a.ndim(), a.strides().data());
   auto d_strides_b = cuda_unique_ptr_from_host(b.ndim(), b.strides().data());

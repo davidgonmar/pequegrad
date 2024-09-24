@@ -1,4 +1,4 @@
-from pequegrad import Tensor, device, fngrad
+from pequegrad import Tensor, fngrad
 import pequegrad.modules as nn
 from pequegrad.optim import SGD, Adam, JittedAdam, JittedSGD
 import argparse
@@ -107,7 +107,7 @@ parser.add_argument(
 args = parser.parse_args()
 transform = transforms.Compose(
     [
-        transforms.ToTensor(device=device.cuda),
+        transforms.ToTensor(device="cuda"),
         transforms.JitCompose(
             [
                 transforms.PermuteFromTo((0, 1, 2, 3), (0, 3, 1, 2)),  # NHWC -> NCHW
@@ -132,7 +132,7 @@ testset = CIFAR100Dataset(train=False, transform=transform)
 testloader = DataLoader(testset, batch_size=40, shuffle=False)
 
 
-DEVICE = device.cuda
+DEVICE = "cuda"
 model = AlexNet(num_classes=100).to(DEVICE)
 print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
 print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1024)

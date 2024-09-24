@@ -14,7 +14,7 @@ np.random.seed(0)
 
 model_path = "mlp_mnist_model.pkl"
 
-device = device.cpu
+device = "cpu"
 
 USE_GRAPH = True
 
@@ -114,12 +114,12 @@ if __name__ == "__main__":
     mlp = MLP()
     if USE_CUDA:
         print("Using CUDA")
-        mlp.to(device.cuda)
-        device = device.cuda
+        mlp.to("cuda")
+        device = "cuda"
     else:
-        mlp.to(device.cpu)
+        mlp.to("cpu")
         print("Using CPU")
-        device = device.cpu
+        device = "cpu"
     train_ds = MNISTDataset(device=device)
     test_ds = MNISTDataset(device=device, train=False)
 

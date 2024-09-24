@@ -1,4 +1,4 @@
-from pequegrad import Tensor, dt, device, grads
+from pequegrad import Tensor, dt, grads
 import pequegrad as pg
 import numpy as np
 import torch
@@ -12,7 +12,10 @@ dtypemapt = {
     dt.int32: torch.int32,
 }
 
-# raise pytest.skip("Not implemented yet", allow_module_level=True)
+
+# decorator to parametrize devices
+def all_devices(func):
+    return pytest.mark.parametrize("device", ["cpu", "cuda"])(func)
 
 
 def _compare_fn_with_torch(
@@ -21,7 +24,7 @@ def _compare_fn_with_torch(
     torch_fn=None,
     tol: float = 1e-5,
     backward=True,
-    device: device = device.cpu,
+    device="cpu",
     dtype=dt.float32,
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
@@ -104,7 +107,7 @@ class TestNew:
             [(1, 2), (2,), 1e-5],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_layer_norm(self, data, device):
         shape_input, normalized_shape, eps = data
 
@@ -127,7 +130,7 @@ class TestNew:
             [(5, 3, 10, 5), 5, 1e-4, 0.75, 2],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cuda, device.cpu])
+    @all_devices
     def test_local_response_norm(self, data, device):
         shape_input, size, alpha, beta, k = data
 
@@ -177,7 +180,7 @@ class TestNew:
             [(5, 3, 10, 5), (0, 1, 2, 3), False],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_std_var(self, data, device):
         shape_input, dim, keepdim = data
 
@@ -203,7 +206,7 @@ class TestNew:
             [(5, 3, 10, 5), (5, 5), 5],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize("method_name", ["avg_pool2d", "max_pool2d"])
     def test_pool2d(self, data, method_name, device):
         shape_input, kernel_size, stride = data
@@ -251,7 +254,7 @@ class TestNew:
             [(2, 10, 20, 10), (8, 5, 3, 3), True, (1, 1), 1, 2],  # 17
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_conv2d(self, data, device):
         shape_input, shape_kernel, use_bias, stride, dilation, groups = data
 
@@ -290,7 +293,7 @@ class TestNew:
             [(1, 1, 3, 3), (1, 1, 3, 3), True, 2, 1, 0, 1],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cuda, device.cpu])
+    @all_devices
     def test_conv2d_transpose(self, data, device):
         (
             shape_input,
@@ -353,7 +356,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_softmax(self, shape, device):
         _compare_fn_with_torch(
             shape,
@@ -368,7 +371,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_log_softmax(self, shape, device):
         _compare_fn_with_torch(
             shape,
@@ -378,7 +381,7 @@ class TestNew:
         )
 
     @pytest.mark.parametrize("shape", [[(3,)], [(2, 3)], [(1, 2, 3)]])
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_cross_entropy_loss_probs(self, shape, device):
         def torch_fn(x, y):
             nn_cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
@@ -393,7 +396,7 @@ class TestNew:
 
     # batch, classes
     @pytest.mark.parametrize("shape", [(2, 3), (3, 2), (6, 1), (1, 6)])
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_cross_entropy_loss_index(self, shape, device):
         np_idx = np.random.randint(0, shape[1], size=shape[0]).astype(np.int32)
         correct_index = Tensor(np_idx).to(device)
@@ -422,7 +425,7 @@ class TestNew:
             [(7, 7), (1, 2, 3, 4), 2],  # different padding for each side, constant 2
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_pad_constant(self, data, device):
         tensor_shape, padding, constant = data
 
@@ -462,7 +465,7 @@ class TestNew:
             [(100, 20), (20, 300), 0],  # output shape: (100, 20, 20, 300), no reduction
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_tensordot(self, data, device):
         shape_input1, shape_input2, dim = data
 
@@ -489,7 +492,7 @@ class TestNew:
             ["abc,bce->ae", (2, 3, 4), (3, 4, 6)],  # output shape: (2, 3, 6)
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_einsum(self, data, device):
         equation, shape_input1, shape_input2 = data
 
@@ -513,7 +516,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_erf(self, shape, device):
         _compare_fn_with_torch(
             shape,
@@ -529,7 +532,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize("approximate", ["tanh"])
     def test_gelu(self, shape, device, approximate):
         _compare_fn_with_torch(
@@ -546,7 +549,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_tanh(self, shape, device):
         _compare_fn_with_torch(
             shape,
@@ -562,7 +565,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_sigmoid(self, shape, device):
         _compare_fn_with_torch(
             shape,
@@ -578,7 +581,7 @@ class TestNew:
             [(2, 3)],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_silu(self, shape, device):
         _compare_fn_with_torch(
             shape,

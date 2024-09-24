@@ -45,21 +45,21 @@ class TestModules:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
-            assert m.parameters()[0].device == device.cpu
-            assert m2.parameters()[0].device == device.cpu
+            assert m.parameters()[0].device == device.cpu(0)
+            assert m2.parameters()[0].device == device.cpu(0)
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
     @pytest.mark.skipif(not CUDA_AVAILABLE, reason="CUDA is not available")
     def test_save_load_cuda(self):
-        m = Linear(2, 1).to(device.cuda)
-        m2 = Linear(2, 1).to(device.cuda)
+        m = Linear(2, 1).to("cuda")
+        m2 = Linear(2, 1).to("cuda")
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
-            assert m.parameters()[0].device == device.cuda
-            assert m2.parameters()[0].device == device.cuda
+            assert m.parameters()[0].device == device.cuda(0)
+            assert m2.parameters()[0].device == device.cuda(0)
             for p1, p2 in zip(m.parameters(), m2.parameters()):
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
@@ -89,27 +89,27 @@ class TestModules:
             path = os.path.join(tmpdirname, "model.pkl")
             m.save(path)
             m2.load(path)
-            m2.to(device.cuda)
+            m2.to("cuda")
             for p1, p2 in zip(m.parameters(), m2.parameters()):
-                assert p1.device == device.cpu
-                assert p2.device == device.cuda
+                assert p1.device == device.cpu(0)
+                assert p2.device == device.cuda(0)
                 np.testing.assert_allclose(p1.numpy(), p2.numpy())
-        m2.to(device.cuda)
+        m2.to("cuda")
         for p1, p2 in zip(m.parameters(), m2.parameters()):
-            assert p1.device == device.cpu
-            assert p2.device == device.cuda
+            assert p1.device == device.cpu(0)
+            assert p2.device == device.cuda(0)
             np.testing.assert_allclose(p1.numpy(), p2.numpy())
 
-        m2.to(device.cpu)
+        m2.to("cpu")
         for p1, p3 in zip(m.parameters(), m2.parameters()):
-            assert p1.device == device.cpu
-            assert p3.device == device.cpu
+            assert p1.device == device.cpu(0)
+            assert p3.device == device.cpu(0)
             np.testing.assert_allclose(p1.numpy(), p3.numpy())
 
-        m2.to(device.cuda)
+        m2.to("cuda")
         for p1, p4 in zip(m.parameters(), m2.parameters()):
-            assert p1.device == device.cpu
-            assert p4.device == device.cuda
+            assert p1.device == device.cpu(0)
+            assert p4.device == device.cuda(0)
             np.testing.assert_allclose(p1.numpy(), p4.numpy())
 
     # test dropout behaviour during training and evaluation

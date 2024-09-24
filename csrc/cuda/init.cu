@@ -29,7 +29,8 @@ __global__ void binomial(T *ptr, const size_t numel, const double p,
 
 void Fill::dispatch_cuda(const std::vector<Tensor> &inputs,
                          std::vector<Tensor> &outputs) {
-  outputs[0].init_view(std::make_shared<View>(_shape, _dtype, device::CUDA));
+  outputs[0].init_view(
+      std::make_shared<View>(_shape, _dtype, device::from_str("cuda")));
   PG_DISPATCH_ALL_TYPES(_dtype, "fill_cuda", [&]() {
     size_t block_size = DEFAULT_BLOCK_SIZE;
     size_t grid_size = ceil(outputs[0].numel() / (float)block_size);
@@ -42,7 +43,8 @@ void Fill::dispatch_cuda(const std::vector<Tensor> &inputs,
 
 void Binomial::dispatch_cuda(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
-  outputs[0].init_view(std::make_shared<View>(_shape, _dtype, device::CUDA));
+  outputs[0].init_view(
+      std::make_shared<View>(_shape, _dtype, device::from_str("cuda")));
   curandState *state =
       CudaRandomState::get_instance(outputs[0].numel()).get_states().get();
   PG_DISPATCH_ALL_TYPES(_dtype, "binomial_cuda", [&]() {

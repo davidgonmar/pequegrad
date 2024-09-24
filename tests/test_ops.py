@@ -1,4 +1,4 @@
-import pequegrad.backend.c as pg
+import pequegrad as pg
 from pequegrad import Tensor, device, dt, grads
 import numpy as np
 import torch
@@ -13,13 +13,17 @@ dtypemapt = {
 }
 
 
+def all_devices(func):
+    return pytest.mark.parametrize("device", ["cpu", "cuda"])(func)
+
+
 def _compare_fn_with_torch(
     shapes,
     pequegrad_fn,
     torch_fn=None,
     tol: float = 1e-5,
     backward=True,
-    device: device = device.cpu,
+    device="cpu",
     dtype=dt.float64,
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
@@ -78,7 +82,7 @@ def _compare_fn_with_torch(
 
 class TestNew:
     def test_fill(self):
-        a = pg.fill((2, 3), dt.float32, 1, device.cpu)
+        a = pg.fill((2, 3), dt.float32, 1, device.cpu(0))
         assert np.allclose(a.to_numpy(), np.ones((2, 3)))
 
     def test_custom(self):
@@ -103,7 +107,7 @@ class TestNew:
     @pytest.mark.parametrize(
         "dtype", [dt.float32, dt.float64]
     )  # TODO -- correct Int32 implementations (for example, divs need to be casted to float before division)
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize(
         "lambdaop",
         [
@@ -136,7 +140,7 @@ class TestNew:
     # unary ops
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize(
         "lambdaop",
         [
@@ -150,7 +154,7 @@ class TestNew:
         )
 
     # REDUCERS TESTS
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize("shape", [(2, 3), (3, 4), (4, 5)])
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
     @pytest.mark.parametrize("axes", [(0, 1), (1, 0), (0,), (1,), (-1), (-1, -2), None])
@@ -236,7 +240,7 @@ class TestNew:
             [(1, 2, 3), 0, 1],
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_transpose(self, data, device):
         shape, dim0, dim1 = data
         _compare_fn_with_torch(
@@ -255,7 +259,7 @@ class TestNew:
             ((5, 2, 10), (5, 10, 6)),
         ],
     )
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
     def test_matmul(self, shapes, dtype, device):
         def pq_fn(a, b):
@@ -275,7 +279,7 @@ class TestNew:
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     @pytest.mark.parametrize(
         "lambdaop",
         [
@@ -344,7 +348,7 @@ class TestNew:
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64])
-    @pytest.mark.parametrize("device", [device.cuda])
+    @all_devices
     def test_im2col(self, info, dtype, device):
         shape, kernel_size, stride, dilation = info
 
@@ -396,7 +400,7 @@ class TestNew:
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_select(self, data, dtype, device):
         tensor_shape, slices = data
 
@@ -430,7 +434,7 @@ class TestNew:
         ],
     )
     @pytest.mark.parametrize("dtype", [dt.float32, dt.float64, dt.int32])
-    @pytest.mark.parametrize("device", [device.cpu, device.cuda])
+    @all_devices
     def test_assign_at(self, data, dtype, device):
         tensor_shape, slices, assign_at_shape = data
 

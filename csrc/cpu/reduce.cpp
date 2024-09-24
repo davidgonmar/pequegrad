@@ -24,7 +24,7 @@
     for (int i = 0; i < axes.size(); i++) {                                    \
       const shape_t new_shape =                                                \
           _reduce_single_shape_assuming_keepdims(old_view, axes[i]);           \
-      new_view = View(new_shape, a.dtype(), device::CPU);                      \
+      new_view = View(new_shape, a.dtype(), device::from_str("cpu"));          \
       axis_t axis = axes[i] < 0 ? old_view.ndim() + axes[i] : axes[i];         \
       PG_DISPATCH_ALL_TYPES(a.dtype(), "reduce_cpu", [&] {                     \
         FUNCTOR_FOR_OP_KIND(OP);                                               \

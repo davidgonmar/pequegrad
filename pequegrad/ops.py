@@ -1,5 +1,5 @@
 import numpy as np
-from pequegrad.backend.c import Tensor, device, dt, permute
+from pequegrad.backend.c import Tensor, dt, permute
 from typing import Optional, Tuple, Union, List
 import pequegrad.backend.c as pg
 import math
@@ -9,6 +9,21 @@ from pequegrad.transforms import jit
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
+
+from pequegrad.backend.c import Device, from_str  # noqa
+
+
+class DeviceModule:
+    @staticmethod
+    def cuda(idx: int = 0) -> Device:
+        return from_str(f"cuda:{idx}")
+
+    @staticmethod
+    def cpu(idx: int = 0) -> Device:
+        return from_str(f"cpu:{idx}")
+
+
+device = DeviceModule
 
 
 def custom_prim(f, compile_jit=False):
@@ -163,12 +178,14 @@ tanh = safetanh
 
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
 
+_device = device
+
 
 def one_hot(
     cls,
     num_classes: int,
     indices: "Tensor",
-    device=device.cpu,
+    device="cpu",
     dtype=dt.float32,
 ) -> "Tensor":
     # if indices is an int, fast path
@@ -177,7 +194,7 @@ def one_hot(
         nparr[indices] = 1.0
         return Tensor(nparr, device=device)
     assert indices.ndim in [1, 0], "indices must be a vector"
-    if indices.device == pg.device.cpu:
+    if indices.device == _device.cpu(0):
         indices = indices.numpy()
 
         np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])
@@ -584,7 +601,7 @@ def pad_constant(x: Tensor, pad: _Shape, constant: float = 0.0):
     for i, (padleft, padright) in enumerate(padpairs):
         new_shape[i] += padleft + padright
 
-    if x.device == pg.device.cpu:
+    if x.device == device.cpu(0):
         out = pg.broadcast_to(
             pg.fill(
                 (),
@@ -620,17 +637,17 @@ fill = pg.fill
 
 
 @custom_init
-def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device=device.cpu):
+def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device="cpu"):
     return Tensor(np.arange(start, end, step).astype(dtypetonp[dtype]), device=device)
 
 
 @custom_init
-def randn(shape: int, dtype=dt.float32, device=device.cpu):
+def randn(shape: int, dtype=dt.float32, device="cpu"):
     return Tensor(np.random.randn(*shape).astype(dtypetonp[dtype]), device=device)
 
 
 @custom_init
-def rand(shape: int, dtype=dt.float32, device=device.cpu):
+def rand(shape: int, dtype=dt.float32, device="cpu"):
     return Tensor(np.random.rand(*shape).astype(dtypetonp[dtype]), device=device).to(
         device
     )
@@ -792,3 +809,21 @@ def scaled_dot_product_attention(
 """pg.matmul = matmul_with_reshapes
 
 Tensor.__matmul__ = matmul_with_reshapes"""
+
+
+sum = pg.sum
+log = pg.log
+max = pg.max
+exp = pg.exp
+gt = pg.gt
+lt = pg.lt
+mul = pg.mul
+div = pg.div
+pow = pg.pow
+squeeze = pg.squeeze
+unsqueeze = pg.unsqueeze
+sub = pg.sub
+add = pg.add
+neq = pg.neq
+im2col = pg.im2col
+col2im = pg.col2im

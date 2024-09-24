@@ -8,7 +8,7 @@ View as_contiguous(const View &view, bool force) {
   if (view.is_contiguous() && !force) {
     return view;
   }
-  View new_view = View(view.shape(), view.dtype(), device::CPU);
+  View new_view = View(view.shape(), view.dtype(), device::from_str("cpu"));
   PG_DISPATCH_ALL_TYPES(view.dtype(), "dispatch_copy", [&] {
     copy_ker<scalar_t>(view.shape(), view.get_casted_base_ptr<scalar_t>(),
                        new_view.get_casted_base_ptr<scalar_t>(), view.strides(),
@@ -20,7 +20,7 @@ View astype(const View &view, DType dtype) {
   if (view.dtype() == dtype) {
     return view;
   }
-  View new_view = View(view.shape(), dtype, device::CPU);
+  View new_view = View(view.shape(), dtype, device::from_str("cpu"));
   PG_DISPATCH_ALL_TYPES_TWO_TYPES(
       view.dtype(), new_view.dtype(), "dispatch_cast", [&] {
         cast_ker<scalar_t1, scalar_t2>(

@@ -310,7 +310,7 @@ bool try_convert_conv2d_vjp_weight(Tensor &out) {
 }
 
 void recursive_conv2d_vjp_weight(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -405,7 +405,7 @@ bool try_convert_max_pooling2d_backward(Tensor &out) {
 }
 
 void recursive_max_pooling2d_backward(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -475,7 +475,7 @@ bool try_convert_local_response_normalization(Tensor &out) {
 
 void recursive_local_response_normalization(Tensor &out,
                                             std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -554,7 +554,7 @@ bool try_convert_lrn_vjp_input(Tensor &out) {
 }
 
 void recursive_lrn_vjp_input(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -649,7 +649,7 @@ bool try_convert_cudnn_sdpa(Tensor &out) {
 }
 
 void recursive_cudnn_sdpa(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -691,7 +691,7 @@ bool try_convert_pooling2d(Tensor &out) {
 }
 
 void recursive_conv2d(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -705,7 +705,7 @@ void recursive_conv2d(Tensor &out, std::set<int> &visited) {
 }
 
 void recursive_conv2d_vjp_input(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -719,7 +719,7 @@ void recursive_conv2d_vjp_input(Tensor &out, std::set<int> &visited) {
 }
 
 void recursive_pooling2d(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -819,7 +819,7 @@ bool try_convert_fused_linear(Tensor &out) {
 }
 
 void recursive_fused_linear(Tensor &out, std::set<int> &visited) {
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {
@@ -843,7 +843,7 @@ void hoist_broadcasts(Tensor &out, std::set<int> &visited) {
   // input -> elwise -> broadcast -> elwise into input -> broadcast -> elwise ->
   // elwise this allows for better fusion
 
-  if (out.device() != device::CUDA) {
+  if (out.device()->kind() != device::CUDA) {
     return;
   }
   if (visited.find(out.id) != visited.end()) {

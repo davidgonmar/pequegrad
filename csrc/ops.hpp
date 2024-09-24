@@ -38,7 +38,7 @@ DEFINE_REDUCE_OP(max_reduce)
 DEFINE_REDUCE_OP(mean)
 
 Tensor fill(const shape_t &shape, DType dtype, double value,
-            device::DeviceKind device);
+            std::shared_ptr<device::Device> device);
 Tensor bilinear_resize(const Tensor &a, const shape_t &new_shape);
 Tensor one_hot(const Tensor &a, int num_classes);
 Tensor broadcast_to(const Tensor &a, const shape_t &shape);
@@ -84,5 +84,5 @@ Tensor assign_at(const Tensor &dst, const Tensor &src,
 Tensor astype(const Tensor &a, DType dtype);
 
 Tensor binomial(const double p, const shape_t &shape, const DType dtype,
-                const device::DeviceKind device);
+                std::shared_ptr<device::Device> device);
 } // namespace pg

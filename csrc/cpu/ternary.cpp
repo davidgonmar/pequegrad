@@ -13,7 +13,7 @@ void Where::dispatch_cpu(const std::vector<Tensor> &inputs,
   CHECK_SAME_SHAPE(a, b);
   CHECK_SAME_SHAPE(condition, a);
   outputs[0].init_view(
-      std::make_shared<View>(a.shape(), a.dtype(), device::CPU));
+      std::make_shared<View>(a.shape(), a.dtype(), device::from_str("cpu")));
   PG_DISPATCH_ALL_TYPES(a.dtype(), "where_cpu", [&] {
     cpu::ternar_op_ker<scalar_t>(
         condition.get_casted_base_ptr<scalar_t>(),

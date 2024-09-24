@@ -21,5 +21,13 @@ std::shared_ptr<void> allocate(const size_t nbytes, const DeviceKind device,
   }
 }
 
+std::shared_ptr<Device> from_str(std::string str) {
+  return DeviceRegistry::get_instance().get(str);
+}
+
+std::shared_ptr<Device> from_kind(DeviceKind kind) {
+  return DeviceRegistry::get_instance().get(kind);
+}
+
 } // namespace device
 } // namespace pg

@@ -28,7 +28,7 @@ size_t View::nbytes() const { return _nbytes; }
 DType View::dtype() const { return _dtype; }
 View::View(const std::shared_ptr<void> &ptr, const size_t nbytes,
            const shape_t &shape, const strides_t &strides, const size_t offset,
-           DType dtype, device::DeviceKind device)
+           DType dtype, std::shared_ptr<device::Device> device)
     : _ptr(ptr), _nbytes(nbytes), _shape(shape), _strides(strides),
       _offset(offset), _dtype(dtype), _initialized(true), _device(device) {}
 
@@ -71,21 +71,20 @@ typedef void (*FunPtr)();
 std::vector<Tensor> &ADNode::children() { return _children; }
 Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
                                   std::vector<Tensor> inputs,
-                                  std::optional<device::DeviceKind> _device) {
+                                  std::shared_ptr<device::Device> _device) {
   if (inputs.size() == 0) {
-    PG_CHECK_ARG(_device.has_value(),
+    PG_CHECK_ARG(_device != nullptr,
                  "Device must be specified for leaf nodes.");
   }
 
-  device::DeviceKind device =
-      _device.has_value() ? _device.value() : inputs[0].device();
+  std::shared_ptr<device::Device> device =
+      _device != nullptr ? _device : inputs[0].device();
   Tensor t = Tensor(primitive, inputs, 0, device);
 
   for (const Tensor &input : inputs) {
     PG_CHECK_ARG(input.device() == device,
                  "All inputs to a primitive must be on the same device, got ",
-                 device_to_string(input.device()), " and ",
-                 device_to_string(device));
+                 input.device()->str(), " and ", device->str());
   }
 
   ADPrimitive *primitive_ptr = primitive.get();
@@ -104,7 +103,7 @@ Tensor Tensor::from_primitive_numpy(const shape_t &shape, DType dtype,
                                     const strides_t &strides,
                                     const py::buffer_info &buffer_info,
                                     const size_t size,
-                                    device::DeviceKind device) {
+                                    std::shared_ptr<device::Device> device) {
   Tensor a = Tensor::from_primitive_one(
       std::make_shared<FromNumpy>(shape, dtype, strides, buffer_info.ptr, size,
                                   device),
@@ -114,14 +113,14 @@ Tensor Tensor::from_primitive_numpy(const shape_t &shape, DType dtype,
 std::vector<Tensor>
 Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
                                 std::vector<Tensor> inputs,
-                                std::optional<device::DeviceKind> _device) {
+                                std::shared_ptr<device::Device> _device) {
   if (inputs.size() == 0) {
-    PG_CHECK_ARG(_device.has_value(),
+    PG_CHECK_ARG(_device != nullptr,
                  "Device must be specified for leaf nodes.");
   }
 
-  device::DeviceKind device =
-      _device.has_value() ? _device.value() : inputs[0].device();
+  std::shared_ptr<device::Device> device =
+      _device != nullptr ? _device : inputs[0].device();
   std::vector<View> vs = primitive->precompute(inputs);
   int nouts = vs.size();
   std::vector<Tensor> tensors;
@@ -168,7 +167,7 @@ Tensor Tensor::eval(bool detach) {
     return *this;
   }
   auto primitive = _ad_node->primitive();
-  const device::DeviceKind this_device = this->device();
+  auto this_device = this->device();
   std::vector<Tensor> &children = _ad_node->children();
   for (Tensor &child : children) {
     PG_CHECK_RUNTIME(child.device() == this_device,
@@ -189,7 +188,7 @@ Tensor Tensor::eval(bool detach) {
     PG_CHECK_RUNTIME(child.device() == this_device,
                      "All children must be on the same device");
   }
-  switch (this_device) {
+  switch (this_device->kind()) {
   case device::DeviceKind::CPU:
     primitive->dispatch_cpu(children, outputs);
     break;
@@ -345,7 +344,7 @@ Tensor::Tensor(Tensor &&other) {
 }
 Tensor::Tensor(const std::shared_ptr<ADPrimitive> &primitive,
                std::vector<Tensor> inputs, int position,
-               std::optional<device::DeviceKind> _device) {
+               std::shared_ptr<device::Device> device) {
   _ad_node = std::make_shared<ADNode>(primitive, inputs);
 }
 

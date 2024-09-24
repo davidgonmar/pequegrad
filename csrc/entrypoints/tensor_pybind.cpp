@@ -60,6 +60,19 @@ PYBIND11_MODULE(pequegrad_c, m) {
   BIND_BINOP_WITH_SCALAR_OVERLOADS(max);
   BIND_BINOP_WITH_SCALAR_OVERLOADS(pow);
 
+  // device class
+  py::class_<device::Device, std::shared_ptr<device::Device>>(m, "Device")
+      .def("allocate", &device::Device::allocate)
+      .def("memset", &device::Device::memset)
+      .def("str", &device::Device::str);
+
+  // device utils
+  m.def("default_device", &device::get_default_device);
+  m.def("device_to_string", &device::device_to_string);
+  m.def("from_str", &device::from_str);
+  m.def("is_cuda", &device::is_cuda);
+  m.def("is_cpu", &device::is_cpu);
+
   m.def("log", &pg::log);
   m.def("exp", &pg::exp);
   m.def("im2col", &pg::im2col, py::arg("a"), py::arg("kernel_shape"),
@@ -351,7 +364,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
           },
           this->name);
       auto x = Tensor::from_primitive_multiple(
-          std::make_shared<FromFunctions>(prim), {}, device::DeviceKind::CPU);
+          std::make_shared<FromFunctions>(prim), {}, device::from_str("cpu"));
       return x;
     }
   };
@@ -372,7 +385,12 @@ PYBIND11_MODULE(pequegrad_c, m) {
   // module classes
   py::class_<Tensor>(m, "Tensor")
       .def_property_readonly("ndim", &Tensor::ndim)
-      .def("to_", &Tensor::to_)
+      .def("to_", [](Tensor &t, std::shared_ptr<device::Device> device) {
+        t.to_(device);
+      })
+      .def("to_", [](Tensor &t, std::string device) {
+        t.to_(device::from_str(device));
+      })
       .def("assign", &Tensor::assign)
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
@@ -383,14 +401,6 @@ PYBIND11_MODULE(pequegrad_c, m) {
              std::vector<Tensor> sibs = t.ad_node()->siblings();
              return sibs;
            })
-      .def(
-          "from_primitive",
-          [](const std::shared_ptr<ADPrimitive> &primitive,
-             std::vector<Tensor> inputs,
-             std::optional<device::DeviceKind> device) {
-            return Tensor::from_primitive_one(primitive, inputs, device);
-          },
-          py::return_value_policy::reference)
       .def("set_primitive",
            [](Tensor &t, std::shared_ptr<ADPrimitive> &p) {
              t.ad_node()->set_primitive(p);
@@ -409,6 +419,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
                throw std::runtime_error("Unsupported device: " + device);
              }
            })
+      .def("to", [](Tensor &t, std::shared_ptr<device::Device> device) {
+        return t.to(device->kind());
+      })
       .def("from_numpy",
            [](py::array_t<float> np_array) {
              return Tensor::from_numpy(np_array);
@@ -505,18 +518,43 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def_property_readonly("device",
                              [](const Tensor &t) { return t.device(); })
       .def(py::init([](py::array_t<float> np_array, device::DeviceKind device) {
-             return Tensor::from_numpy(np_array, device);
+             return Tensor::from_numpy(np_array, device::from_kind(device));
            }),
            py::arg("np_array"), py::arg("device") = device::DeviceKind::CPU)
       .def(py::init([](py::array_t<int> np_array, device::DeviceKind device) {
-             return Tensor::from_numpy(np_array, device);
+             return Tensor::from_numpy(np_array, device::from_kind(device));
            }),
            py::arg("np_array"), py::arg("device") = device::DeviceKind::CPU)
       .def(
           py::init([](py::array_t<double> np_array, device::DeviceKind device) {
-            return Tensor::from_numpy(np_array, device);
+            return Tensor::from_numpy(np_array, device::from_kind(device));
           }),
           py::arg("np_array"), py::arg("device") = device::DeviceKind::CPU)
+      .def(py::init([](py::array_t<float> np_array, std::string device) {
+             return Tensor::from_numpy(np_array, device::from_str(device));
+           }),
+           py::arg("np_array"), py::arg("device") = "cpu")
+      .def(py::init([](py::array_t<int> np_array, std::string device) {
+             return Tensor::from_numpy(np_array, device::from_str(device));
+           }),
+           py::arg("np_array"), py::arg("device") = "cpu")
+      .def(py::init([](py::array_t<double> np_array, std::string device) {
+             return Tensor::from_numpy(np_array, device::from_str(device));
+           }),
+           py::arg("np_array"), py::arg("device") = "cpu")
+      .def(py::init([](py::array_t<float> np_array, std::shared_ptr<device::Device> device) {
+             return Tensor::from_numpy(np_array, device);
+           }),
+           py::arg("np_array"), py::arg("device"))
+      .def(py::init([](py::array_t<int> np_array, std::shared_ptr<device::Device> device) {
+             return Tensor::from_numpy(np_array, device);
+           }),
+            py::arg("np_array"), py::arg("device"))
+      .def(py::init([](py::array_t<double> np_array, std::shared_ptr<device::Device> device) {
+             return Tensor::from_numpy(np_array, device);
+            }),
+            py::arg("np_array"), py::arg("device"))
+
       .def(py::init([](Tensor &orig) { return Tensor(orig); }))
       .BIND_BINOP_WITH_OVERLOAD_CLASS(add, add)
       .BIND_BINOP_WITH_OVERLOAD_CLASS(__add__, add)

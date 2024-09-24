@@ -7,7 +7,7 @@
 namespace pg {
 
 Tensor fill(const shape_t &shape, DType dtype, double value,
-            device::DeviceKind device) {
+            std::shared_ptr<device::Device> device) {
   return Tensor::from_primitive_one(std::make_shared<Fill>(value, dtype, shape),
                                     {}, device);
 }
@@ -452,7 +452,7 @@ Tensor add_inplace(Tensor &dst, const Tensor &other) {
 }
 
 Tensor binomial(const double p, const shape_t &shape, const DType dtype,
-                const device::DeviceKind device) {
+                std::shared_ptr<device::Device> device) {
   return Tensor::from_primitive_one(std::make_shared<Binomial>(p, shape, dtype),
                                     {}, device);
 }

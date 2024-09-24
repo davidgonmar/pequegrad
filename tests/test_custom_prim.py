@@ -1,5 +1,5 @@
 import pytest
-from pequegrad import custom_prim, Tensor, grads, device
+from pequegrad import custom_prim, Tensor, grads
 import numpy as np
 from functools import partial
 
@@ -82,12 +82,12 @@ def myfunction2_vjp(primals, tangents, outputs):
 @pytest.mark.parametrize("shape", [(3, 4), (5, 6)])
 @pytest.mark.parametrize("compiled", [True, False])
 def test_myfunction2(shape, compiled):
-    x = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
-    y = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
-    z = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
-    w = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
+    x = Tensor(np.random.rand(*shape).astype(np.float32)).to("cuda")
+    y = Tensor(np.random.rand(*shape).astype(np.float32)).to("cuda")
+    z = Tensor(np.random.rand(*shape).astype(np.float32)).to("cuda")
+    w = Tensor(np.random.rand(*shape).astype(np.float32)).to("cuda")
 
-    tan = Tensor(np.random.rand(*shape).astype(np.float32)).to(device.cuda)
+    tan = Tensor(np.random.rand(*shape).astype(np.float32)).to("cuda")
 
     c = myfunction2(x, y, z, w) if not compiled else myfunction2_compiled(x, y, z, w)
     print("c", c)

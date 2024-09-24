@@ -1,5 +1,6 @@
 from pequegrad.backend.c import Tensor
 import pequegrad.backend.c as pg
+
 import numpy as np
 from typing import Union, List
 from .utils import bind_method, bind_method_property
@@ -35,6 +36,21 @@ from .ops import (
 )
 
 
+from pequegrad.backend.c import Device, from_str  # noqa
+
+
+class DeviceModule:
+    @staticmethod
+    def cuda(idx: int = 0) -> Device:
+        return from_str(f"cuda:{idx}")
+
+    @staticmethod
+    def cpu(idx: int = 0) -> Device:
+        return from_str(f"cpu:{idx}")
+
+
+device = DeviceModule
+
 CUDA_AVAILABLE = True
 
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
@@ -56,7 +72,7 @@ bind_method(
                 shape,
                 kwargs.get("dtype", pg.dt.float32),
                 0.0,
-                kwargs.get("device", pg.device.cpu),
+                kwargs.get("device", device.cpu(0)),
             )
         )
     ),
@@ -77,7 +93,7 @@ bind_method(
                 shape,
                 kwargs.get("dtype", pg.dt.float32),
                 1.0,
-                kwargs.get("device", pg.device.cpu),
+                kwargs.get("device", device.cpu(0)),
             )
         )
     ),
@@ -131,13 +147,13 @@ bind_method(
 bind_method(
     Tensor,
     "cuda",
-    lambda self: self.to(pg.device.cuda),
+    lambda self: self.to(device.cuda(0)),
 )
 
 bind_method(
     Tensor,
     "cpu",
-    lambda self: self.to(pg.device.cpu),
+    lambda self: self.to(device.cpu(0)),
 )
 
 

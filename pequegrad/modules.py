@@ -1,4 +1,4 @@
-from pequegrad.backend.c import Tensor, device
+from pequegrad.backend.c import Tensor
 import numpy as np
 from typing import List, Union
 import pickle
@@ -64,8 +64,6 @@ class StatefulModule:
                 p.assign(Tensor(p_loaded, device=device))
 
     def to(self, backend):
-        d = {"cpu": device.cpu, "cuda": device.cuda}
-        backend = d[backend] if backend in d else backend
         for p in self.__dict__.values():
             if isinstance(p, StatefulModule) or isinstance(p, NonStatefulModule):
                 p.to(backend)

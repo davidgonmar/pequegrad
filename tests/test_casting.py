@@ -1,6 +1,6 @@
 from pequegrad.transforms.autodiff import grads
 from pequegrad.tensor import Tensor
-from pequegrad import device, dt
+from pequegrad import dt
 import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
@@ -20,7 +20,7 @@ def _compare_fn_with_torch(
     torch_fn=None,
     tol: float = 1e-5,
     backward=True,
-    device: device = device.cpu,
+    device="cpu",
     dtype=dt.float64,
 ):
     # In cases where the api is the same, just use the same fn as pequegrad
@@ -92,7 +92,7 @@ class TestCasting:
     )
     @pytest.mark.parametrize(
         "device",
-        [device.cpu, device.cuda],
+        ["cpu", "cuda"],
     )
     def test_astype_general(self, shape, dtypes, device):
         def pequegrad_fn(tensor):
@@ -107,7 +107,7 @@ class TestCasting:
 
     @pytest.mark.parametrize(
         "device",
-        [device.cpu, device.cuda],
+        ["cpu", "cuda"],
     )
     def test_astype_int_to_float(self, device):
         arr = np.array([[1, 2, 3], [4, 5, 6]])

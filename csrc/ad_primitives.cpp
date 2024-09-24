@@ -39,7 +39,8 @@ std::vector<View> FromNumpy::precompute(const std::vector<Tensor> &inputs) {
 }
 
 void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs,
-                                  device::DeviceKind device) {
+                                  std::shared_ptr<device::Device> _device) {
+  auto device = _device->kind();
   auto _ptr = device::allocate(_buffer_size * dtype_to_size(_dtype), device,
                                /*pinned=*/true);
   if (device == device::DeviceKind::CUDA) {
@@ -54,12 +55,12 @@ void FromNumpy::_dispatch_general(std::vector<Tensor> &outputs,
 
 void FromNumpy::dispatch_cpu(const std::vector<Tensor> &inputs,
                              std::vector<Tensor> &outputs) {
-  _dispatch_general(outputs, device::DeviceKind::CPU);
+  _dispatch_general(outputs, device::from_str("cpu"));
 }
 
 void FromNumpy::dispatch_cuda(const std::vector<Tensor> &inputs,
                               std::vector<Tensor> &outputs) {
-  _dispatch_general(outputs, device::DeviceKind::CUDA);
+  _dispatch_general(outputs, device::from_str("cuda"));
 }
 
 std::vector<View> Add::precompute(const std::vector<Tensor> &inputs) {

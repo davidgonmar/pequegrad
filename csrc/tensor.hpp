@@ -94,7 +94,7 @@ public:
     return std::accumulate(_shape.begin(), _shape.end(), 1,
                            std::multiplies<size_t>());
   }
-  void set_device(device::DeviceKind device) { _device = device; }
+  void set_device(std::shared_ptr<device::Device> device) { _device = device; }
   void set_shape(const shape_t &shape) { _shape = shape; }
   void set_strides(const strides_t &strides) { _strides = strides; }
   void set_ptr(const std::shared_ptr<void> &ptr, size_t nbytes) {
@@ -102,11 +102,11 @@ public:
     _nbytes = nbytes;
     _initialized = true;
   }
-  device::DeviceKind device() const { return _device; }
+  std::shared_ptr<device::Device> device() const { return _device; }
 
   View(const std::shared_ptr<void> &ptr, const size_t nbytes,
        const shape_t &shape, const strides_t &strides, const size_t offset,
-       DType dtype, device::DeviceKind device);
+       DType dtype, std::shared_ptr<device::Device> device);
 
   bool is_initialized() const { return _initialized; }
   bool is_evaled() const { return is_initialized(); }
@@ -124,34 +124,34 @@ public:
   }
 
   View(const shape_t shape, const strides_t strides, const size_t offset,
-       const DType dtype, device::DeviceKind device)
+       const DType dtype, std::shared_ptr<device::Device> device)
       : _shape(shape), _strides(strides), _offset(offset), _dtype(dtype),
         _device(device) {
     size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
                                     std::multiplies<size_t>()) *
                     dtype_to_size(dtype);
     _nbytes = nbytes;
-    _ptr = device::allocate(nbytes, device);
+    _ptr = device->allocate(nbytes);
     _initialized = true;
 
     PG_CHECK_RUNTIME(is_dense(), "Cannot create view with holes.");
   }
 
   View(const shape_t shape, const strides_t strides, const DType dtype,
-       device::DeviceKind device)
+       std::shared_ptr<device::Device> device)
       : _shape(shape), _strides(strides), _dtype(dtype), _device(device) {
     size_t nbytes = std::accumulate(shape.begin(), shape.end(), 1,
                                     std::multiplies<size_t>()) *
                     dtype_to_size(dtype);
     _nbytes = nbytes;
-    _ptr = device::allocate(nbytes, device);
+    _ptr = device->allocate(nbytes);
     _offset = 0;
     _initialized = true;
 
     PG_CHECK_RUNTIME(is_dense(), "Cannot create view with holes.");
   }
 
-  View(const shape_t shape, DType dtype, device::DeviceKind device,
+  View(const shape_t shape, DType dtype, std::shared_ptr<device::Device> device,
        bool init = true) {
     _shape = shape;
 
@@ -161,7 +161,7 @@ public:
                       dtype_to_size(dtype);
       _nbytes = nbytes;
       _strides = _compute_natural_strides(shape, dtype);
-      _ptr = device::allocate(nbytes, device);
+      _ptr = device->allocate(nbytes);
       _offset = 0;
     }
     _device = device;
@@ -171,7 +171,7 @@ public:
 
   void allocate() {
     size_t nbytes = compute_nbytes(_shape, _dtype);
-    _ptr = device::allocate(nbytes, _device);
+    _ptr = _device->allocate(nbytes);
     _nbytes = nbytes;
     _initialized = true;
   }
@@ -245,7 +245,7 @@ public:
   }
 
   View(size_t nbytes, shape_t shape, strides_t strides, size_t offset,
-       DType dtype, device::DeviceKind device)
+       DType dtype, std::shared_ptr<device::Device> device)
       : _nbytes(nbytes), _shape(shape), _strides(strides), _offset(offset),
         _dtype(dtype), _device(device) {
     _initialized = false;
@@ -260,7 +260,7 @@ private:
   size_t _offset; // offset in bytes
   DType _dtype;
   bool _initialized = false;
-  device::DeviceKind _device;
+  std::shared_ptr<device::Device> _device;
 };
 
 // builder pattern for view options
@@ -271,7 +271,7 @@ public:
     _dtype = dtype;
     return *this;
   }
-  ViewOptions &device(device::DeviceKind device) {
+  ViewOptions &device(std::shared_ptr<device::Device> device) {
     _device = device;
     return *this;
   }
@@ -336,7 +336,7 @@ public:
 
 private:
   DType _dtype = DType::Float32;
-  device::DeviceKind _device = device::DeviceKind::CPU;
+  std::shared_ptr<device::Device> _device = device::get_default_device();
   shape_t _shape;
   strides_t _strides;
   size_t _offset = 0;
@@ -583,7 +583,7 @@ public:
     return view().get_base_ptr();
   }
 
-  device::DeviceKind device() const {
+  std::shared_ptr<device::Device> device() const {
     // We need to know device before initialization
     return _view->device();
   }
@@ -591,6 +591,7 @@ public:
   template <typename T> T *get_casted_base_ptr() const {
     _throw_if_not_initialized(
         "get_casted_base_ptr() called on uninitialized tensor.");
+
     if (dtype_from_cpptype<T>() != this->dtype()) {
       throw std::runtime_error("Cannot cast pointer to different dtype, got " +
                                dtype_to_string(this->dtype()) + " and " +
@@ -603,12 +604,12 @@ public:
                                      const strides_t &strides,
                                      const py::buffer_info &buffer_info,
                                      const size_t size,
-                                     device::DeviceKind device);
+                                     std::shared_ptr<device::Device> device);
 
   template <typename T>
-  static Tensor
-  from_numpy(py::array_t<T> np_array,
-             device::DeviceKind device = device::DeviceKind::CPU) {
+  static Tensor from_numpy(
+      py::array_t<T> np_array,
+      std::shared_ptr<device::Device> device = device::get_default_device()) {
     py::buffer_info buffer_info = np_array.request();
     auto size = buffer_info.size;
     shape_t shape;
@@ -649,7 +650,7 @@ public:
       eval();
     }
     // TODO -- maybe dont copy 2 times
-    if (device() != device::DeviceKind::CPU) {
+    if (!device::is_cpu(device())) {
       return to_cpu().to_numpy<T>();
     }
     // if is not dense, we need to copy to a dense tensor
@@ -669,7 +670,7 @@ public:
     throw std::runtime_error("Unsupported device type.");
   }
 
-  Tensor to_(device::DeviceKind _device) {
+  Tensor to_(std::shared_ptr<device::Device> _device) {
     // TODO -- Make this safer
     if (device() == _device) {
       return *this;
@@ -677,17 +678,17 @@ public:
     if (!is_initialized()) {
       this->eval();
     }
-    if (device() == device::DeviceKind::CUDA) {
+    if (device::is_cpu(_device)) {
       size_t nbytes = this->nbytes();
-      auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
+      auto new_ptr = _device->allocate(nbytes);
       copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
-      this->_view->set_device(device::DeviceKind::CPU);
+      this->_view->set_device(_device);
       this->_view->set_ptr(new_ptr);
-    } else if (device() == device::DeviceKind::CPU) {
+    } else if (device::is_cuda(_device)) {
       size_t nbytes = this->nbytes();
-      auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
+      auto new_ptr = _device->allocate(nbytes);
       copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
-      this->_view->set_device(device::DeviceKind::CUDA);
+      this->_view->set_device(_device);
       this->_view->set_ptr(new_ptr);
     }
     return *this;
@@ -696,40 +697,41 @@ public:
   std::string str() const;
 
   Tensor to_cpu() {
-    if (device() == device::DeviceKind::CPU) {
+    if (is_cpu(device())) {
       return *this;
     }
     if (!is_initialized()) {
       this->eval();
     }
     size_t nbytes = this->nbytes();
-    auto new_ptr = device::allocate(nbytes, device::DeviceKind::CPU);
+    auto new_ptr = device::from_str("cpu")->allocate(nbytes);
     copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
     return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
-                  device::DeviceKind::CPU);
+                  device::from_str("cpu"));
   }
 
   Tensor to_cuda() {
-    if (device() == device::DeviceKind::CUDA) {
+    if (is_cuda(device())) {
       return *this;
     }
     if (!is_initialized()) {
       this->eval();
     }
     size_t nbytes = this->nbytes();
-    auto new_ptr = device::allocate(nbytes, device::DeviceKind::CUDA);
+    auto new_ptr = device::from_str("cuda")->allocate(nbytes);
     copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
     return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
-                  device::DeviceKind::CUDA);
+                  device::from_str("cuda"));
   }
 
   static Tensor
   from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
                      std::vector<Tensor> inputs,
-                     std::optional<device::DeviceKind> device = std::nullopt);
-  static std::vector<Tensor> from_primitive_multiple(
-      const std::shared_ptr<ADPrimitive> &primitive, std::vector<Tensor> inputs,
-      std::optional<device::DeviceKind> device = std::nullopt);
+                     std::shared_ptr<device::Device> device = nullptr);
+  static std::vector<Tensor>
+  from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
+                          std::vector<Tensor> inputs,
+                          std::shared_ptr<device::Device> device = nullptr);
   Tensor eval(bool detach = true);
 
   Tensor() {}
@@ -737,9 +739,9 @@ public:
 
   bool is_initialized() const { return _view->is_initialized(); }
 
-  Tensor(const shape_t &shape, const DType dtype, device::DeviceKind device) {
-    _view = std::make_shared<View>(shape, dtype, device);
-  }
+  Tensor(const shape_t &shape, const DType dtype,
+         std::shared_ptr<device::Device> device)
+      : _view(std::make_shared<View>(shape, dtype, device)) {}
 
   void set_ad_node(const ADNode &ad_node) {
     _ad_node = std::make_shared<ADNode>(ad_node);
@@ -748,12 +750,12 @@ public:
 
   Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
          const std::shared_ptr<void> &ptr, DType dtype,
-         device::DeviceKind device)
+         std::shared_ptr<device::Device> device)
       : _view(std::make_shared<View>(ptr, nbytes, shape, strides, 0, dtype,
                                      device)) {}
   Tensor(const size_t nbytes, const shape_t &shape, const strides_t &strides,
          size_t offset, const std::shared_ptr<void> &ptr, DType dtype,
-         device::DeviceKind device)
+         std::shared_ptr<device::Device> device)
       : _view(std::make_shared<View>(ptr, nbytes, shape, strides, offset, dtype,
                                      device)) {}
 
@@ -765,7 +767,7 @@ private:
 
   Tensor(const std::shared_ptr<ADPrimitive> &primitive,
          std::vector<Tensor> inputs, int position,
-         std::optional<device::DeviceKind> device = std::nullopt);
+         std::shared_ptr<device::Device> device);
 };
 
 std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,

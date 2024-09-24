@@ -28,7 +28,7 @@ CudaSelect convert_to_slice(const select_item_t &_item,
                      dtype_to_string(tensor->dtype()));
     PG_CHECK_ARG(tensor->ndim() == 1, "Index tensor must be 1D");
     PG_CHECK_ARG(tensor->is_contiguous(), "Index tensor must be contiguous");
-    PG_CHECK_ARG(tensor->device() == device::CUDA,
+    PG_CHECK_ARG(tensor->device()->kind() == device::CUDA,
                  "Index tensor must be on the GPU");
     auto indices = tensor->get_casted_base_ptr<int>();
     item.indices = indices;
