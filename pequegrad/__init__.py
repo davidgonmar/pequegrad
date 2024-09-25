@@ -18,6 +18,7 @@ from pequegrad.transforms.compile import *  # noqa
 from pequegrad.ops import *  # noqa
 from pequegrad.distrib.sharded_tensor import *  # noqa
 from pequegrad.viz import *  # noqa
+from pequegrad.distrib import *  # noqa
 
 
 class DeviceModule:
