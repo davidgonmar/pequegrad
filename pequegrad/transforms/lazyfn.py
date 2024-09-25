@@ -206,3 +206,16 @@ def get_consumers(xs):
 
     topo_recurse(xs, add_consumer)
     return consumers
+
+
+def deepcopy_graphtrace(trace):
+    # uses the clone_graph function to clone the graph
+    outputs, input_tensors = clone_graph(trace.outputs, trace.input_tensors)
+    assert len(trace.inputs) == len(input_tensors), "Input tensors should have the same length"
+    return GraphTrace(
+        inputs=input_tensors,
+        inputs_pytree=trace.inputs_pytree,
+        input_tensors=input_tensors,
+        outputs=outputs,
+        outputs_pytree=trace.outputs_pytree,
+    )
