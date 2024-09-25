@@ -661,11 +661,13 @@ public:
     return np_array;
   }
 
-  Tensor to(device::DeviceKind device) {
-    if (device == device::DeviceKind::CPU) {
-      return to_cpu();
-    } else if (device == device::DeviceKind::CUDA) {
-      return to_cuda();
+  Tensor to(std::shared_ptr<device::Device> new_device) {
+    if (is_cpu(new_device)) {
+      return to_cpu(
+          std::dynamic_pointer_cast<device::CPUDevice>(new_device)->idx());
+    } else if (is_cuda(new_device)) {
+      return to_cuda(
+          std::dynamic_pointer_cast<device::CudaDevice>(new_device)->idx());
     }
     throw std::runtime_error("Unsupported device type.");
   }
@@ -696,7 +698,7 @@ public:
 
   std::string str() const;
 
-  Tensor to_cpu() {
+  Tensor to_cpu(int idx = 0) {
     if (is_cpu(device())) {
       return *this;
     }
@@ -704,13 +706,14 @@ public:
       this->eval();
     }
     size_t nbytes = this->nbytes();
-    auto new_ptr = device::from_str("cpu")->allocate(nbytes);
+    auto str = "cpu:" + std::to_string(idx);
+    auto new_ptr = device::from_str(str)->allocate(nbytes);
     copy_from_cuda_to_cpu(view().shared_ptr(), new_ptr, nbytes);
     return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
-                  device::from_str("cpu"));
+                  device::from_str(str));
   }
 
-  Tensor to_cuda() {
+  Tensor to_cuda(int idx = 0) {
     if (is_cuda(device())) {
       return *this;
     }
@@ -718,10 +721,11 @@ public:
       this->eval();
     }
     size_t nbytes = this->nbytes();
-    auto new_ptr = device::from_str("cuda")->allocate(nbytes);
+    auto new_ptr =
+        device::from_str("cuda:" + std::to_string(idx))->allocate(nbytes);
     copy_from_cpu_to_cuda(view().shared_ptr(), new_ptr, nbytes);
     return Tensor(nbytes, shape(), strides(), offset(), new_ptr, dtype(),
-                  device::from_str("cuda"));
+                  device::from_str("cuda:" + std::to_string(idx)));
   }
 
   static Tensor

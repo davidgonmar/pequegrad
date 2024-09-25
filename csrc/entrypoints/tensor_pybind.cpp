@@ -410,19 +410,14 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("ad_context",
            [](const Tensor &t) { return t.ad_node()->primitive()->str(); })
       .def("to",
-           [](Tensor &t, device::DeviceKind device) { return t.to(device); })
+           [](Tensor &t, device::DeviceKind device) { return t.to(device::from_kind(device)); })
       .def("to",
            [](Tensor &t, std::string device) {
-             if (device == "cuda") {
-               return t.to(device::DeviceKind::CUDA);
-             } else if (device == "cpu") {
-               return t.to(device::DeviceKind::CPU);
-             } else {
-               throw std::runtime_error("Unsupported device: " + device);
-             }
+             auto _device = device::from_str(device);
+              return t.to(_device);
            })
       .def("to", [](Tensor &t, std::shared_ptr<device::Device> device) {
-        return t.to(device->kind());
+        return t.to(device);
       })
       .def("from_numpy",
            [](py::array_t<float> np_array) {
