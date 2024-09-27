@@ -816,10 +816,12 @@ protected:
   double _value;
   shape_t _shape;
   DType _dtype;
+  std::shared_ptr<device::Device> _device;
 
 public:
-  explicit Fill(double value, DType dtype, shape_t shape)
-      : _value(value), _shape(shape), _dtype(dtype) {}
+  explicit Fill(double value, DType dtype, shape_t shape,
+                std::shared_ptr<device::Device> device)
+      : _value(value), _shape(shape), _dtype(dtype), _device(device) {}
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   std::string str() { return "Fill<" + std::to_string(_value) + ">"; }
@@ -835,9 +837,11 @@ protected:
   double _p;
   shape_t _shape;
   DType _dtype;
+  std::shared_ptr<device::Device> _device;
 
 public:
-  explicit Binomial(double p, shape_t shape, DType dtype)
+  explicit Binomial(double p, shape_t shape, DType dtype,
+                    std::shared_ptr<device::Device> device)
       : _p(p), _shape(shape), _dtype(dtype) {}
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
@@ -866,6 +870,22 @@ public:
   DEFINE_PRECOMPUTE
   DEFINE_BACKWARD
   explicit Copy() {}
+};
+
+class ToDevice : public ADPrimitive {
+protected:
+  std::shared_ptr<device::Device> _device_to;
+
+public:
+  explicit ToDevice(std::shared_ptr<device::Device> device_to)
+      : _device_to(device_to) {}
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_STR_NAME(ToDevice)
+
+  DEFINE_BACKWARD
+  DEFINE_PRECOMPUTE
+  std::shared_ptr<device::Device> device_to() { return _device_to; }
 };
 
 } // namespace pg

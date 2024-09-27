@@ -399,13 +399,7 @@ class GPT(pnn.Module):
         print(previous_text, end="", flush=True)
         curr = len(idx) - 1
         # pad idx to max block size
-        idx = (
-            idx.astype(pg.dt.int32)
-            .pad_to(self.block_size)
-            .eval()
-            .detach()
-            .to("cuda")
-        )
+        idx = idx.astype(pg.dt.int32).pad_to(self.block_size).eval().detach().to("cuda")
 
         @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
         def runmodel(x, model, curridx, temperature):

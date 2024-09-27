@@ -63,6 +63,12 @@ class StatefulModule:
             for p, p_loaded in zip(self.parameters(), d["params"]):
                 p.assign(Tensor(p_loaded, device=device))
 
+    def copy(self):
+        new = self.__class__()
+        for p, p_new in zip(self.parameters(), new.parameters()):
+            p_new.assign(p)
+        return new
+
     def to(self, backend):
         for p in self.__dict__.values():
             if isinstance(p, StatefulModule) or isinstance(p, NonStatefulModule):

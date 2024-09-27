@@ -196,12 +196,11 @@ def one_hot(
     assert indices.ndim in [1, 0], "indices must be a vector"
     if indices.device == _device.cpu(0):
         indices = indices.numpy()
-
         np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])
 
         np_one_hot[np.arange(indices.shape[0]), indices] = 1.0
-
-        return Tensor(np_one_hot, device=device)
+        ret = Tensor(np_one_hot, device=device)
+        return ret
     else:
         return pg.one_hot(indices, num_classes)
 

@@ -85,4 +85,7 @@ Tensor astype(const Tensor &a, DType dtype);
 
 Tensor binomial(const double p, const shape_t &shape, const DType dtype,
                 std::shared_ptr<device::Device> device);
+
+Tensor to_device(const Tensor &a, std::shared_ptr<device::Device> device_to);
+
 } // namespace pg

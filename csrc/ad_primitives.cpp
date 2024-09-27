@@ -153,6 +153,7 @@ std::vector<View> Sum::precompute(const std::vector<Tensor> &inputs) {
   this->_total_reduce_numel = total_reduced_per_out_elem;
   this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -167,6 +168,7 @@ std::vector<View> MaxReduce::precompute(const std::vector<Tensor> &inputs) {
   this->_total_reduce_numel = total_reduced_per_out_elem;
   this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -181,6 +183,7 @@ std::vector<View> Mean::precompute(const std::vector<Tensor> &inputs) {
   this->_total_reduce_numel = total_reduced_per_out_elem;
   this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -568,6 +571,7 @@ std::vector<View> Im2Col::precompute(const std::vector<Tensor> &inputs) {
 
   shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(a.dtype())
               .shape(out_shape)
               .with_natural_strides()
@@ -600,6 +604,7 @@ std::vector<View> Col2Im::precompute(const std::vector<Tensor> &inputs) {
 
   shape_t out_shape = {batch_size, out_channels, out_h, out_w};
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(a.dtype())
               .shape(out_shape)
               .with_natural_strides()
@@ -711,6 +716,7 @@ std::vector<View> Select::precompute(const std::vector<Tensor> &inputs) {
   }
   if (slice_with_array) {
     return {ViewOptions()
+                .like(inputs[0])
                 .dtype(inp.dtype())
                 .shape(new_shape)
                 .with_natural_strides()
@@ -785,6 +791,7 @@ std::vector<View> AsType::precompute(const std::vector<Tensor> &inputs) {
 
 std::vector<View> Where::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(inputs[1].dtype())
               .shape(inputs[1].shape())
               .with_natural_strides()
@@ -798,13 +805,21 @@ std::vector<Tensor> Fill::backward(const std::vector<Tensor> &primals,
 }
 
 std::vector<View> Fill::precompute(const std::vector<Tensor> &inputs) {
-  return {
-      ViewOptions().dtype(_dtype).shape(_shape).with_natural_strides().build()};
+  return {ViewOptions()
+              .device(_device)
+              .dtype(_dtype)
+              .shape(_shape)
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<View> Binomial::precompute(const std::vector<Tensor> &inputs) {
-  return {
-      ViewOptions().dtype(_dtype).shape(_shape).with_natural_strides().build()};
+  return {ViewOptions()
+              .device(_device)
+              .dtype(_dtype)
+              .shape(_shape)
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<View>
@@ -814,6 +829,7 @@ BilinearResize::precompute(const std::vector<Tensor> &inputs) {
   shape_t new_shape = {inputs[0].shape()[0], inputs[0].shape()[1], new_height,
                        new_width};
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -827,6 +843,7 @@ std::vector<View> OneHotVector::precompute(const std::vector<Tensor> &inputs) {
                inputs[0].ndim());
   shape_t new_shape = {inputs[0].shape()[0], size_t(num_classes)};
   return {ViewOptions()
+              .like(inputs[0])
               .dtype(DType::Float32)
               .shape(new_shape)
               .with_natural_strides()
@@ -869,5 +886,15 @@ void Copy::dispatch_cuda(const std::vector<Tensor> &inputs,
                          std::vector<Tensor> &outputs) {
   outputs[0].view_ptr()->set_ptr(inputs[0].view().shared_ptr(),
                                  inputs[0].nbytes());
+}
+
+std::vector<View> ToDevice::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like(inputs[0]).device(_device_to).build()};
+}
+
+std::vector<Tensor> ToDevice::backward(const std::vector<Tensor> &primals,
+                                       const std::vector<Tensor> &tangents,
+                                       const std::vector<Tensor> &outputs) {
+  return {to_device(tangents[0], primals[0].device())};
 }
 } // namespace pg

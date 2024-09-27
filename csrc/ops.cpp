@@ -8,8 +8,8 @@ namespace pg {
 
 Tensor fill(const shape_t &shape, DType dtype, double value,
             std::shared_ptr<device::Device> device) {
-  return Tensor::from_primitive_one(std::make_shared<Fill>(value, dtype, shape),
-                                    {}, device);
+  return Tensor::from_primitive_one(
+      std::make_shared<Fill>(value, dtype, shape, device), {}, device);
 }
 
 Tensor broadcast_to(const Tensor &a, const shape_t &shape) {
@@ -453,8 +453,8 @@ Tensor add_inplace(Tensor &dst, const Tensor &other) {
 
 Tensor binomial(const double p, const shape_t &shape, const DType dtype,
                 std::shared_ptr<device::Device> device) {
-  return Tensor::from_primitive_one(std::make_shared<Binomial>(p, shape, dtype),
-                                    {}, device);
+  return Tensor::from_primitive_one(
+      std::make_shared<Binomial>(p, shape, dtype, device), {}, device);
 }
 
 Tensor bilinear_resize(const Tensor &a, const shape_t &new_shape) {
@@ -464,5 +464,9 @@ Tensor bilinear_resize(const Tensor &a, const shape_t &new_shape) {
 Tensor one_hot(const Tensor &a, int num_classes) {
   return Tensor::from_primitive_one(std::make_shared<OneHotVector>(num_classes),
                                     {a});
+}
+
+Tensor to_device(const Tensor &a, std::shared_ptr<device::Device> device_to) {
+  return Tensor::from_primitive_one(std::make_shared<ToDevice>(device_to), {a});
 }
 } // namespace pg

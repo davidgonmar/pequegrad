@@ -77,21 +77,29 @@ Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
                  "Device must be specified for leaf nodes.");
   }
 
-  std::shared_ptr<device::Device> device =
-      _device != nullptr ? _device : inputs[0].device();
+  auto device = _device != nullptr ? _device : inputs[0].device();
   Tensor t = Tensor(primitive, inputs, 0, device);
 
-  for (const Tensor &input : inputs) {
-    PG_CHECK_ARG(input.device() == device,
-                 "All inputs to a primitive must be on the same device, got ",
-                 input.device()->str(), " and ", device->str());
+  // only check if it is not a ToDevice op. This shouldbe cleaner with primitve
+  // traits
+  if (true || primitive->str() != "ToDevice") {
+    for (const Tensor &input : inputs) {
+      PG_CHECK_ARG(input.device() == device,
+                   "All inputs to a primitive must be on the same device, got ",
+                   input.device()->str(), " and ", device->str(),
+                   "for primitive", primitive->str());
+    }
   }
 
   ADPrimitive *primitive_ptr = primitive.get();
   std::vector<View> vs = primitive_ptr->precompute(inputs);
   PG_CHECK_RUNTIME(vs.size() == 1, "precompute must return a single view");
   t.set_view(vs[0]);
-  t.view_ptr()->set_device(device);
+
+  // maybe override device
+  if (_device != nullptr) {
+    t.view_ptr()->set_device(_device);
+  }
   // check if primitive is marked as eager
   if (primitive->eager()) {
     t.eval(false);
@@ -170,9 +178,6 @@ Tensor Tensor::eval(bool detach) {
   auto this_device = this->device();
   std::vector<Tensor> &children = _ad_node->children();
   for (Tensor &child : children) {
-    PG_CHECK_RUNTIME(child.device() == this_device,
-                     "All children must be on the same device, got child: ",
-                     child.str(), " and parent: ", this->str());
     child.eval(detach);
   }
   // outputs is just `this` tensor and the siblings (ordered by position)
@@ -183,11 +188,6 @@ Tensor Tensor::eval(bool detach) {
             [](const Tensor &a, const Tensor &b) {
               return a.ad_node()->position() < b.ad_node()->position();
             });
-  // assert all children are on the same device
-  for (Tensor &child : children) {
-    PG_CHECK_RUNTIME(child.device() == this_device,
-                     "All children must be on the same device");
-  }
   switch (this_device->kind()) {
   case device::DeviceKind::CPU:
     primitive->dispatch_cpu(children, outputs);

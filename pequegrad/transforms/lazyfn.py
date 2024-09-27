@@ -211,7 +211,9 @@ def get_consumers(xs):
 def deepcopy_graphtrace(trace):
     # uses the clone_graph function to clone the graph
     outputs, input_tensors = clone_graph(trace.outputs, trace.input_tensors)
-    assert len(trace.inputs) == len(input_tensors), "Input tensors should have the same length"
+    assert len(trace.inputs) == len(
+        input_tensors
+    ), "Input tensors should have the same length"
     return GraphTrace(
         inputs=input_tensors,
         inputs_pytree=trace.inputs_pytree,

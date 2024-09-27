@@ -20,6 +20,7 @@ def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
     )
     return flattened_indices
 
+
 class pmap(LazyFunction):
     def __init__(self, f, devices, argnum_opts):
         super().__init__(f)
@@ -43,15 +44,18 @@ class pmap(LazyFunction):
         apply_funcs = dict()
         for i, opt in enumerate(self.argnum_opts):
             if opt is not None:
+
                 def apply_func(input):
                     split = input.split(len(self.devices), dim=0)
                     return [split.to(device) for device in self.devices]
+
             else:
+
                 def apply_func(input):
                     return [input.to(device) for device in self.devices]
 
             apply_funcs[i] = apply_func
-        
+
         # now, for each graphtrace, apply the apply_func for the input tensors.
         # also, we need to re-propagate shape/device information
         for device in self.devices:
@@ -63,6 +67,6 @@ class pmap(LazyFunction):
 
         # reprogate the shape/device information
         raise NotImplementedError
-    
+
         # merge the traces
         raise NotImplementedError

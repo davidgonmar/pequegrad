@@ -46,7 +46,7 @@ class ADPrimitive; // forward declaration
 class Tensor;
 
 Tensor as_contiguous(const Tensor &t); // forward declaration
-
+Tensor to_device(const Tensor &t, std::shared_ptr<device::Device> device);
 namespace py = pybind11;
 
 class View {
@@ -329,6 +329,9 @@ public:
     if (!_strides_set) {
       _strides = _compute_natural_strides(_shape, _dtype);
     }
+    if (_device == nullptr) {
+      PG_CHECK_RUNTIME(false, "Device not set for ViewOptions");
+    }
     return View(_nbytes, _shape, _strides, _offset, _dtype, _device);
   }
 
@@ -336,7 +339,7 @@ public:
 
 private:
   DType _dtype = DType::Float32;
-  std::shared_ptr<device::Device> _device = device::get_default_device();
+  std::shared_ptr<device::Device> _device = nullptr;
   shape_t _shape;
   strides_t _strides;
   size_t _offset = 0;
@@ -661,17 +664,12 @@ public:
     return np_array;
   }
 
+  // Differentiable / graph-aware (jittable) operation
   Tensor to(std::shared_ptr<device::Device> new_device) {
-    if (is_cpu(new_device)) {
-      return to_cpu(
-          std::dynamic_pointer_cast<device::CPUDevice>(new_device)->idx());
-    } else if (is_cuda(new_device)) {
-      return to_cuda(
-          std::dynamic_pointer_cast<device::CudaDevice>(new_device)->idx());
-    }
-    throw std::runtime_error("Unsupported device type.");
+    return to_device(*this, new_device);
   }
 
+  // This is inplace, not differentiable / graph-aware at the moment
   Tensor to_(std::shared_ptr<device::Device> _device) {
     // TODO -- Make this safer
     if (device() == _device) {
