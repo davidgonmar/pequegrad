@@ -140,7 +140,7 @@ class CausalSelfAttention(pnn.Module):
             )
             .astype(pg.dt.float32)
             .eval()
-            .to(device.cuda)
+            .to("cuda")
         )
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -404,7 +404,7 @@ class GPT(pnn.Module):
             .pad_to(self.block_size)
             .eval()
             .detach()
-            .to(device.cuda)
+            .to("cuda")
         )
 
         @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
@@ -439,7 +439,7 @@ class GPT(pnn.Module):
             probs = runmodel(
                 idx,
                 self,
-                pg.Tensor([curr], device=device.cuda).astype(pg.dt.int32),
+                pg.Tensor([curr], device="cuda").astype(pg.dt.int32),
                 temperature,
             ).numpy()
             # sample from the distribution
@@ -450,7 +450,7 @@ class GPT(pnn.Module):
                 idx = pg.pad_to(idx[1:], self.block_size)
             # append sampled index to the running sequence and continue
             idx = pg.assign_at(
-                idx, pg.Tensor(idx_next, device=device.cuda).astype(pg.dt.int32), curr
+                idx, pg.Tensor(idx_next, device="cuda").astype(pg.dt.int32), curr
             )
             last_token_decoded = tokenizer.decode([idx_next])
             print(last_token_decoded, end="", flush=True)
@@ -467,7 +467,7 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 use_mingpt = True  # use minGPT or huggingface/transformers model?
 model_type = "gpt2"
-device = pg.device.cuda
+device = "cuda"
 
 if use_mingpt:
     model = GPT.from_pretrained(model_type)
@@ -488,7 +488,7 @@ def generate(prompt="", num_samples=50, steps=100000, do_sample=True):
         prompt = "<|endoftext|>"
     encoded_input = np.array(tokenizer.encode(prompt))
     encoded_input = (
-        pg.Tensor(encoded_input).to(device.cuda).astype(pg.dt.int32).eval().detach()
+        pg.Tensor(encoded_input).to("cuda").astype(pg.dt.int32).eval().detach()
     )
     x = encoded_input
 
@@ -515,7 +515,7 @@ def model_pass(x):
 
 
 # time the forward pass
-x = pg.Tensor(np.random.randint(0, 50257, (1024)).astype(np.int32), device=device.cuda).eval().detach()
+x = pg.Tensor(np.random.randint(0, 50257, (1024)).astype(np.int32), device="cuda").eval().detach()
 print("timing forward pass...")
 import time
 for _ in range(10):
