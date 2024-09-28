@@ -44,7 +44,7 @@ namespace pg {
 
 class ADPrimitive; // forward declaration
 class Tensor;
-
+void tensor_precompute_again(Tensor &t);
 Tensor as_contiguous(const Tensor &t); // forward declaration
 Tensor to_device(const Tensor &t, std::shared_ptr<device::Device> device);
 namespace py = pybind11;
@@ -193,6 +193,14 @@ public:
     _dtype = view->_dtype;
     _initialized = true;
     _device = view->_device;
+  }
+
+  void copy_meta(const View &view) {
+    _shape = view._shape;
+    _strides = view._strides;
+    _offset = view._offset;
+    _dtype = view._dtype;
+    _device = view._device;
   }
 
   View() = default;

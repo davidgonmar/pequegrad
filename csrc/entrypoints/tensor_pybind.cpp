@@ -67,6 +67,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("str", &device::Device::str)
       .def("__repr__", &device::Device::str);
 
+  // tensor uitls
+  m.def("tensor_precompute_again", &tensor_precompute_again);
   // device utils
   m.def("default_device", &device::get_default_device);
   m.def("device_to_string", &device::device_to_string);
@@ -263,7 +265,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
 
   py::class_<ADNode>(m, "ADNode")
       .def(py::init<std::shared_ptr<ADPrimitive>, std::vector<Tensor>>())
-      .def("primitive", &ADNode::primitive)
+      .def("primitive",
+           [](ADNode &node) {
+             std::cout << "primitive\n";
+             return node.primitive();
+           })
       .def("children", &ADNode::children)
       .def("set_children", &ADNode::set_children)
       .def("set_primitive", [](ADNode &node, std::shared_ptr<ADPrimitive> &p) {
@@ -397,6 +403,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
       .def("children", &Tensor::children)
+      .def("primitive", [](Tensor &t) { return t.ad_node()->primitive(); })
       .def("_inplace_as_copy", &Tensor::_inplace_as_copy)
       .def("siblings",
            [](Tensor &t) {
@@ -614,4 +621,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("primitive",
            [](const Tensor &t) { return t.ad_node()->primitive(); })
       .def("ad_node", [](const Tensor &t) { return t.ad_node(); });
+
+  // primitives
+  py::class_<BroadcastTo, std::shared_ptr<BroadcastTo>>(m, "BroadcastTo")
+      .def("set_shape_to", &BroadcastTo::set_shape_to)
+      .def("get_created_axes", &BroadcastTo::get_created_axes)
+      .def("get_broadcasted_axes", &BroadcastTo::get_broadcasted_axes)
+      .def("shape_to", &BroadcastTo::shape_to);
 };

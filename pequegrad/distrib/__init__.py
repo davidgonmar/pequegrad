@@ -46,4 +46,17 @@ def naive_all_reduce(tensors, op="sum"):
     return tensor
 
 
+def reduce_to_one_device(tensors, op="sum"):
+    total_sum = tensors[0]
+    for tensor in tensors[1:]:
+        total_sum = total_sum + tensor.to(total_sum.device)
+    if op == "sum":
+        pass
+    elif op == "avg":
+        total_sum = total_sum / len(tensors)
+    else:
+        raise ValueError(f"Unknown op {op}")
+    return total_sum
+
+
 all_reduce = tree_all_reduce

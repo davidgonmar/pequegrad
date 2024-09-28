@@ -23,10 +23,9 @@ class MLP(StatefulModule):
         return x
 
 
-def train(model, ds, epochs=2, batch_size=4096):
+def train(model, ds, epochs=2, batch_size=6000):
     pg.device.force_emulated_devices(8, "cuda")  # force 8 emulated cuda devices
-
-    optcls = Adam
+    model.to("cuda:0")
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
     def get_loss(batch_X, batch_Y, model):
@@ -35,43 +34,26 @@ def train(model, ds, epochs=2, batch_size=4096):
 
     loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
 
-    @pg.jit
-    def loss_and_grad_multidevice(x, y, models, chunks):
-        xs = pg.split(x, chunksize)
-        ys = pg.split(batch_y_onehot, chunksize)
-        xs = [x.to(f"cuda:{i}") for i, x in enumerate(xs)]
-        ys = [y.to(f"cuda:{i}") for i, y in enumerate(ys)]
-        losses = []
-        gradsall = []
-        for x, y, model in zip(xs, ys, models):
-            loss, grads = loss_and_grads(x, y, model)
-            gradsall.append(grads)
-            losses.append(loss)
-        return losses, gradsall
-
+    loss_and_grad_multidevice = pg.pmap(
+        loss_and_grads,
+        devices=[f"cuda:{i}" for i in range(8)],  # 8 devices
+        argnum_opts=[0, 0, None],  # None means replicate
+    )  # should match the above function
+    loss_and_grad_multidevice = pg.jit(loss_and_grad_multidevice)  # jit the function
     i = 0
-    models = [model.copy().to(f"cuda:{i}") for i in range(8)]
-    # assert all params are the same
-    optims = [optcls(model.parameters(), lr=2e-3) for model in models]
+    optim = Adam(model.parameters(), lr=0.021)
     for epoch in range(epochs):
         for x, y in loader:
             if i == 1:
                 start = time.time()
-            batch_y_onehot = Tensor.one_hot(10, y)
+            batch_y_onehot = Tensor.one_hot(10, y, device="cuda:0").reshape(
+                (8, -1, 10)
+            )  # 8 for 8 devices
+            x = x.to("cuda:0").reshape((8, -1, 784))  # 8 for 8 devices
             # subdivide the batch into smaller batches to shard the computation among the available devices
-            chunksize = batch_size // 8
-
-            losses, grads = loss_and_grad_multidevice(x, y, models, chunksize)
-            for j, (model, optim, g) in enumerate(zip(models, optims, grads)):
-                optim.step(g)
-            # merge weights back to the main model in the cpu
-            for param_idx in range(len(models[0].parameters())):
-                tensors = [m.parameters()[param_idx] for m in models]
-                pg.all_reduce(tensors, "avg")
-
-            # avg loss
-            loss = pg.all_reduce(losses, "avg")
-
+            loss, grads = loss_and_grad_multidevice(x, batch_y_onehot, model)
+            # loss_and_grad_multidevice.print_trace()
+            optim.step(grads)
             print(f"Step {i} | Loss {loss.numpy()}")
 
             i += 1
@@ -79,7 +61,7 @@ def train(model, ds, epochs=2, batch_size=4096):
     end = time.time()
     print(f"Training time: {end - start:.2f}s")
 
-    return models[0]
+    return model
 
 
 def test_model(model, ds):

@@ -552,7 +552,15 @@ public:
   DEFINE_STR_NAME(Broadcast)
   DEFINE_BACKWARD
   DEFINE_PRECOMPUTE
-  shape_t shape_to() { return _shape_to; }
+  shape_t shape_to() const { return _shape_to; }
+  void set_shape_to(shape_t shape_to) {
+    PG_CHECK_RUNTIME(
+        _shape_to.size() == shape_to.size(),
+        "Tried to modify shape_to, but the new shape has different ndim");
+    _shape_to = shape_to;
+  }
+  const axes_t &get_broadcasted_axes() const { return _broadcasted_axes; }
+  const axes_t &get_created_axes() const { return _created_axes; }
 };
 
 class Squeeze : public ADPrimitive {

@@ -13,7 +13,7 @@ from pequegrad.tensor import *  # noqa
 from pequegrad.optim import *  # noqa
 from pequegrad.modules import *  # noqa
 from pequegrad.einsum import *  # noqa
-from pequegrad.transforms.compile import *  # noqa
+from pequegrad.transforms import *  # noqa
 
 from pequegrad.ops import *  # noqa
 from pequegrad.distrib.sharded_tensor import *  # noqa

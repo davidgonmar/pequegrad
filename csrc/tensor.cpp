@@ -68,6 +68,11 @@ ViewOptions &ViewOptions::like_natural(const Tensor &t) {
 }
 typedef void (*FunPtr)();
 
+void tensor_precompute_again(Tensor &t) {
+  auto views = t.ad_node()->primitive()->precompute(t.ad_node()->children());
+  PG_CHECK_RUNTIME(views.size() == 1, "precompute must return a single view");
+  t.view_ptr()->copy_meta(views[0]);
+}
 std::vector<Tensor> &ADNode::children() { return _children; }
 Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
                                   std::vector<Tensor> inputs,
@@ -82,7 +87,7 @@ Tensor Tensor::from_primitive_one(const std::shared_ptr<ADPrimitive> &primitive,
 
   // only check if it is not a ToDevice op. This shouldbe cleaner with primitve
   // traits
-  if (true || primitive->str() != "ToDevice") {
+  if (primitive->str() != "ToDevice") {
     for (const Tensor &input : inputs) {
       PG_CHECK_ARG(input.device() == device,
                    "All inputs to a primitive must be on the same device, got ",

@@ -43,7 +43,7 @@ def print_trace(trace):
             return "f16"
 
     def repr_tensor(x):
-        return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]"
+        return f"{n(x)}: {dtype_name(x)}[{', '.join([str(y) for y in x.shape])}]<{x.device}>"
 
     def non_tensors_dtype(x):
         if isinstance(x, int):
@@ -182,6 +182,28 @@ def topo_recurse(x, fn):
     visited = set()
 
     def recurse(x):
+        if x.id not in visited:
+            for child in x.children():
+                recurse(child)
+            fn(x)
+            visited.add(x.id)
+
+    if isinstance(x, list):
+        for xx in x:
+            recurse(xx)
+    else:
+        recurse(x)
+
+
+def topo_recurse_until_reach_inputs(x, fn, inputs, do_for_input=True):
+    visited = set()
+    inputs = [input.id for input in inputs]
+
+    def recurse(x):
+        if x.id in inputs:
+            if do_for_input:
+                fn(x)
+            return
         if x.id not in visited:
             for child in x.children():
                 recurse(child)
