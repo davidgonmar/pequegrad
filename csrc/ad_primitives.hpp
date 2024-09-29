@@ -850,7 +850,7 @@ protected:
 public:
   explicit Binomial(double p, shape_t shape, DType dtype,
                     std::shared_ptr<device::Device> device)
-      : _p(p), _shape(shape), _dtype(dtype) {}
+      : _p(p), _shape(shape), _dtype(dtype), _device(device) {}
   DEFINE_DISPATCH_CPU
   DEFINE_DISPATCH_CUDA
   DEFINE_STR_NAME(Binomial)

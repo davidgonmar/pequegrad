@@ -39,7 +39,7 @@ def train(model, ds, epochs=2, batch_size=6000):
         devices=[f"cuda:{i}" for i in range(8)],  # 8 devices
         argnum_opts=[0, 0, None],  # None means replicate
     )  # should match the above function
-    loss_and_grad_multidevice = pg.jit(loss_and_grad_multidevice)  # jit the function
+    #loss_and_grad_multidevice = pg.jit(loss_and_grad_multidevice)  # jit the function
     i = 0
     optim = Adam(model.parameters(), lr=0.021)
     for epoch in range(epochs):
@@ -50,8 +50,9 @@ def train(model, ds, epochs=2, batch_size=6000):
                 (8, -1, 10)
             )  # 8 for 8 devices
             x = x.to("cuda:0").reshape((8, -1, 784))  # 8 for 8 devices
-            # subdivide the batch into smaller batches to shard the computation among the available devices
+            # subdivide the batch into smaller batches to shard the computation among the available devict es
             loss, grads = loss_and_grad_multidevice(x, batch_y_onehot, model)
+            pg.viz([loss] + grads)
             # loss_and_grad_multidevice.print_trace()
             optim.step(grads)
             print(f"Step {i} | Loss {loss.numpy()}")

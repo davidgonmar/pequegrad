@@ -673,8 +673,13 @@ public:
   }
 
   // Differentiable / graph-aware (jittable) operation
-  Tensor to(std::shared_ptr<device::Device> new_device) {
-    return to_device(*this, new_device);
+  Tensor to(device::DeviceKind device) {
+    if (device == device::DeviceKind::CPU) {
+      return to_cpu();
+    } else if (device == device::DeviceKind::CUDA) {
+      return to_cuda();
+    }
+    throw std::runtime_error("Unsupported device type.");
   }
 
   // This is inplace, not differentiable / graph-aware at the moment

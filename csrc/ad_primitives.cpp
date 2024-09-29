@@ -661,6 +661,7 @@ std::vector<View> Reshape::precompute(const std::vector<Tensor> &inputs) {
                 .build()};
   } else {
     return {ViewOptions()
+                .like(a)
                 .dtype(a.dtype())
                 .shape(new_shape)
                 .with_natural_strides()
