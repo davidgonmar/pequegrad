@@ -23,8 +23,11 @@ class MLP(StatefulModule):
         return x
 
 
-def train(model, ds, epochs=2, batch_size=6000):
-    pg.device.force_emulated_devices(8, "cuda")  # force 8 emulated cuda devices
+def train(model, ds, epochs=2, batch_size=8192):
+    NUM_DEVICES = 8
+    pg.device.force_emulated_devices(
+        NUM_DEVICES, "cuda"
+    )  # force 8 emulated cuda devices
     model.to("cuda:0")
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
@@ -36,7 +39,7 @@ def train(model, ds, epochs=2, batch_size=6000):
 
     loss_and_grad_multidevice = pg.pmap(
         loss_and_grads,
-        devices=[f"cuda:{i}" for i in range(8)],  # 8 devices
+        devices=[f"cuda:{i}" for i in range(NUM_DEVICES)],  # 8 devices
         argnum_opts=[0, 0, None],  # None means replicate
     )  # should match the above function
     # loss_and_grad_multidevice = pg.jit(loss_and_grad_multidevice)  # jit the function
@@ -47,12 +50,11 @@ def train(model, ds, epochs=2, batch_size=6000):
             if i == 1:
                 start = time.time()
             batch_y_onehot = Tensor.one_hot(10, y, device="cuda:0").reshape(
-                (8, -1, 10)
+                (NUM_DEVICES, -1, 10)
             )  # 8 for 8 devices
-            x = x.to("cuda:0").reshape((8, -1, 784))  # 8 for 8 devices
+            x = x.to("cuda:0").reshape((NUM_DEVICES, -1, 784))  # 8 for 8 devices
             # subdivide the batch into smaller batches to shard the computation among the available devict es
             loss, grads = loss_and_grad_multidevice(x, batch_y_onehot, model)
-            pg.viz([loss] + grads)
             # loss_and_grad_multidevice.print_trace()
             optim.step(grads)
             print(f"Step {i} | Loss {loss.numpy()}")

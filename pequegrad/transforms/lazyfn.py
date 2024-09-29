@@ -113,6 +113,24 @@ class LazyFunction:
     def _get_args_for_original_fn(self, args: Any) -> List[Any]:
         return args
 
+    def _trace_fn(self, args):
+        # returns a non-transformed trace
+        inputs, inputs_pytree = tree_flatten(args)
+        input_tensors = extract_input_tensors(inputs)
+        outs, outs_pytree = tree_flatten(self.f(*self._get_args_for_original_fn(args)))
+
+        assert len(input_tensors) == len(
+            inputs
+        ), "Input tensors should have the same length"
+        inputs = input_tensors
+        return GraphTrace(
+            inputs=inputs,
+            inputs_pytree=inputs_pytree,
+            input_tensors=input_tensors,
+            outputs=outs,
+            outputs_pytree=outs_pytree,
+        )
+
     def _get_maybe_cached_transformed_trace(self, args: List[Any]) -> GraphTrace:
         inputs, inputs_pytree = tree_flatten(args)
         input_tensors = extract_input_tensors(inputs)
@@ -136,7 +154,6 @@ class LazyFunction:
                 outputs=cloned_outputs,
                 outputs_pytree=cached.outputs_pytree,
             )
-
         outs, outs_pytree = tree_flatten(self.f(*self._get_args_for_original_fn(args)))
         outs, input_tensors = clone_graph(outs, input_tensors)
         inputs = [x for x in inputs]

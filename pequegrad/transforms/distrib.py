@@ -1,11 +1,4 @@
-from pequegrad.backend.c import (
-    compile,
-    clone_graph,
-    Tensor,
-    dt,
-    tensor_precompute_again,
-    BroadcastTo as BroadcastToPrimitive,
-)  # noqa
+from pequegrad.backend.c import tensor_precompute_again, Tensor  # noqa
 from .lazyfn import (
     GraphTrace,
     LazyFunction,
@@ -18,7 +11,7 @@ from .pytree import (
     tree_flatten,
     PyTreeDef,
 )  # noqa
-from typing import List
+from typing import Any, List
 from pequegrad.distrib import reduce_to_one_device
 
 
@@ -41,11 +34,51 @@ class pmap(LazyFunction):
         self.devices = devices
         self.argnum_opts = argnum_opts
 
+    def _args_for_subtrace(self, args: Any) -> List[Any]:
+        # we simulate the "splitting" of the inputs
+        assert len(args) == len(
+            self.argnum_opts
+        ), f"Number of args must match argnum_opts: {args} != {self.argnum_opts}"
+        new_args = []
+        for i, opt in enumerate(self.argnum_opts):
+            if opt is not None:
+                assert isinstance(args[i], Tensor), "Only tensors can be split"
+
+                def _split_to_dev(old_input):
+                    assert old_input.shape[opt] == len(
+                        self.devices
+                    ), f"Splitting dimension must be equal to the number of devices: {old_input.shape[opt]} != {len(self.devices)}"
+                    return list(
+                        map(
+                            lambda x: x[0].to(self.devices[x[1]]),
+                            zip(old_input.split(1, dim=opt), range(len(self.devices))),
+                        )
+                    )
+
+                new_args.append(_split_to_dev(args[i])[0])  # only the first device
+            else:
+                new_args.append([args[i].to(device) for device in self.devices][0])
+        return new_args
+
+    # This is a hack. Once we can unflatten models it should be fine
+    _last_used_args = None
+
+    def _get_maybe_cached_transformed_trace(self, args: List[Any]) -> GraphTrace:
+        self._last_used_args = args
+        return super()._get_maybe_cached_transformed_trace(args)
+
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         assert len(set([str(d) for d in self.devices])) == len(
             self.devices
         ), "Devices must be unique"
 
+        # obtain a subgraph with the inputs split/replicated already
+        """subgraph = self._get_maybe_cached_transformed_trace(
+            self._args_for_subtrace(
+                tree_unflatten(trace.inputs_pytree, trace.inputs)
+            )
+        )"""  # does not work wince we cant unflatten a model yet
+        subgraph = self._trace_fn(self._args_for_subtrace(self._last_used_args))
         # for each argnum, it can either be an int (shard) or None (no shard)
         numdevices = len(self.devices)
         inputs = trace.input_tensors
@@ -80,7 +113,7 @@ class pmap(LazyFunction):
                 new_inputs.append([inputs[i].to(device) for device in self.devices])
 
         for device in self.devices:
-            traces_per_device[device] = deepcopy_graphtrace(trace)
+            traces_per_device[device] = deepcopy_graphtrace(subgraph)
 
         for deviceidx, device in enumerate(self.devices):
             consumers = get_consumers(traces_per_device[device].outputs)
