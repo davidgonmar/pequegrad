@@ -153,7 +153,7 @@ std::vector<View> Sum::precompute(const std::vector<Tensor> &inputs) {
   this->_total_reduce_numel = total_reduced_per_out_elem;
   this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
-              .like(inputs[0])
+              .device(inputs[0].device())
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -168,7 +168,7 @@ std::vector<View> MaxReduce::precompute(const std::vector<Tensor> &inputs) {
   this->_total_reduce_numel = total_reduced_per_out_elem;
   this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
-              .like(inputs[0])
+              .device(inputs[0].device())
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -183,7 +183,7 @@ std::vector<View> Mean::precompute(const std::vector<Tensor> &inputs) {
   this->_total_reduce_numel = total_reduced_per_out_elem;
   this->reduced_shape_assuming_keepdims = shape_assuming_keepdims;
   return {ViewOptions()
-              .like(inputs[0])
+              .device(inputs[0].device())
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -571,7 +571,7 @@ std::vector<View> Im2Col::precompute(const std::vector<Tensor> &inputs) {
 
   shape_t out_shape = {batch_size, in_channels * k_h * k_w, out_h * out_w};
   return {ViewOptions()
-              .like(inputs[0])
+              .device(a.device())
               .dtype(a.dtype())
               .shape(out_shape)
               .with_natural_strides()
@@ -604,7 +604,7 @@ std::vector<View> Col2Im::precompute(const std::vector<Tensor> &inputs) {
 
   shape_t out_shape = {batch_size, out_channels, out_h, out_w};
   return {ViewOptions()
-              .like(inputs[0])
+              .device(a.device())
               .dtype(a.dtype())
               .shape(out_shape)
               .with_natural_strides()
@@ -661,7 +661,7 @@ std::vector<View> Reshape::precompute(const std::vector<Tensor> &inputs) {
                 .build()};
   } else {
     return {ViewOptions()
-                .like(a)
+                .device(a.device())
                 .dtype(a.dtype())
                 .shape(new_shape)
                 .with_natural_strides()
@@ -717,7 +717,7 @@ std::vector<View> Select::precompute(const std::vector<Tensor> &inputs) {
   }
   if (slice_with_array) {
     return {ViewOptions()
-                .like(inputs[0])
+                .device(inp.device())
                 .dtype(inp.dtype())
                 .shape(new_shape)
                 .with_natural_strides()
@@ -734,7 +734,13 @@ std::vector<View> Select::precompute(const std::vector<Tensor> &inputs) {
 }
 
 std::vector<View> AsContiguous::precompute(const std::vector<Tensor> &inputs) {
-  return {ViewOptions().like(inputs[0]).build()};
+  auto i = inputs[0];
+  return {ViewOptions()
+              .device(i.device())
+              .dtype(i.dtype())
+              .shape(i.shape())
+              .with_natural_strides()
+              .build()};
 }
 
 std::vector<Tensor> AsContiguous::backward(const std::vector<Tensor> &primals,
@@ -792,7 +798,7 @@ std::vector<View> AsType::precompute(const std::vector<Tensor> &inputs) {
 
 std::vector<View> Where::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions()
-              .like(inputs[0])
+              .device(inputs[1].device())
               .dtype(inputs[1].dtype())
               .shape(inputs[1].shape())
               .with_natural_strides()
@@ -830,7 +836,7 @@ BilinearResize::precompute(const std::vector<Tensor> &inputs) {
   shape_t new_shape = {inputs[0].shape()[0], inputs[0].shape()[1], new_height,
                        new_width};
   return {ViewOptions()
-              .like(inputs[0])
+              .device(inputs[0].device())
               .dtype(inputs[0].dtype())
               .shape(new_shape)
               .with_natural_strides()
@@ -844,7 +850,7 @@ std::vector<View> OneHotVector::precompute(const std::vector<Tensor> &inputs) {
                inputs[0].ndim());
   shape_t new_shape = {inputs[0].shape()[0], size_t(num_classes)};
   return {ViewOptions()
-              .like(inputs[0])
+              .device(inputs[0].device())
               .dtype(DType::Float32)
               .shape(new_shape)
               .with_natural_strides()

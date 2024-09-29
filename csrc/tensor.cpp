@@ -187,6 +187,17 @@ Tensor Tensor::eval(bool detach) {
   }
   // outputs is just `this` tensor and the siblings (ordered by position)
   std::vector<Tensor> outputs = this->ad_node()->siblings();
+  // check all inputs are in same device
+  for (const Tensor &input : children) {
+    // if primitive is ToDevice, then we don't need to check device
+    if (primitive->str() == "ToDevice") {
+      break;
+    }
+    PG_CHECK_RUNTIME(
+        input.device() == this_device,
+        "All inputs to a primitive must be on the same device, got ",
+        input.device()->str(), " and ", this_device->str());
+  }
   outputs.insert(outputs.begin(), *this);
   // sort by position
   std::sort(outputs.begin(), outputs.end(),

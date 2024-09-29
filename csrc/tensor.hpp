@@ -340,6 +340,9 @@ public:
     if (_device == nullptr) {
       PG_CHECK_RUNTIME(false, "Device not set for ViewOptions");
     }
+    if (_nbytes == 0) {
+      _nbytes = compute_nbytes(_shape, _dtype);
+    }
     return View(_nbytes, _shape, _strides, _offset, _dtype, _device);
   }
 
@@ -673,13 +676,9 @@ public:
   }
 
   // Differentiable / graph-aware (jittable) operation
-  Tensor to(device::DeviceKind device) {
-    if (device == device::DeviceKind::CPU) {
-      return to_cpu();
-    } else if (device == device::DeviceKind::CUDA) {
-      return to_cuda();
-    }
-    throw std::runtime_error("Unsupported device type.");
+  // Differentiable / graph-aware (jittable) operation
+  Tensor to(std::shared_ptr<device::Device> new_device) {
+    return to_device(*this, new_device);
   }
 
   // This is inplace, not differentiable / graph-aware at the moment

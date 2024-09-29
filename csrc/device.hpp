@@ -181,10 +181,16 @@ static inline bool operator==(const std::shared_ptr<Device> &lhs,
 }
 
 static bool is_cuda(const std::shared_ptr<Device> &device) {
+  if (device == nullptr) {
+    throw std::runtime_error("Device is null");
+  }
   return device->kind() == DeviceKind::CUDA;
 }
 
 static bool is_cpu(const std::shared_ptr<Device> &device) {
+  if (device == nullptr) {
+    throw std::runtime_error("Device is null");
+  }
   return device->kind() == DeviceKind::CPU;
 }
 

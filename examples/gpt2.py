@@ -139,7 +139,8 @@ class CausalSelfAttention(pnn.Module):
                 )
             )
             .astype(pg.dt.float32)
-            .to("cuda").eval()
+            .eval()
+            .to("cuda")
         )
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -200,8 +201,7 @@ class Block(pnn.Module):
         self.forward_ = forward_
 
     def forward(self, x):
-        ret = self.forward_(x)
-        return ret
+        return self.forward_(x)
 
 
 class GPT(pnn.Module):
@@ -399,9 +399,9 @@ class GPT(pnn.Module):
         print(previous_text, end="", flush=True)
         curr = len(idx) - 1
         # pad idx to max block size
-        idx = idx.astype(pg.dt.int32).pad_to(self.block_size).eval().detach().to("cuda:0")
+        idx = idx.astype(pg.dt.int32).pad_to(self.block_size).eval().detach().to("cuda")
 
-        #@pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
+        @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
         def runmodel(x, model, curridx, temperature):
             logits = model(x)
             logits = logits[curridx] / temperature
@@ -448,6 +448,7 @@ class GPT(pnn.Module):
             )
             last_token_decoded = tokenizer.decode([idx_next])
             print(last_token_decoded, end="", flush=True)
+
             # if the last idx is an eos token, we're done
             if last_token_decoded == "<|endoftext|>":
                 print("found eos token, stopping")
@@ -459,8 +460,8 @@ class GPT(pnn.Module):
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 use_mingpt = True  # use minGPT or huggingface/transformers model?
-model_type = "gpt2-medium"  # or "gpt2", "gpt2-large", "gpt2-xl"
-device = "cuda:0"
+model_type = "gpt2"
+device = "cuda"
 
 if use_mingpt:
     model = GPT.from_pretrained(model_type)
@@ -481,7 +482,7 @@ def generate(prompt="", num_samples=50, steps=100000, do_sample=True):
         prompt = "<|endoftext|>"
     encoded_input = np.array(tokenizer.encode(prompt))
     encoded_input = (
-        pg.Tensor(encoded_input).to("cuda:0").astype(pg.dt.int32).eval().detach()
+        pg.Tensor(encoded_input).to("cuda").astype(pg.dt.int32).eval().detach()
     )
     x = encoded_input
 
