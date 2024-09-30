@@ -8,6 +8,7 @@ from .pytree import (
     tree_flatten,
     PyTreeDef,
     make_pytree_list,
+    pytree_def_to_dict,
 )  # noqa
 from .lazyfn import (
     LazyFunction,
@@ -58,8 +59,10 @@ def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
     assert len(argnums) == 1, "Only one argnum supported"
     argnum = argnums[0]
     # inputs_pytree = inputs_pytree.structure
-    flat, _ = tree_flatten(inputs_pytree.structure[argnum])
-    flattened_start_index = len(tree_flatten(inputs_pytree.structure[:argnum])[0])
+    flat, _ = tree_flatten(pytree_def_to_dict(inputs_pytree.structure[argnum]))
+    rest = pytree_def_to_dict(inputs_pytree.structure[:argnum])[0]
+
+    flattened_start_index = len(tree_flatten(rest))
     flattened_indices = list(
         range(flattened_start_index, flattened_start_index + len(flat))
     )
@@ -84,12 +87,18 @@ class fngrad(LazyFunction):
         assert len(grad) == len(wrt), "Gradient and wrt must have the same length"
         new_outs = fn_out + grad if self.return_outs else grad
         new_outs_pytree = None
+        # returned grads have shape of the wrt (maybe a dict for named parameters)
+        # so we get the inputs_pytree of the wrt
+        wrt_pytree = make_pytree_list(
+            [trace.inputs_pytree.structure[i] for i in self.wrt]
+        )
+        print(trace.inputs_pytree.structure[2], self.wrt, wrt_pytree)
         if self.return_outs:
             new_outs_pytree = PyTreeDef(
-                type=tuple, structure=[trace.outputs_pytree, make_pytree_list(wrt)]
+                type=tuple, structure=[trace.outputs_pytree, wrt_pytree]
             )
         else:
-            new_outs_pytree = make_pytree_list(wrt)
+            new_outs_pytree = wrt_pytree
 
         return GraphTrace(
             inputs=trace.inputs,

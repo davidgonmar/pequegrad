@@ -127,3 +127,49 @@ class TestModules:
         y = m.forward(x)
         # so out can be either 0 or 2
         assert np.all((y.numpy() == 0) | (y.numpy() == 2))
+
+    def test_tree_flatten(self):
+        class MLP(StatefulModule):
+            def __init__(self):
+                self.fc1 = Linear(784, 284)
+                self.fc2 = Linear(284, 10)
+
+            def forward(self, input):
+                x = self.fc1(input).relu()
+                x = self.fc2(x)
+                return x
+
+        # assert the strcture of the model
+        tree = MLP().tree_flatten()
+
+        expected_shapes = {
+            "fc1": {"weight": (784, 284), "bias": (284,)},
+            "fc2": {"weight": (284, 10), "bias": (10,)},
+        }
+        for layer, shapes in expected_shapes.items():
+            for param, expected_shape in shapes.items():
+                assert list(tree[layer][param].shape) == list(expected_shape)
+
+    def tree_assign(self):
+        class MLP(StatefulModule):
+            def __init__(self):
+                self.fc1 = Linear(784, 284)
+                self.fc2 = Linear(284, 10)
+
+            def forward(self, input):
+                x = self.fc1(input).relu()
+                x = self.fc2(x)
+                return x
+
+        m = MLP()
+        tree = m.tree_flatten()
+        tree["fc1"]["weight"] = Tensor.ones((784, 284))
+        tree["fc1"]["bias"] = Tensor.ones((284,))
+        tree["fc2"]["weight"] = Tensor.ones((284, 10))
+        tree["fc2"]["bias"] = Tensor.ones((10,))
+        m.tree_assign(tree)
+
+        assert np.all(m.fc1.weight.numpy() == 1.0)
+        assert np.all(m.fc1.bias.numpy() == 1.0)
+        assert np.all(m.fc2.weight.numpy() == 1.0)
+        assert np.all(m.fc2.bias.numpy() == 1.0)

@@ -10,13 +10,18 @@ is_module = lambda x: isinstance(x, (StatefulModule, NonStatefulModule)) or issu
 )
 
 
+def is_pytree(x):
+    """Check if x is a PyTree type."""
+    return isinstance(x, PyTreeDef)
+
+
 def is_leaf(node):
     """Check if a node is a leaf in the PyTree."""
-    return not (isinstance(node, (Mapping, Sequence)) or is_module(node))
+    return not isinstance(node, (Mapping, Sequence)) or isinstance(node, (str, bytes))
 
 
 def make_pytree_list(l):
-    lfs = [PyTreeDef(type=None, structure=None) for _ in l]
+    lfs = [PyTreeDef(type=None, structure=None) if not is_pytree(i) else i for i in l]
     return PyTreeDef(type=list, structure=lfs)
 
 
@@ -25,9 +30,8 @@ def make_pytree_nested_list(rows, cols):
     return PyTreeDef(type=list, structure=lfs)
 
 
-def is_pytree(x):
-    """Check if x is a PyTree type."""
-    return isinstance(x, PyTreeDef)
+def first_tensor_pytree(pytree):
+    return tree_flatten(pytree)[0][0]
 
 
 def tree_flatten(pytree):
@@ -43,9 +47,17 @@ def tree_flatten(pytree):
         return leaves, pytree
 
     if is_module(pytree):
-        params = pytree.parameters()
-        child_struct = [PyTreeDef(type=None, structure=None) for _ in params]
-        return params, PyTreeDef(type=list, structure=child_struct)
+        params_dict = pytree.tree_flatten()
+        leaves = []
+        structure = []
+        for key, value in params_dict.items():
+            flattened, child_structure = tree_flatten(value)
+            leaves.extend(flattened)
+            structure.append((key, child_structure))
+        return leaves, PyTreeDef(type=dict, structure=structure)
+    if hasattr(pytree, "_raw_struct_for_tree_flatten"):
+        return tree_flatten(pytree._raw_struct_for_tree_flatten())
+
     if is_leaf(pytree):
         return [pytree], PyTreeDef(type=None, structure=None)
     if isinstance(pytree, Mapping):
@@ -64,6 +76,27 @@ def tree_flatten(pytree):
             leaves.extend(flattened)
             structure.append(child_structure)
         return leaves, PyTreeDef(type=type(pytree), structure=structure)
+
+
+def pytree_def_to_dict(pytree_def):
+    if isinstance(pytree_def, (list, tuple)) and not is_pytree(pytree_def):
+        return [pytree_def_to_dict(child_def) for child_def in pytree_def]
+
+    # leaves will be set to None
+    if pytree_def.type is None:
+        return None
+
+    if pytree_def.type is dict:
+        return {
+            key: pytree_def_to_dict(child_def)
+            for key, child_def in pytree_def.structure
+        }
+
+    if issubclass(pytree_def.type, Sequence):
+        return [pytree_def_to_dict(child_def) for child_def in pytree_def.structure]
+
+    if pytree_def.type == "_module":
+        raise NotImplementedError("Module flattening not implemented yet.")
 
 
 def tree_unflatten(pytree_def, leaves):
@@ -103,3 +136,40 @@ def count_leaves(pytree_def):
         if pytree_def.type is dict
         else sum(count_leaves(child_def) for child_def in pytree_def.structure)
     )
+
+
+def tree_map(f, *structs):
+    """Map a function f over one or more PyTrees."""
+    leaves = [tree_flatten(pytree)[0] for pytree in structs]
+    result_leaves = [f(*leaves) for leaves in zip(*leaves)]
+    single_res_leave_pytree = tree_flatten(result_leaves[0])[1]
+    # same as input pytree, but leaves are single_res_leave_pytree
+    inp_pytree = tree_flatten(structs[0])[1]
+    res_pytree = inp_pytree  # TODO
+    return tree_unflatten(res_pytree, result_leaves)
+
+
+def _check_same_structure(pytree1, pytree2):
+    """Check if two PyTrees have the same structure."""
+    if pytree1.type != pytree2.type:
+        return False
+
+    if pytree1.type is None:
+        return True
+
+    if pytree1.type is dict:
+        return all(
+            k1 == k2 and _check_same_structure(v1, v2)
+            for (k1, v1), (k2, v2) in zip(pytree1.structure, pytree2.structure)
+        )
+
+    return all(
+        _check_same_structure(c1, c2)
+        for c1, c2 in zip(pytree1.structure, pytree2.structure)
+    )
+
+
+def check_same_structure(anys):
+    """Check if all PyTrees have the same structure."""
+    pytrees = [tree_flatten(pytree)[1] for pytree in anys]  # get the PyTreeDef
+    return all(_check_same_structure(pytrees[0], pytree) for pytree in pytrees)

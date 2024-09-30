@@ -113,6 +113,39 @@ class StatefulModule:
             self._search_parameters_and_submodules(root=True)
         return self._parameters
 
+    def parameters_with_path(self):
+        # Initialize the top-level dict
+        d = {}
+
+        def _recurse(m, path):
+            for key, p in m.__dict__.items():
+                if isinstance(p, ModuleParam):
+                    current = d
+                    for part in path:
+                        current = current.setdefault(part, {})
+                    current[key] = p
+                elif isinstance(p, StatefulModule):
+                    _recurse(p, path + (key,))
+
+        _recurse(self, ())
+        return d
+
+    def tree_flatten(self) -> dict:
+        return self.parameters_with_path()
+
+    def tree_assign(self, parameters):
+        def _recurse(m, path):
+            for key, p in m.__dict__.items():
+                if isinstance(p, ModuleParam):
+                    current = parameters
+                    for part in path:
+                        current = getattr(current, part)
+                    p.assign(getattr(current, key))
+                elif isinstance(p, StatefulModule):
+                    _recurse(p, path + (key,))
+
+        _recurse(self, ())
+
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
