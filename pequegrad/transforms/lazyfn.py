@@ -138,10 +138,16 @@ class LazyFunction:
         if self.cache[cache_key] is not None:
             cached = self.cache[cache_key]
             inputs = [x for x in cached.inputs]
-            cloned_outputs, cloned_input_tensors = clone_graph(
-                cached.outputs, cached.input_tensors
+            cloned_output_tensors, cloned_input_tensors = clone_graph(
+                extract_input_tensors(cached.outputs), cached.input_tensors
             )
             # make sure every element in inputs is substitutedb y corresponding element in cloned_input_tensors
+            cloned_outputs = [x for x in cached.outputs]
+            x = 0
+            for i, out in enumerate(cached.outputs):
+                if isinstance(out, Tensor):
+                    cloned_outputs[i] = cloned_output_tensors[x]
+                    x += 1
             x = 0
             for i, inp in enumerate(inputs):
                 if isinstance(inp, Tensor):
@@ -155,7 +161,17 @@ class LazyFunction:
                 outputs_pytree=cached.outputs_pytree,
             )
         outs, outs_pytree = tree_flatten(self.f(*self._get_args_for_original_fn(args)))
-        outs, input_tensors = clone_graph(outs, input_tensors)
+        out_tensors = extract_input_tensors(outs)
+        out_tensors, input_tensors = clone_graph(out_tensors, input_tensors)
+
+        # using outs, create new outs that matches the shape of the original outs
+        outs = [x for x in outs]
+        x = 0
+        for i, out in enumerate(outs):
+            if isinstance(out, Tensor):
+                outs[i] = out_tensors[x]
+                x += 1
+
         inputs = [x for x in inputs]
         x = 0
         for i, inp in enumerate(inputs):

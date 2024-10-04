@@ -139,8 +139,8 @@ class StatefulModule:
                 if isinstance(p, ModuleParam):
                     current = parameters
                     for part in path:
-                        current = getattr(current, part)
-                    p.assign(getattr(current, key))
+                        current = current[part]
+                    p.assign(current[key])
                 elif isinstance(p, StatefulModule):
                     _recurse(p, path + (key,))
 

@@ -3,7 +3,8 @@ from collections import namedtuple
 from pequegrad.modules import StatefulModule, NonStatefulModule
 
 
-PyTreeDef = namedtuple("PyTreeDef", ["type", "structure"])
+PyTreeDef = namedtuple("PyTreeDef", ["type", "structure", "extra"])
+PyTreeDef.__new__.__defaults__ = ({},)  # Set default value of extra to an empty dict
 
 is_module = lambda x: isinstance(x, (StatefulModule, NonStatefulModule)) or issubclass(
     type(x), (StatefulModule, NonStatefulModule)
@@ -35,6 +36,8 @@ def first_tensor_pytree(pytree):
 
 
 def tree_flatten(pytree):
+    from pequegrad.optim import OptimizerState
+
     """Flatten a PyTree into a list of leaves and a PyTreeDef."""
     if is_pytree(pytree):
         # if is None, return empty list
@@ -55,8 +58,9 @@ def tree_flatten(pytree):
             leaves.extend(flattened)
             structure.append((key, child_structure))
         return leaves, PyTreeDef(type=dict, structure=structure)
-    if hasattr(pytree, "_raw_struct_for_tree_flatten"):
-        return tree_flatten(pytree._raw_struct_for_tree_flatten())
+    if isinstance(pytree, OptimizerState):
+        subtree = tree_flatten(pytree._state_dict_for_flatten())
+        return subtree[0], PyTreeDef(type=type(pytree), structure=[subtree[1]])
 
     if is_leaf(pytree):
         return [pytree], PyTreeDef(type=None, structure=None)
@@ -100,6 +104,13 @@ def pytree_def_to_dict(pytree_def):
 
 
 def tree_unflatten(pytree_def, leaves):
+    from pequegrad.optim import OptimizerState
+
+    # if is subclass of OptimizeState
+    def _is_optimizer_state(x):
+        # can be subclass of OptimizerState
+        return x.__name__ == "OptimizerState" or issubclass(x, OptimizerState)
+
     """Reconstruct a PyTree from its flattened version."""
     if pytree_def.type is None:
         return leaves[0]
@@ -122,6 +133,9 @@ def tree_unflatten(pytree_def, leaves):
             idx += num_leaves
         return pytree_def.type(result)
 
+    elif _is_optimizer_state(pytree_def.type):
+        _dict = tree_unflatten(pytree_def.structure[0], leaves)
+        return pytree_def.type._from_dict({**_dict, **pytree_def.extra})
     elif pytree_def.type == "_module":
         raise NotImplementedError("Module unflattening not implemented yet.")
 
@@ -130,7 +144,6 @@ def count_leaves(pytree_def):
     """Count the number of leaves in a PyTreeDef."""
     if pytree_def.type is None:
         return 1
-
     return (
         sum(count_leaves(child_def) for _, child_def in pytree_def.structure)
         if pytree_def.type is dict

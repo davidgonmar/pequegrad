@@ -7,7 +7,7 @@ import time
 from pequegrad.backend.c import device
 from pequegrad.optim import adam, AdamState  # noqa
 from pequegrad.data.dataloader import DataLoader
-from pequegrad import fngrad, jit, amp, Tensor
+from pequegrad import fngrad, jit, amp, Tensor, maybe
 
 np.random.seed(0)
 
@@ -43,21 +43,20 @@ def train(model, ds, epochs=13, batch_size=4096):
 
     loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
 
+    @maybe(jit, use_jit)
+    @maybe(amp, do_amp)
     def update(state, model, x, y):
-        loss, g = loss_and_grads(x, y, model)
+        loss, (g,) = loss_and_grads(x, y, model)
         new_state = adam(model, g, state)
         return new_state, loss
 
     i = 0
-    _amp = amp if do_amp else lambda x: x
-    update = jit(_amp(update)) if use_jit else update
     state = AdamState(model)
     for x, y in loader:
         if i == 1:
             start = time.time()
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
-        nstate, loss = update(state, model, x, batch_y_onehot)
-        state.assign_from_pytree(nstate)
+        state, loss = update(state, model, x, batch_y_onehot)
         model.tree_assign(state.params)
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:

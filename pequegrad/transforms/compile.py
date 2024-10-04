@@ -1,6 +1,6 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
 from contextvars import ContextVar
-from .lazyfn import GraphTrace, LazyFunction
+from .lazyfn import GraphTrace, LazyFunction, extract_input_tensors as extract_tensors
 
 inside_jit = ContextVar("inside_jit", default=False)
 
@@ -19,6 +19,6 @@ class jit(LazyFunction):
             outputs=trace.outputs,
             outputs_pytree=trace.outputs_pytree,
         )
-        compile(new_trace.outputs, self.opts)
+        compile(extract_tensors(new_trace.outputs), self.opts)
 
         return new_trace

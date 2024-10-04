@@ -168,33 +168,64 @@ class OptimizerState:
 
 
 class AdamState(OptimizerState):
-    def _raw_struct_for_tree_flatten(self):
+    def _state_dict_for_flatten(self):
         return {
             "mt": self.mt,
             "vt": self.vt,
             "t": self.t,
+            "lr": self.lr,
+            "b1": self.b1,
+            "b2": self.b2,
+            "eps": self.eps,
+            "params": self.params,
         }
 
-    def assign_from_pytree(self, pytree):
-        self.mt = pytree["mt"]
-        self.vt = pytree["vt"]
-        self.t = pytree["t"]
-
-    def __init__(self, params, lr=0.001, b1=0.9, b2=0.999, eps=1e-08):
-        self.mt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
-        self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
-        self.t = Tensor(1).to(first_tensor_pytree(params).device).eval()
+    def __init__(self, params, lr=0.001, b1=0.9, b2=0.999, eps=1e-08, _state_dict=None):
+        if _state_dict is None:
+            self.mt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
+            self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
+            self.t = Tensor(1).to(first_tensor_pytree(params).device).eval()
+        else:
+            self.mt = _state_dict["mt"]
+            self.vt = _state_dict["vt"]
+            self.t = _state_dict["t"]
         self.lr = lr
         self.b1 = b1
         self.b2 = b2
         self.eps = eps
         self.params = params
 
+    def numpy(self):
+        return {
+            "mt": tree_map(lambda mt: mt.numpy(), self.mt),
+            "vt": tree_map(lambda vt: vt.numpy(), self.vt),
+            "t": self.t.numpy(),
+            "lr": self.lr,
+            "b1": self.b1,
+            "b2": self.b2,
+            "eps": self.eps,
+            "params": tree_map(lambda p: p.numpy(), self.params),
+        }
+
+    def _from_dict(d):
+        return AdamState(
+            d["params"],
+            lr=d["lr"],
+            b1=d["b1"],
+            b2=d["b2"],
+            eps=d["eps"],
+            _state_dict={
+                "mt": d["mt"],
+                "vt": d["vt"],
+                "t": d["t"],
+            },
+        )
+
 
 def adam(params, grads, state: AdamState):
-    mt = tree_map(lambda mt, gt: state.b1 * mt + (1 - state.b1) * gt, state.mt, grads)
+    mt = tree_map(lambda mt, gt: mt * state.b1 + (1 - state.b1) * gt, state.mt, grads)
     vt = tree_map(
-        lambda vt, gt: state.b2 * vt + (1 - state.b2) * (gt**gt), state.vt, grads
+        lambda vt, gt: vt * state.b2 + (1 - state.b2) * (gt * gt), state.vt, grads
     )
     mt_hat = tree_map(lambda mt: mt / (1 - state.b1**state.t), mt)
     vt_hat = tree_map(lambda vt: vt / (1 - state.b2**state.t), vt)
@@ -204,4 +235,16 @@ def adam(params, grads, state: AdamState):
         mt_hat,
         vt_hat,
     )
-    return AdamState(new_params, mt, vt, state.t + 1)
+    new_state = AdamState(
+        new_params,
+        lr=state.lr,
+        b1=state.b1,
+        b2=state.b2,
+        eps=state.eps,
+        _state_dict={
+            "mt": mt,
+            "vt": vt,
+            "t": state.t,
+        },
+    )
+    return new_state
