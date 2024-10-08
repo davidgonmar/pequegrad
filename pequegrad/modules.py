@@ -124,8 +124,11 @@ class StatefulModule:
                     for part in path:
                         current = current.setdefault(part, {})
                     current[key] = p
-                elif isinstance(p, StatefulModule):
+                elif isinstance(p, (StatefulModule, NonStatefulModule)):
                     _recurse(p, path + (key,))
+                elif isinstance(p, (list, tuple)):
+                    for i, pp in enumerate(p):
+                        _recurse(pp, path + (key, i))
 
         _recurse(self, ())
         return d
@@ -143,6 +146,9 @@ class StatefulModule:
                     p.assign(current[key])
                 elif isinstance(p, StatefulModule):
                     _recurse(p, path + (key,))
+                elif isinstance(p, (list, tuple)):
+                    for i, pp in enumerate(p):
+                        _recurse(pp, path + (key, i))
 
         _recurse(self, ())
 

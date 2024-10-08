@@ -1,8 +1,7 @@
 from pequegrad import Tensor, fngrad
 import pequegrad.modules as nn
-from pequegrad.optim import SGD, Adam, JittedAdam, JittedSGD
+from pequegrad.optim import SGDState, sgd
 import argparse
-import numpy as np
 import pequegrad.ds_transforms as transforms
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.extra.cifar_100 import CIFAR100Dataset
@@ -98,12 +97,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--jit",
-    action="store_true",
-    default=False,
-    help="Use CUDA for computations",
+    "--bs",
+    type=int,
+    default=64,
+    help="Batch size for training",
 )
-
 args = parser.parse_args()
 transform = transforms.Compose(
     [
@@ -114,7 +112,6 @@ transform = transforms.Compose(
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                 transforms.Resize((224, 224)),
             ],
-            enabled=args.jit,
         ),
         transforms.EvalAndDetach(),
     ],
@@ -122,93 +119,44 @@ transform = transforms.Compose(
 
 trainset = CIFAR100Dataset(train=True, transform=transform)
 
-bs = 128 if args.jit else 45
-trainloader = DataLoader(
-    trainset, batch_size=bs, shuffle=True
-)  #  no jit 45, jit allows 128 because of reduced memory usage
-
+trainloader = DataLoader(trainset, batch_size=args.bs, shuffle=True)
 testset = CIFAR100Dataset(train=False, transform=transform)
+testloader = DataLoader(testset, batch_size=args.bs, shuffle=False)
 
-testloader = DataLoader(testset, batch_size=40, shuffle=False)
-
-
-DEVICE = "cuda"
-model = AlexNet(num_classes=100).to(DEVICE)
+model = AlexNet(num_classes=100).to("cuda")
 print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
 print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1024)
-
-
-if args.checkpoint is not None:
-    model.load(args.checkpoint)
-
-use_sgd = True
-optims = {
-    "compiled": {
-        "adam": JittedAdam,
-        "sgd": JittedSGD,
-    },
-    "uncompiled": {
-        "adam": Adam,
-        "sgd": SGD,
-    },
-}
 if not args.test:
-    str1 = "compiled" if args.jit else "uncompiled"
-    str2 = "adam" if use_sgd else "sgd"
-    optim = optims[str1][str2](model, lr=args.lr)
 
-    def get_loss(x, y, model):
+    def get_loss(x, y, model: AlexNet):
         outs = model(x)
         return outs.cross_entropy_loss_probs(y)
 
-    val_and_grad = fngrad(get_loss, wrt=[2], return_outs=True)
-    use_jit = args.jit  # does not work yet
-    train_step = (
-        jit(
-            val_and_grad,
-        )
-        if use_jit
-        else val_and_grad
-    )
+    loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
+
+    @jit
+    def update_step(state, model, x, y):
+        loss, (grads,) = loss_and_grads(x, y, model)
+        new_state = sgd(model, grads, state)
+        return new_state, loss
+
     import time
+
+    state = SGDState(model, lr=args.lr)
 
     for epoch in range(args.epochs):
         for i, data in enumerate(trainloader, 0):
             st = time.time()
             inputs, labels = data
-
-            inputs = inputs.to(DEVICE)
-            labels = labels.eval().to(DEVICE)
+            inputs = inputs.to("cuda")
+            labels = labels.eval().to("cuda")
             labels = Tensor.one_hot(100, labels)
-            loss, g = train_step(inputs, labels, model)
-            optim.step(g)
+            state, loss = update_step(state, model, inputs, labels)
+            state.eval()
+            model.tree_assign(state.params)
             # if i == 100: raise Exception("stop")
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )
             if i % 100 == 0:
                 model.save("alexnet_checkpoint.pkl")
-
-if args.test:
-    correct = 0
-    total = 0
-    for data in testloader:
-        images, labels = data
-        images = Tensor(images.numpy().astype("float32"), device=DEVICE)
-        labels = Tensor(labels.astype("float32"), device=DEVICE)
-        outputs = model(images)
-        total += labels.shape[0]
-        correct += np.sum(outputs.numpy().argmax(1) == labels.numpy())
-
-        print(
-            "Accuracy of the network on the 10000 test images: %d %%"
-            % (100 * correct / total)
-        )
-    print(
-        "Accuracy of the network on the 10000 test images: %d %%"
-        % (100 * correct / total)
-    )
-    print(
-        "Accuracy of the network on the 10000 test images: %d %%"
-        % (100 * correct / total)
-    )

@@ -155,7 +155,6 @@ def tree_map(f, *structs):
     """Map a function f over one or more PyTrees."""
     leaves = [tree_flatten(pytree)[0] for pytree in structs]
     result_leaves = [f(*leaves) for leaves in zip(*leaves)]
-    single_res_leave_pytree = tree_flatten(result_leaves[0])[1]
     # same as input pytree, but leaves are single_res_leave_pytree
     inp_pytree = tree_flatten(structs[0])[1]
     res_pytree = inp_pytree  # TODO
