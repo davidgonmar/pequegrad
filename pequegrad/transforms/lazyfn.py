@@ -190,11 +190,15 @@ class LazyFunction:
         self.cache[cache_key] = transformed_trace
         return self._get_maybe_cached_transformed_trace(args)
 
+    def post_process_outs(self, outs):
+        return outs
+
     def __call__(self, *args):
         trace = self._get_maybe_cached_transformed_trace(args)
         args, _ = tree_flatten(args)
         args = [x for x in args if isinstance(x, Tensor)]
         bridge_args_to_lazy_fn(trace.input_tensors, args)
+        trace.outputs = self.post_process_outs(trace.outputs)
         return tree_unflatten(trace.outputs_pytree, trace.outputs)
 
     def print_trace(self):

@@ -1,6 +1,6 @@
 from pequegrad.extra.mnist import MNISTDataset
 import numpy as np
-from pequegrad.modules import Linear, StatefulModule
+from pequegrad.modules import Linear, StatefulModule, apply_to_module
 from pequegrad.context import no_grad
 import argparse
 import time
@@ -12,9 +12,6 @@ from pequegrad import fngrad, jit, amp, Tensor, maybe
 np.random.seed(0)
 
 model_path = "mlp_mnist_model.pkl"
-
-device = "cpu"
-
 USE_GRAPH = True
 
 
@@ -31,33 +28,32 @@ class MLP(StatefulModule):
 
 def train(model, ds, epochs=13, batch_size=4096):
     start = None
-    # weights of the network printed
     use_jit = True
     do_amp = False
 
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
-    def get_loss(batch_X, batch_Y, model):
-        prediction = model.forward(batch_X)
-        return prediction.cross_entropy_loss_probs(batch_Y)
-
-    loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
-
     @maybe(jit, use_jit)
     @maybe(amp, do_amp)
-    def update(state, model, x, y):
-        loss, (g,) = loss_and_grads(x, y, model)
-        new_state = adam(model, g, state)
-        return new_state, loss
+    def update(optim_state, params_dict, x, y):
+        def get_loss(batch_X, batch_Y, params_dict):
+            prediction = apply_to_module(model, params_dict, batch_X)
+            return prediction.cross_entropy_loss_probs(batch_Y)
+
+        loss, (g,) = fngrad(get_loss, wrt=[2], return_outs=True)(x, y, params_dict)
+        new_optim_state, new_params = adam(params_dict, g, optim_state)
+        return new_optim_state, new_params, loss
 
     i = 0
-    state = AdamState(model)
+    optim_state = AdamState(model)
+    params_dict = model.tree_flatten()
     for x, y in loader:
         if i == 1:
             start = time.time()
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
-        state, loss = update(state, model, x, batch_y_onehot)
-        model.tree_assign(state.params)
+        optim_state, params_dict, loss = update(
+            optim_state, params_dict, x, batch_y_onehot
+        )
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break
@@ -66,18 +62,18 @@ def train(model, ds, epochs=13, batch_size=4096):
     end = time.time()
     print(f"Training time: {end - start:.2f}s")
 
-    return model
+    return params_dict
 
 
-def test_model(model, ds):
+def test_model(model, params_dict, ds):
     import time
 
     correct = 0
     total = 0
     loader = DataLoader(ds, batch_size=4096)
 
-    def step(x, model):
-        return model.forward(x)
+    def step(x, model, params_dict):
+        return apply_to_module(model, params_dict, x)
 
     step = jit(amp(step))
     start = None
@@ -87,7 +83,7 @@ def test_model(model, ds):
             with no_grad():
                 if i == 1:  # start time after first batch
                     start = time.time()
-                outputs = step(x, model)
+                outputs = step(x, model, params_dict)
                 correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
                 total += y.shape[0]
                 i += 1
@@ -126,17 +122,12 @@ if __name__ == "__main__":
 
     if MODE == "train":
         print("Training the model")
-        mlp = train(mlp, train_ds)
+        d = train(mlp, train_ds)
         mlp.save(model_path)
 
         print("Model saved to", model_path)
         print("Testing the model")
-        correct, total = test_model(mlp, test_ds)
+        correct, total = test_model(mlp, d, test_ds)
         print(f"Test accuracy: {correct / total:.3f}")
     else:
-        print("Evaluating the model")
-        mlp.load(model_path)
-        print("Model loaded from", model_path)
-        print("Testing the model")
-        correct, total = test_model(mlp, test_ds)
-        print(f"Test accuracy: {correct / total:.3f}")
+        raise ValueError("Unknown mode")

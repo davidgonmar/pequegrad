@@ -6,9 +6,10 @@ inside_jit = ContextVar("inside_jit", default=False)
 
 
 class jit(LazyFunction):
-    def __init__(self, f, opts=None):
+    def __init__(self, f, eval_outs=True, opts=None):
         super().__init__(f)
         self.opts = opts if opts is not None else {}
+        self.eval_outs = eval_outs
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph
@@ -22,3 +23,8 @@ class jit(LazyFunction):
         compile(extract_tensors(new_trace.outputs), self.opts)
 
         return new_trace
+
+    def post_process_outs(self, outs):
+        if self.eval_outs:
+            return [o.eval() if isinstance(o, Tensor) else o for o in outs]
+        return outs

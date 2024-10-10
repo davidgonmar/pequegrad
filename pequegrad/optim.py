@@ -164,12 +164,7 @@ class JittedAdam:
 
 
 class OptimizerState:
-    def eval(self):
-        def _fn(p):
-            if hasattr(p, "eval"):
-                p.eval()
-
-        tree_map(_fn, self._state_dict_for_flatten())
+    ...
 
 
 class AdamState(OptimizerState):
@@ -182,10 +177,18 @@ class AdamState(OptimizerState):
             "b1": self.b1,
             "b2": self.b2,
             "eps": self.eps,
-            "params": self.params,
         }
 
-    def __init__(self, params, lr=0.001, b1=0.9, b2=0.999, eps=1e-08, _state_dict=None):
+    def __init__(
+        self, params_or_model, lr=0.001, b1=0.9, b2=0.999, eps=1e-08, _state_dict=None
+    ):
+        if params_or_model is None:
+            params = _state_dict["mt"]
+        params = (
+            params_or_model
+            if not hasattr(params_or_model, "tree_flatten")
+            else params_or_model.tree_flatten()
+        )
         if _state_dict is None:
             self.mt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
             self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
@@ -198,23 +201,10 @@ class AdamState(OptimizerState):
         self.b1 = b1
         self.b2 = b2
         self.eps = eps
-        self.params = params
-
-    def numpy(self):
-        return {
-            "mt": tree_map(lambda mt: mt.numpy(), self.mt),
-            "vt": tree_map(lambda vt: vt.numpy(), self.vt),
-            "t": self.t.numpy(),
-            "lr": self.lr,
-            "b1": self.b1,
-            "b2": self.b2,
-            "eps": self.eps,
-            "params": tree_map(lambda p: p.numpy(), self.params),
-        }
 
     def _from_dict(d):
         return AdamState(
-            d["params"],
+            None,
             lr=d["lr"],
             b1=d["b1"],
             b2=d["b2"],
@@ -228,31 +218,40 @@ class AdamState(OptimizerState):
 
 
 def adam(params, grads, state: AdamState):
-    mt = tree_map(lambda mt, gt: mt * state.b1 + (1 - state.b1) * gt, state.mt, grads)
-    vt = tree_map(
-        lambda vt, gt: vt * state.b2 + (1 - state.b2) * (gt * gt), state.vt, grads
-    )
-    mt_hat = tree_map(lambda mt: mt / (1 - state.b1**state.t), mt)
-    vt_hat = tree_map(lambda vt: vt / (1 - state.b2**state.t), vt)
-    new_params = tree_map(
-        lambda p, mt_hat, vt_hat: p - state.lr * mt_hat / (vt_hat**0.5 + state.eps),
+    def _update(mt, vt, gt, params):
+        # returns updated params and state
+        new_mt = mt * state.b1 + (1 - state.b1) * gt
+        new_vt = vt * state.b2 + (1 - state.b2) * (gt * gt)
+        new_mt_hat = new_mt / (1 - state.b1**state.t)
+        new_vt_hat = new_vt / (1 - state.b2**state.t)
+
+        new_params = params - state.lr * new_mt_hat / (new_vt_hat**0.5 + state.eps)
+
+        return new_mt, new_vt, new_params
+
+    new_mt, new_vt, new_params = tree_map(
+        _update,
+        state.mt,
+        state.vt,
+        grads,
         params,
-        mt_hat,
-        vt_hat,
     )
+
+    new_t = state.t + 1
     new_state = AdamState(
-        new_params,
+        None,
         lr=state.lr,
         b1=state.b1,
         b2=state.b2,
         eps=state.eps,
         _state_dict={
-            "mt": mt,
-            "vt": vt,
-            "t": state.t,
+            "mt": new_mt,
+            "vt": new_vt,
+            "t": new_t,
         },
     )
-    return new_state
+
+    return new_state, new_params
 
 
 # sgd

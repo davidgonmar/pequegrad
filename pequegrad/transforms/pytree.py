@@ -151,14 +151,57 @@ def count_leaves(pytree_def):
     )
 
 
+def _replace_leaves(pytree_def: PyTreeDef, leave_structure: PyTreeDef) -> PyTreeDef:
+    # each leave in pytree_def (of type None) will be replaced by the WHOLE leave_structure
+    if pytree_def.type is None:
+        return leave_structure
+
+    if pytree_def.type is dict:
+        return PyTreeDef(
+            type=dict,
+            structure=[
+                (key, _replace_leaves(child_def, leave_structure))
+                for key, child_def in pytree_def.structure
+            ],
+        )
+
+    return PyTreeDef(
+        type=pytree_def.type,
+        structure=[
+            _replace_leaves(child_def, leave_structure)
+            for child_def in pytree_def.structure
+        ],
+    )
+
+
 def tree_map(f, *structs):
     """Map a function f over one or more PyTrees."""
     leaves = [tree_flatten(pytree)[0] for pytree in structs]
     result_leaves = [f(*leaves) for leaves in zip(*leaves)]
     # same as input pytree, but leaves are single_res_leave_pytree
     inp_pytree = tree_flatten(structs[0])[1]
-    res_pytree = inp_pytree  # TODO
-    return tree_unflatten(res_pytree, result_leaves)
+    # single res pytree
+    res_pytree = tree_flatten(result_leaves[0])[1]
+
+    # now, the real output pytree is the input pytree with the leaves replaced by the result pytree
+
+    whole_res_pytree = inp_pytree
+
+    # replace leaves with result leaves
+    whole_res_pytree = _replace_leaves(res_pytree, whole_res_pytree)
+
+    def _transpose(li: list[list[any]]):
+        if not isinstance(li[0], (list, tuple)):
+            return li  # vector, return as is
+        # if we have
+        """
+        [[1, 2, 3], [4, 5, 6]]
+        returns
+        [[1, 4], [2, 5], [3, 6]]
+        """
+        return list(map(list, zip(*li)))
+
+    return tree_unflatten(whole_res_pytree, tree_flatten(_transpose(result_leaves))[0])
 
 
 def _check_same_structure(pytree1, pytree2):

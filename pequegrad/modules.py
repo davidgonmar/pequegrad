@@ -138,8 +138,12 @@ class StatefulModule:
 
     def tree_assign(self, parameters):
         def _recurse(m, path):
+            if path and any(
+                path[i] in ("_parameters", "_submodules") for i in range(len(path))
+            ):
+                return
             for key, p in m.__dict__.items():
-                if isinstance(p, ModuleParam):
+                if isinstance(p, (ModuleParam, Tensor)):
                     current = parameters
                     for part in path:
                         current = current[part]
@@ -336,3 +340,8 @@ class ModuleDict(StatefulModule):
 
 
 Module = StatefulModule
+
+
+def apply_to_module(module: Module, params_dict: dict, *args, **kwargs):
+    module.tree_assign(params_dict)
+    return module(*args, **kwargs)
