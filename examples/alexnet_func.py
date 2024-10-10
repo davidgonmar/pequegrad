@@ -1,11 +1,12 @@
-from pequegrad import Tensor, fngrad
+from pequegrad import Tensor, fngrad, maybe
 import pequegrad.modules as nn
 from pequegrad.optim import SGDState, sgd
 import argparse
 import pequegrad.ds_transforms as transforms
 from pequegrad.data.dataloader import DataLoader
 from pequegrad.extra.cifar_100 import CIFAR100Dataset
-from pequegrad.transforms.compile import jit
+import pequegrad as pg
+from pequegrad.transforms.pytree import tree_map
 
 
 class AlexNet(nn.StatefulModule):
@@ -129,8 +130,9 @@ print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1
 
 
 if not args.test:
+    do_jit = True
 
-    @jit
+    @maybe(pg.jit, do_jit)
     def update_step(state, params_dict, x, y):
         x = x.to("cuda")
         y = y.to("cuda")
@@ -142,6 +144,11 @@ if not args.test:
 
         loss, (grads,) = fngrad(get_loss, wrt=[2], return_outs=True)(x, y, params_dict)
         new_state, params_dict = sgd(params_dict, grads, state)
+        # if we are not jitting, evaluate the lazy new state and params_dict
+        if not do_jit:
+            tree_map(lambda x: x.eval() if isinstance(x, Tensor) else x, new_state)
+            tree_map(lambda x: x.eval() if isinstance(x, Tensor) else x, params_dict)
+            loss.eval()
         return new_state, params_dict, loss
 
     import time

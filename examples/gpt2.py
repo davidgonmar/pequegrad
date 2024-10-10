@@ -402,8 +402,8 @@ class GPT(pnn.Module):
         idx = idx.astype(pg.dt.int32).pad_to(self.block_size).eval().detach().to("cuda")
 
         @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
-        def runmodel(x, model, curridx, temperature):
-            logits = model(x)
+        def runmodel(x, params, curridx, temperature):
+            logits = self.forward(x)
             logits = logits[curridx] / temperature
             probs = pg.softmax(logits, dim=-1)
 
@@ -427,12 +427,13 @@ class GPT(pnn.Module):
 
             sys.stdout.flush()
 
+        di = self.parameters()
         for _ in range(max_new_tokens):
             start = time.time()
             # forward the model to get the logits for the index in the sequence
             probs = runmodel(
                 idx,
-                self,
+                di,
                 pg.Tensor([curr], device="cuda").astype(pg.dt.int32),
                 temperature,
             ).numpy()

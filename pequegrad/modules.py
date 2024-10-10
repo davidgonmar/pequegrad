@@ -118,6 +118,8 @@ class StatefulModule:
         d = {}
 
         def _recurse(m, path):
+            if not hasattr(m, "__dict__"):
+                return
             for key, p in m.__dict__.items():
                 if isinstance(p, ModuleParam):
                     current = d
@@ -136,18 +138,24 @@ class StatefulModule:
     def tree_flatten(self) -> dict:
         return self.parameters_with_path()
 
-    def tree_assign(self, parameters):
+    def tree_assign(self, parameters, replace=False):
         def _recurse(m, path):
             if path and any(
                 path[i] in ("_parameters", "_submodules") for i in range(len(path))
             ):
+                return
+            if not hasattr(m, "__dict__"):
                 return
             for key, p in m.__dict__.items():
                 if isinstance(p, (ModuleParam, Tensor)):
                     current = parameters
                     for part in path:
                         current = current[part]
-                    p.assign(current[key])
+                    if replace:
+                        m.__dict__[key] = current[key]
+                    else:
+                        p.assign(current[key])
+
                 elif isinstance(p, StatefulModule):
                     _recurse(p, path + (key,))
                 elif isinstance(p, (list, tuple)):
@@ -343,5 +351,5 @@ Module = StatefulModule
 
 
 def apply_to_module(module: Module, params_dict: dict, *args, **kwargs):
-    module.tree_assign(params_dict)
+    module.tree_assign(params_dict, replace=True)
     return module(*args, **kwargs)

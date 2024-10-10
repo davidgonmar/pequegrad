@@ -92,7 +92,6 @@ class fngrad(LazyFunction):
         wrt_pytree = make_pytree_list(
             [trace.inputs_pytree.structure[i] for i in self.wrt]
         )
-        print(trace.inputs_pytree.structure[2], self.wrt, wrt_pytree)
         if self.return_outs:
             new_outs_pytree = PyTreeDef(
                 type=tuple, structure=[trace.outputs_pytree, wrt_pytree]

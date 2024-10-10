@@ -26,5 +26,5 @@ class jit(LazyFunction):
 
     def post_process_outs(self, outs):
         if self.eval_outs:
-            return [o.eval() if isinstance(o, Tensor) else o for o in outs]
+            outs = [o.eval() if isinstance(o, Tensor) else o for o in outs]
         return outs

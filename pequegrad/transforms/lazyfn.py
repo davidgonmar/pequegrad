@@ -199,7 +199,8 @@ class LazyFunction:
         args = [x for x in args if isinstance(x, Tensor)]
         bridge_args_to_lazy_fn(trace.input_tensors, args)
         trace.outputs = self.post_process_outs(trace.outputs)
-        return tree_unflatten(trace.outputs_pytree, trace.outputs)
+        ret = tree_unflatten(trace.outputs_pytree, trace.outputs)
+        return ret
 
     def print_trace(self):
         # get last key in cache
