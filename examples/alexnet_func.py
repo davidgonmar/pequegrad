@@ -66,7 +66,6 @@ class AlexNet(nn.StatefulModule):
         return x
 
 
-# allow to continue training from a checkpoint
 parser = argparse.ArgumentParser(description="Train AlexNet on CIFAR-100")
 
 parser.add_argument(
@@ -99,10 +98,12 @@ parser.add_argument(
 parser.add_argument(
     "--bs",
     type=int,
-    default=64,
+    default=128,
     help="Batch size for training",
 )
+
 args = parser.parse_args()
+
 transform = transforms.Compose(
     [
         transforms.ToTensor(device="cuda"),
@@ -118,7 +119,6 @@ transform = transforms.Compose(
 )
 
 trainset = CIFAR100Dataset(train=True, transform=transform)
-
 trainloader = DataLoader(trainset, batch_size=args.bs, shuffle=True)
 testset = CIFAR100Dataset(train=False, transform=transform)
 testloader = DataLoader(testset, batch_size=args.bs, shuffle=False)
@@ -126,35 +126,33 @@ testloader = DataLoader(testset, batch_size=args.bs, shuffle=False)
 model = AlexNet(num_classes=100).to("cuda")
 print("Number of parameters:", sum([p.numel() for p in model.parameters()]))
 print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1024)
+
+
 if not args.test:
 
-    def get_loss(x, y, model: AlexNet):
-        outs = model(x)
-        return outs.cross_entropy_loss_probs(y)
-
-    loss_and_grads = fngrad(get_loss, wrt=[2], return_outs=True)
-
     @jit
-    def update_step(state, model, x, y):
-        loss, (grads,) = loss_and_grads(x, y, model)
-        new_state = sgd(model, grads, state)
-        return new_state, loss
+    def update_step(state, params_dict, x, y):
+        x = x.to("cuda")
+        y = y.to("cuda")
+        y = Tensor.one_hot(100, y)
+
+        def get_loss(x, y, params_dict):
+            outs = nn.apply_to_module(model, params_dict, x)
+            return outs.cross_entropy_loss_probs(y)
+
+        loss, (grads,) = fngrad(get_loss, wrt=[2], return_outs=True)(x, y, params_dict)
+        new_state, params_dict = sgd(params_dict, grads, state)
+        return new_state, params_dict, loss
 
     import time
 
     state = SGDState(model, lr=args.lr)
-
+    params_dict = model.tree_flatten()
     for epoch in range(args.epochs):
         for i, data in enumerate(trainloader, 0):
             st = time.time()
             inputs, labels = data
-            inputs = inputs.to("cuda")
-            labels = labels.eval().to("cuda")
-            labels = Tensor.one_hot(100, labels)
-            state, loss = update_step(state, model, inputs, labels)
-            state.eval()
-            model.tree_assign(state.params)
-            # if i == 100: raise Exception("stop")
+            state, params_dict, loss = update_step(state, params_dict, inputs, labels)
             print(
                 f"Epoch {epoch}, iter {i}, loss: {loss.numpy()}, time: {time.time() - st}"
             )

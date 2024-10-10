@@ -260,71 +260,70 @@ def adam(params, grads, state: AdamState):
 class SGDState(OptimizerState):
     def _state_dict_for_flatten(self):
         return {
-            "params": self.params,
             "lr": self.lr,
-            "momentum": self.momentum,
             "weight_decay": self.weight_decay,
-            "vt_last": self.vt_last,
+            "momentum": self.momentum,
+            "vt": self.vt,
         }
 
     def __init__(
-        self, params, lr=0.1, momentum=0.0, weight_decay=0.0, _state_dict=None
+        self, params_or_model, lr=0.1, weight_decay=0.0, momentum=0.0, _state_dict=None
     ):
-        if _state_dict is None:
-            self.vt_last = (
-                tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
-                if momentum != 0
-                else None
-            )
-        else:
-            self.vt_last = _state_dict["vt_last"]
-        self.params = params
+        if params_or_model is None:
+            params = _state_dict["vt"]
+        params = (
+            params_or_model
+            if not hasattr(params_or_model, "tree_flatten")
+            else params_or_model.tree_flatten()
+        )
         self.lr = lr
-        self.momentum = momentum
         self.weight_decay = weight_decay
+        self.momentum = momentum
 
-    def numpy(self):
-        return {
-            "params": tree_map(lambda p: p.numpy(), self.params),
-            "lr": self.lr,
-            "momentum": self.momentum,
-            "weight_decay": self.weight_decay,
-            "vt_last": tree_map(lambda vt: vt.numpy(), self.vt_last),
-        }
+        if _state_dict is None:
+            if momentum != 0:
+                self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
+            else:
+                self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
+        else:
+            self.vt = _state_dict["vt"]
 
     def _from_dict(d):
         return SGDState(
-            d["params"],
+            None,
             lr=d["lr"],
-            momentum=d["momentum"],
             weight_decay=d["weight_decay"],
+            momentum=d["momentum"],
             _state_dict={
-                "vt_last": d["vt_last"],
+                "vt": d["vt"],
             },
         )
 
 
 def sgd(params, grads, state: SGDState):
-    if state.momentum != 0:
-        new_params = tree_map(
-            lambda p, gt, vt: p - state.lr * (state.momentum * vt + gt),
-            params,
-            grads,
-            state.vt_last,
-        )
-        new_vt_last = tree_map(
-            lambda vt, gt: state.momentum * vt + gt, state.vt_last, grads
-        )
-    else:
-        new_params = tree_map(lambda p, gt: p - state.lr * gt, params, grads)
-        new_vt_last = None
+    def _update(vt, gt, p):
+        if state.weight_decay != 0:
+            gt += state.weight_decay * p
+        if state.momentum != 0:
+            vt = state.momentum * vt + gt
+        newp = p - state.lr * (vt if state.momentum != 0 else gt)
+        return vt, newp
+
+    new_vt, new_params = tree_map(
+        _update,
+        state.vt,
+        grads,
+        params,
+    )
+
     new_state = SGDState(
-        new_params,
+        None,
         lr=state.lr,
-        momentum=state.momentum,
         weight_decay=state.weight_decay,
+        momentum=state.momentum,
         _state_dict={
-            "vt_last": new_vt_last,
+            "vt": new_vt,
         },
     )
-    return new_state
+
+    return new_state, new_params
