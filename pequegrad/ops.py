@@ -258,7 +258,7 @@ def cross_entropy_loss_probs(self, target: "Tensor") -> "Tensor":
     # will not really do anything
     # If there is a minibatch, we'll sum over dim 1, which is the classes dimension, and reduce the minibatch
     # by taking the mean
-    c_idx = 0 if self.dim == 1 else -1
+    c_idx = 0 if self.dim == 1 else 1
     a = -(target * self.log_softmax(dim=c_idx)).sum(c_idx).mean()
     return a
 
