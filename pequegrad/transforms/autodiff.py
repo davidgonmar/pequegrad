@@ -60,9 +60,11 @@ def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
     argnum = argnums[0]
     # inputs_pytree = inputs_pytree.structure
     flat, _ = tree_flatten(pytree_def_to_dict(inputs_pytree.structure[argnum]))
-    rest = pytree_def_to_dict(inputs_pytree.structure[:argnum])[0]
-
-    flattened_start_index = len(tree_flatten(rest))
+    rest = pytree_def_to_dict(inputs_pytree.structure[:argnum])
+    if len(rest) > 0:
+        flattened_start_index = len(tree_flatten(rest[0])[0])
+    else:
+        flattened_start_index = 0
     flattened_indices = list(
         range(flattened_start_index, flattened_start_index + len(flat))
     )
