@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor
-from pequegrad.ops import assign_at, fill, outer_prod
+from pequegrad.ops import assign_at, fill, outer_prod, triu
 from typing import Tuple
 
 
@@ -53,7 +53,7 @@ def project(v: Tensor, onto: Tensor):
     return ((v @ onto) / (onto @ onto)) * onto
 
 
-# ======================= Gram-Schmidt =======================
+# ======================= Gram-Schmidt  =======================
 def assert_rank(a: Tensor, rank: int, name: str):
     assert (
         a.ndim == rank
@@ -73,3 +73,15 @@ def gram_schmidt(vectors: Tuple[Tensor, ...]):
         res = res.at[:, i].set(v / (v @ v) ** 0.5)
         others.append(v)
     return res
+
+
+# ======================= QR factorization =======================
+
+
+def qr_factorization(A: Tensor):
+    m = A.shape[0]
+    assert A.shape[1] == m, "QR factorization only implemented for square matrices"
+    Q = gram_schmidt([A[:, i] for i in range(m)])
+    mask = triu(Tensor.ones((m, m), dtype=A.dtype, device=A.device), diagonal=0)
+    R = (Q.T @ A) * mask
+    return Q, R
