@@ -1,7 +1,9 @@
 from pequegrad.tensor import Tensor
 from pequegrad.ops import assign_at, fill, outer_prod
+from typing import Tuple
 
 
+# ======================= LU factorization =======================
 def lu_factorization(A: Tensor):
     assert A.ndim == 2
     n, m = A.shape
@@ -42,3 +44,32 @@ def lu_factorization_faster(A: Tensor):
 
 
 lu_factorization = lu_factorization_faster
+
+
+# ======================= Projection ========================
+def project(v: Tensor, onto: Tensor):
+    assert_rank(v, 1, "v")
+    assert_rank(onto, 1, "onto")
+    return ((v @ onto) / (onto @ onto)) * onto
+
+
+# ======================= Gram-Schmidt =======================
+def assert_rank(a: Tensor, rank: int, name: str):
+    assert (
+        a.ndim == rank
+    ), f"Expected a tensor of rank {rank} for arg '{name}', got {a.ndim}"
+
+
+def gram_schmidt(vectors: Tuple[Tensor, ...]):
+    map(lambda i, v: assert_rank(v, 1, f"vectors[{i}]"), enumerate(vectors))
+    dim, dtype = vectors[0].shape[0], vectors[0].dtype
+    assert len(vectors) == dim
+    res = Tensor.zeros((dim, dim), dtype=dtype)
+    others = []
+    for i, v in enumerate(vectors):
+        v_orig = v
+        for o in others:
+            v = v - project(v_orig, o)
+        res = res.at[:, i].set(v / (v @ v) ** 0.5)
+        others.append(v)
+    return res

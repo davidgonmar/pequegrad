@@ -250,4 +250,4 @@ class _SetItemPartial:
         return assign_at(self.tensor, value, self.index)
 
 
-bind_method(Tensor, "at", lambda self: _SetItemPartial(self))
+bind_method_property(Tensor, "at", lambda self: _SetItemPartial(self))

@@ -805,6 +805,13 @@ def scaled_dot_product_attention(
     return p_attn @ value
 
 
+def truncate(self, i: int):
+    """
+    Truncates a floating point vector to the i-th fractional digit
+    """
+    return (self * 10**i).astype(dt.int32) / 10**i
+
+
 """pg.matmul = matmul_with_reshapes
 
 Tensor.__matmul__ = matmul_with_reshapes"""
