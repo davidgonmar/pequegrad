@@ -1,6 +1,7 @@
 from pequegrad.tensor import Tensor
 from pequegrad.ops import assign_at, fill, outer_prod, triu
 from typing import Tuple
+import functools
 
 
 # ======================= LU factorization =======================
@@ -85,3 +86,17 @@ def qr_factorization(A: Tensor):
     mask = triu(Tensor.ones((m, m), dtype=A.dtype, device=A.device), diagonal=0)
     R = (Q.T @ A) * mask
     return Q, R
+
+
+# ======================= Determinant =======================
+
+
+# determinant is the product of the diagonal elements of the upper triangular matrix in the LU factorization
+def det(A: Tensor) -> Tensor:
+    if A.shape[0] != A.shape[1]:
+        raise ValueError("Determinant is only defined for square matrices")
+    L, U = lu_factorization(A)
+    return functools.reduce(lambda x, y: x * y, [U[i, i] for i in range(U.shape[0])])
+
+
+determinant = det
