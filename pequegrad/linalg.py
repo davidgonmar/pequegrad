@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor
-from pequegrad.ops import assign_at, fill, outer_prod, triu
+from pequegrad.ops import assign_at, fill, outer_prod, triu, tril
 from typing import Tuple
 import functools
 
@@ -100,3 +100,16 @@ def det(A: Tensor) -> Tensor:
 
 
 determinant = det
+
+
+# ======================== Matrix Power (O(log(n))) ========================
+
+def matrix_power(A: Tensor, n: int) -> Tensor:
+    if n == 0:
+        # eye
+        ones = fill(A.shape, A.dtype, 1, A.device)
+        return triu(tril(ones), diagonal=0)
+    if n % 2 == 0:
+        return matrix_power(A @ A, n // 2)
+    else:
+        return A @ matrix_power(A, n - 1)
