@@ -843,3 +843,38 @@ add = pg.add
 neq = pg.neq
 im2col = pg.im2col
 col2im = pg.col2im
+
+
+def norm(vector: "Tensor", p: float = 2) -> "Tensor":
+    """
+    Returns the p-norm of the tensor
+    """
+    exped = pg.abs(vector) ** p
+    return pg.sum(exped) ** (1 / p)
+
+
+pg.norm = norm
+
+
+def slerp(p0: Tensor, p1: Tensor, alpha: float) -> Tensor:
+    assert p0.ndim == p1.ndim and p0.shape == p1.shape and p0.ndim == 1
+    # computes Spherical Linear intERPolation between two points
+    # described in https://www.cs.cmu.edu/~kiranb/animation/p245-shoemake.pdf
+    zero = pg.fill((), p0.dtype, 0, p0.device)
+    one = pg.fill((), p0.dtype, 1, p0.device)
+    minus_one = pg.fill((), p0.dtype, -1, p0.device)
+
+    def _arccos(x):
+        # polynomial approximation for arccos(x) in [0, 1]
+        x = where(x < -1, minus_one, x)
+        x = where(x > 1, one, x)
+        return (3.14159265 / 2) - (x + (x**3 / 6) + (3 * x**5 / 40))
+
+    def _sin(x):
+        # polynomial approximation for sin(x) in [0, 1]
+        x = where(x < 0, zero, x)
+        x = where(x > 1, one, x)
+        return x - (x**3 / 6) + (x**5 / 120)
+
+    angle = _arccos((p0 @ p1) / (pg.norm(p0) * pg.norm(p1)))
+    return (_sin((1 - alpha) * angle) * p0 + _sin(alpha * angle) * p1) / _sin(angle)
