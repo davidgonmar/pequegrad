@@ -4,6 +4,12 @@ from typing import Tuple
 import functools
 
 
+def assert_rank(a: Tensor, rank: int, name: str):
+    assert (
+        a.ndim == rank
+    ), f"Expected a tensor of rank {rank} for arg '{name}', got {a.ndim}"
+
+
 # ======================= LU factorization =======================
 def lu_factorization(A: Tensor):
     assert A.ndim == 2
@@ -47,6 +53,34 @@ def lu_factorization_faster(A: Tensor):
 lu_factorization = lu_factorization_faster
 
 
+# ======================= Solve linear system =======================
+
+
+def solve(A: Tensor, b: Tensor):
+    """
+    Solves the linear system Ax = b for x.
+    """
+
+    assert_rank(A, 2, "A")
+    assert_rank(b, 1, "b")
+    # Ax = b -> LUx = b
+    L, U = lu_factorization(A)
+
+    # LUx = b -> Ly = b, solve for y
+    y = fill(b.shape, b.dtype, 0, b.device)
+    for i in range(A.shape[0]):
+        y = y.at[i].set(b[i] - L[i, :i] @ y[:i])
+
+    # Ux = y, solve for x
+    x = fill(b.shape, b.dtype, 0, b.device)
+    for i in range(A.shape[0] - 1, -1, -1):
+        if i == A.shape[0] - 1:
+            x = x.at[i].set(y[i] / U[i, i])
+        else:
+            x = x.at[i].set((y[i] - U[i, i + 1 :] @ x[i + 1 :]) / U[i, i])
+    return x
+
+
 # ======================= Projection ========================
 def project(v: Tensor, onto: Tensor):
     assert_rank(v, 1, "v")
@@ -55,10 +89,6 @@ def project(v: Tensor, onto: Tensor):
 
 
 # ======================= Gram-Schmidt  =======================
-def assert_rank(a: Tensor, rank: int, name: str):
-    assert (
-        a.ndim == rank
-    ), f"Expected a tensor of rank {rank} for arg '{name}', got {a.ndim}"
 
 
 def gram_schmidt(vectors: Tuple[Tensor, ...]):
