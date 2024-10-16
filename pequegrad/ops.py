@@ -1,11 +1,16 @@
 import numpy as np
-from pequegrad.backend.c import Tensor, dt, permute
 from typing import Optional, Tuple, Union, List
 import pequegrad.backend.c as pg
 import math
-from pequegrad.backend.c import custom_prim as _custom_prim, custom_init as _custom_init
+from pequegrad.backend.c import (
+    custom_prim as _custom_prim,
+    custom_init as _custom_init,
+    permute,
+)
 from pequegrad.transforms import jit
 
+Tensor = pg.Tensor
+dt = pg.dt
 _ArrayLike = Union[float, int, np.ndarray, "Tensor", List["_ArrayLike"]]
 _Shape = Union[int, Tuple[int, ...]]
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}

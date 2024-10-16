@@ -1,19 +1,16 @@
-from pequegrad.backend.c import grads  # noqa
-from pequegrad.backend.c import (
-    Tensor,
-    custom_prim as _custom_prim,
-)  # noqa
+from pequegrad.backend.c import grads
+from pequegrad.backend.c import custom_prim as _custom_prim, Tensor
 from .pytree import (
     make_pytree_nested_list,
     tree_flatten,
     PyTreeDef,
     make_pytree_list,
     pytree_def_to_dict,
-)  # noqa
+)
 from .lazyfn import (
     LazyFunction,
     GraphTrace,
-)  # noqa
+)
 import itertools
 from typing import List, Callable
 
@@ -21,25 +18,33 @@ from typing import List, Callable
 def ndindex(shape):
     if not isinstance(shape, tuple) or not all(isinstance(dim, int) for dim in shape):
         raise ValueError("Shape must be a tuple of integers")
-    return itertools.product(*(range(dim) for dim in shape))
+    return tuple(itertools.product(*(range(dim) for dim in shape)))
+
+
+def standard_basis_and_ndindex(shape: List[int], device, dtype):
+    idxs = ndindex(tuple(shape))
+    return [
+        Tensor.zeros(shape, device=device)
+        .astype(dtype)
+        .at[idx]
+        .set(Tensor.ones([], device=device).astype(dtype))
+        for idx in idxs
+    ], idxs
 
 
 def jacrev(out, wrt):
     # we can compute the jacobian by computing the gradient of each element of the output
-    # that can be done by computing a vjp with v = e_i where e_i is the i-th unit vector
+    # that can be done by computing a vjp with v = e_i where e_i is the i-th element of the standard basis of the output space
     jacs = []
     if isinstance(wrt, Tensor):
         wrt = [wrt]
+    basis, ndixs = standard_basis_and_ndindex(out.shape, out.device, out.dtype)
     for w in wrt:
         jac = Tensor.zeros((*out.shape, *w.shape), device=out.device)
-        for i in ndindex(tuple(out.shape)):
-            v = Tensor.zeros(out.shape, device=out.device)
-            val = Tensor.ones([], device=out.device).astype(out.dtype)
-            v = v.assign_at(val, i)
-            g = grads([w], out, v)[0]
-            jac = jac.assign_at(g, i)
+        for elem, ndidx in zip(basis, ndixs):
+            g = grads([w], out, elem)[0]
+            jac = jac.at[ndidx].set(g)
         jacs.append(jac)
-
     return jacs
 
 
