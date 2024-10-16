@@ -13,11 +13,9 @@ from .pytree import (
 from .lazyfn import (
     LazyFunction,
     GraphTrace,
-    Cache,
-    get_cache_key,
 )  # noqa
 import itertools
-from typing import List
+from typing import List, Callable
 
 
 def ndindex(shape):
@@ -278,7 +276,6 @@ class fnvhp(LazyFunction):
 
 # Given a graph, to compute its gradients we usually keep the graphs' intermediate values in memory.
 # Gradient checkpointing can be seen as 'duplicating' the graph, then computing the gradients of the duplicated graph.
-
 """
 def f(a, b, c):
     x = a * b
@@ -345,87 +342,19 @@ def custom_prim(f):
     return p
 
 
-# does nothing at all
-class tracedfn(LazyFunction):
-    def __init__(self, f):
-        self.f = f
+# ===================== NEW CHECKPOINT THING =====================
+def checkpoint(f: Callable, diff_argnums=None) -> Callable:
+    if diff_argnums is None:
+        import inspect
 
-    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
-        return trace
+        diff_argnums = list(range(len(inspect.signature(f).parameters)))
+    prim = custom_prim(f)
+    grad_fn = fngrad(f, wrt=diff_argnums)
 
-    # functionalizes a trace
-    @staticmethod
-    def from_trace(trace: GraphTrace):
-        self = tracedfn(None)
-
-        def _f(*args):
-            raise ValueError("Traced function cannot be called")
-
-        self.cache = Cache()
-        self.cache[get_cache_key(trace.inputs)] = trace
-        self.f = _f
-        return self
-
-
-class checkpoint(LazyFunction):
-    def __init__(self, f):
-        self.f = f
-
-    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
-        # orig_traced_f is a function representation of the trace
-        orig_traced_f = tracedfn.from_trace(trace)
-        orig_traced_f(*trace.input_tensors)
-        # orig_traced_f.print_trace()
-        """orig_f_grads = fngrad(orig_traced_f, wrt=[0])
-        orig_f_grads(trace.input_tensors)
-        
-        orig_f_grads.print_trace()
-        """
-        # now, the original grad graph is in orig_f_grads cache
-        # grads_trace = orig_f_grads.get_last_trace()
-
-        # orig_f_grads.print_trace()
-        wrt = list(range(len(trace.inputs)))
-        grad_fn = fngrad(orig_traced_f, wrt=wrt)
-        # INSPECT THE GRADIENT FUNCTION
-        grad_fn(*trace.input_tensors)  # so it records the trace
-        grad_fn = tracedfn.from_trace(
-            grad_fn.get_last_trace()
-        )  # for some reason, we need to do this?
-        """std::vector<Tensor> ADPrimitive::backward(const std::vector<Tensor> &primals,
-                                          const std::vector<Tensor> &tangents,
-                                          const std::vector<Tensor> &outputs) {
-        throw std::runtime_error("backward not implemented for " + str());
-        }"""
-
-        def grad_fn_for_setvjp(primals, tangents, outputs):
-            ret = grad_fn(*primals)
-            return ret[0]
-
-        fff = custom_prim(tracedfn.from_trace(trace))
-        fff.setvjp(grad_fn_for_setvjp)
-
-        fff_out = fff(*trace.input_tensors)
-
-        new_trace_inputs = trace.inputs
-        new_trace_inputs_pytree = trace.inputs_pytree
-        new_trace_input_tensors = trace.input_tensors
-        new_trace_outputs = (
-            fff_out if isinstance(fff_out, (tuple, list)) else (fff_out,)
-        )
-        new_trace_outputs_pytree = trace.outputs_pytree
-
-        # this is a hack
-        # now, look for the fff node in the graph, and replace it with a copy of the original trace
-        ret = GraphTrace(
-            inputs=new_trace_inputs,
-            inputs_pytree=new_trace_inputs_pytree,
-            input_tensors=new_trace_input_tensors,
-            outputs=new_trace_outputs,
-            outputs_pytree=new_trace_outputs_pytree,
-        )
-
-        # raise ValueError("Checkpoint not implemented yet")
-
-        # print_trace(ret)
+    def grad_fn_for_setvjp(primals, tangents, outputs):
+        ret = grad_fn(*primals)
         return ret
+
+    prim.setvjp(grad_fn_for_setvjp)
+
+    return prim

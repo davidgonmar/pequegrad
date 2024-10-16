@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import torch
-from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device
+from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device, checkpoint
 
 
 def function1(a, b):
@@ -64,3 +64,18 @@ def test_hessian(tensors, func):
             np.testing.assert_allclose(
                 hessians[i][j].numpy(), torch_hessian[i][j].detach().numpy(), rtol=1e-5
             )
+
+
+@pytest.mark.parametrize("func", [function1, function2, function3])
+def test_checkpoint(tensors, func):
+    checkpointed_func = checkpoint(func)
+    a, b, *_ = tensors
+    res = func(a, b)
+    checkpointed_res = checkpointed_func(a, b)
+    checkpointed_grads = fngrad(checkpointed_func, wrt=[0, 1])(a, b)
+    grads = fngrad(func, wrt=[0, 1])(a, b)
+    for i in range(2):
+        np.testing.assert_allclose(
+            checkpointed_grads[i].numpy(), grads[i].numpy(), rtol=1e-5
+        )
+    np.testing.assert_allclose(res.numpy(), checkpointed_res.numpy(), rtol=1e-5)
