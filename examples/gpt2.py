@@ -403,7 +403,7 @@ class GPT(pnn.Module):
 
         @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
         def runmodel(x, params, curridx, temperature):
-            logits = self.forward(x)
+            logits = pnn.apply_to_module(self, params, x)
             logits = logits[curridx] / temperature
             probs = pg.softmax(logits, dim=-1)
 
@@ -427,7 +427,7 @@ class GPT(pnn.Module):
 
             sys.stdout.flush()
 
-        di = self.parameters()
+        di = self.tree_flatten()
         for _ in range(max_new_tokens):
             start = time.time()
             # forward the model to get the logits for the index in the sequence

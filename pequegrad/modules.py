@@ -3,8 +3,7 @@ import numpy as np
 from typing import List, Union
 import pickle
 from pequegrad.context import pequegrad_context
-
-
+from pequegrad.utils import FrozenDict
 class ModuleParam(Tensor):
     def __init__(self, *args, **kwargs):
         if isinstance(args[0], Tensor):
@@ -135,8 +134,10 @@ class StatefulModule:
         _recurse(self, ())
         return d
 
-    def tree_flatten(self) -> dict:
-        return self.parameters_with_path()
+    def tree_flatten(self, hash=True) -> dict:
+        ret = self.parameters_with_path()
+        return FrozenDict(ret) if hash else ret
+             
 
     def tree_assign(self, parameters, replace=False):
         def _recurse(m, path):

@@ -1,8 +1,7 @@
 from collections.abc import Mapping, Sequence
 from collections import namedtuple
 from pequegrad.modules import StatefulModule, NonStatefulModule
-
-
+from pequegrad.utils import try_cache
 PyTreeDef = namedtuple("PyTreeDef", ["type", "structure", "extra"])
 PyTreeDef.__new__.__defaults__ = ({},)  # Set default value of extra to an empty dict
 
@@ -34,7 +33,7 @@ def make_pytree_nested_list(rows, cols):
 def first_tensor_pytree(pytree):
     return tree_flatten(pytree)[0][0]
 
-
+@try_cache
 def tree_flatten(pytree):
     from pequegrad.optim import OptimizerState
 
