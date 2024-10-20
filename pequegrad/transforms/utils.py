@@ -2,6 +2,7 @@ from pequegrad.backend.c import Tensor
 from typing import Any, Tuple
 from pequegrad.utils import try_cache
 
+
 @try_cache
 def _cache_individual_item(item: Any):
     if isinstance(item, Tensor):
@@ -9,6 +10,7 @@ def _cache_individual_item(item: Any):
             (tuple(item.shape), tuple(item.strides), item.dtype, item.device.str())
         )
     return item
+
 
 @try_cache
 def get_cache_key(flattened_args: Tuple[Any]) -> int:

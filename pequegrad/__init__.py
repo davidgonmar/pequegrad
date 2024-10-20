@@ -40,3 +40,4 @@ class DeviceModule:
 
 
 device = DeviceModule
+import pequegrad.linalg as linalg

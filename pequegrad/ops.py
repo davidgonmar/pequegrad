@@ -667,6 +667,13 @@ def rand(shape: int, dtype=dt.float32, device="cpu"):
     )
 
 
+@custom_init
+def eye(n: int, m: int = None, dtype=dt.float32, device="cpu"):
+    if m is None:
+        m = n
+    return Tensor(np.eye(n, m).astype(dtypetonp[dtype]), device=device)
+
+
 def outer_prod(v1, v2):
     return v1.reshape((v1.shape[0], 1)) * v2.reshape((1, v2.shape[0]))
 
@@ -747,7 +754,13 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
 
     new_shape = list(tensors[0].shape)
 
-    new_shape[dim] = sum(t.shape[dim] for t in tensors)
+    def _sum_dim(tensors, dim):
+        res = 0
+        for t in tensors:
+            res += t.shape[dim]
+        return res
+
+    new_shape[dim] = _sum_dim(tensors, dim)
 
     out = pg.fill(
         new_shape,

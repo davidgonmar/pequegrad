@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor
-from pequegrad.ops import assign_at, fill, outer_prod, triu, tril
+from pequegrad.ops import assign_at, fill, outer_prod, triu, tril, cat, eye
 from typing import Tuple
 import functools
 
@@ -144,3 +144,18 @@ def matrix_power(A: Tensor, n: int) -> Tensor:
         return matrix_power(A @ A, n // 2)
     else:
         return A @ matrix_power(A, n - 1)
+
+
+# ======================= Eigenvalues =======================
+
+
+# use qr algorithm to find eigenvalues
+def eig(A: Tensor, n_iter: int = 100) -> Tensor:
+    assert_rank(A, 2, "A")
+    eigvecs = eye(A.shape[0], A.shape[0], A.dtype, A.device)
+    for _ in range(n_iter):
+        Q, R = qr_factorization(A)
+        A = R @ Q
+        eigvecs = eigvecs @ Q
+    eigvals = [A[i, i] for i in range(A.shape[0])]
+    return eigvecs, cat([ei.unsqueeze(0) for ei in eigvals], dim=0)
