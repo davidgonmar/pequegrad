@@ -186,3 +186,17 @@ def matrix_exp(A: Tensor, diagonalizable=True) -> Tensor:
     eigvecs, eigvals = eig(A)
     eigvals_exp = exp(eigvals)
     return eigvecs @ diag_vector(eigvals_exp) @ eigvecs.T
+
+
+# ======================= Matrix Inverse =======================
+
+
+def inv(A: Tensor) -> Tensor:
+    # computes the inverse of a square matrix
+    assert_rank(A, 2, "A")
+    n = A.shape[0]
+    assert n == A.shape[1], "Matrix must be square"
+    I = eye(n, n, A.dtype, A.device)
+    cols = [I[:, i] for i in range(n)]
+    inv_cols = [solve(A, col) for col in cols]
+    return cat([col.unsqueeze(1) for col in inv_cols], dim=1)
