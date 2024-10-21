@@ -896,3 +896,11 @@ def slerp(p0: Tensor, p1: Tensor, alpha: float) -> Tensor:
 
     angle = _arccos((p0 @ p1) / (pg.norm(p0) * pg.norm(p1)))
     return (_sin((1 - alpha) * angle) * p0 + _sin(alpha * angle) * p1) / _sin(angle)
+
+def diag_vector(vector: Tensor) -> Tensor:
+    """
+    Returns a 2D tensor with the vector as the diagonal
+    """
+    I = eye(vector.shape[0], vector.shape[0], dtype=vector.dtype, device=vector.device)
+    return I * vector # will be broadcasted
+   

@@ -1,5 +1,5 @@
 from pequegrad.tensor import Tensor
-from pequegrad.ops import assign_at, fill, outer_prod, triu, tril, cat, eye
+from pequegrad.ops import assign_at, fill, outer_prod, triu, tril, cat, eye, diag_vector
 from typing import Tuple
 import functools
 
@@ -132,18 +132,23 @@ def det(A: Tensor) -> Tensor:
 determinant = det
 
 
-# ======================== Matrix Power (O(log(n))) ========================
+# ======================== Matrix Power ========================
 
 
-def matrix_power(A: Tensor, n: int) -> Tensor:
-    if n == 0:
-        # eye
-        ones = fill(A.shape, A.dtype, 1, A.device)
-        return triu(tril(ones), diagonal=0)
-    if n % 2 == 0:
-        return matrix_power(A @ A, n // 2)
-    else:
-        return A @ matrix_power(A, n - 1)
+def matrix_power(A: Tensor, n: int, method="eigen") -> Tensor:
+    if method == "recursive":
+        if n == 0:
+            # eye
+            ones = fill(A.shape, A.dtype, 1, A.device)
+            return triu(tril(ones), diagonal=0)
+        if n % 2 == 0:
+            return matrix_power(A @ A, n // 2)
+        else:
+            return A @ matrix_power(A, n - 1)
+    elif method == "eigen":
+        eigvecs, eigvals = eig(A)
+        eigvals__n = eigvals ** n
+        return eigvecs @ diag_vector(eigvals__n) @ eigvecs.T
 
 
 # ======================= Eigenvalues =======================
@@ -159,14 +164,3 @@ def eig(A: Tensor, n_iter: int = 100) -> Tensor:
         eigvecs = eigvecs @ Q
     eigvals = [A[i, i] for i in range(A.shape[0])]
     return eigvecs, cat([ei.unsqueeze(0) for ei in eigvals], dim=0)
-
-
-# ======================= Diagonalization =======================
-
-
-def diagonalize(A: Tensor, n_iter: int = 100, ret_eig=False) -> Tuple[Tensor, Tensor]:
-    eigvecs, eigvals = eig(A, n_iter)
-    di = eigvecs.T @ A @ eigvecs
-    if ret_eig:
-        return eigvecs, eigvals, di
-    return di
