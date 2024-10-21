@@ -1,5 +1,15 @@
 from pequegrad.tensor import Tensor
-from pequegrad.ops import assign_at, fill, outer_prod, triu, tril, cat, eye, diag_vector
+from pequegrad.ops import (
+    assign_at,
+    fill,
+    outer_prod,
+    triu,
+    tril,
+    cat,
+    eye,
+    diag_vector,
+    exp,
+)
 from typing import Tuple
 import functools
 
@@ -147,7 +157,7 @@ def matrix_power(A: Tensor, n: int, method="eigen") -> Tensor:
             return A @ matrix_power(A, n - 1)
     elif method == "eigen":
         eigvecs, eigvals = eig(A)
-        eigvals__n = eigvals ** n
+        eigvals__n = eigvals**n
         return eigvecs @ diag_vector(eigvals__n) @ eigvecs.T
 
 
@@ -164,3 +174,15 @@ def eig(A: Tensor, n_iter: int = 100) -> Tensor:
         eigvecs = eigvecs @ Q
     eigvals = [A[i, i] for i in range(A.shape[0])]
     return eigvecs, cat([ei.unsqueeze(0) for ei in eigvals], dim=0)
+
+
+# ======================= Matrix Exponential =======================
+
+
+def matrix_exp(A: Tensor, diagonalizable=True) -> Tensor:
+    # computes exp(A) where A is a square matrix
+    if not diagonalizable:
+        raise NotImplementedError("Only implemented for diagonalizable matrices")
+    eigvecs, eigvals = eig(A)
+    eigvals_exp = exp(eigvals)
+    return eigvecs @ diag_vector(eigvals_exp) @ eigvecs.T
