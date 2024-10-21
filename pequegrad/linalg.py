@@ -159,3 +159,14 @@ def eig(A: Tensor, n_iter: int = 100) -> Tensor:
         eigvecs = eigvecs @ Q
     eigvals = [A[i, i] for i in range(A.shape[0])]
     return eigvecs, cat([ei.unsqueeze(0) for ei in eigvals], dim=0)
+
+
+# ======================= Diagonalization =======================
+
+
+def diagonalize(A: Tensor, n_iter: int = 100, ret_eig=False) -> Tuple[Tensor, Tensor]:
+    eigvecs, eigvals = eig(A, n_iter)
+    di = eigvecs.T @ A @ eigvecs
+    if ret_eig:
+        return eigvecs, eigvals, di
+    return di
