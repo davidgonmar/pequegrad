@@ -1,5 +1,5 @@
 from pequegrad.backend.c import Tensor
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 from pequegrad.utils import try_cache
 
 
@@ -13,8 +13,12 @@ def _cache_individual_item(item: Any):
 
 
 @try_cache
-def get_cache_key(flattened_args: Tuple[Any]) -> int:
-    tup = tuple(_cache_individual_item(item) for item in flattened_args)
+def get_cache_key(flattened_args: Tuple[Any], ignore_argnums: List[int]) -> int:
+    tup = tuple(
+        _cache_individual_item(item)
+        for idx, item in enumerate(flattened_args)
+        if idx not in ignore_argnums
+    )
     hashed = hash(tup)
     return hashed
 

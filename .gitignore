@@ -135,3 +135,6 @@ a.py
 
 
 *.nsys-rep
+
+
+*.onnx

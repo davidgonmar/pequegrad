@@ -6,8 +6,8 @@ inside_jit = ContextVar("inside_jit", default=False)
 
 
 class jit(LazyFunction):
-    def __init__(self, f, eval_outs=True, opts=None):
-        super().__init__(f)
+    def __init__(self, f, assume_static_argnums=None, eval_outs=True, opts=None):
+        super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
         self.eval_outs = eval_outs
 

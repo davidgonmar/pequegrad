@@ -94,9 +94,10 @@ class Cache(dict):
 class LazyFunction:
     cache: Cache
 
-    def __init__(self, f):
+    def __init__(self, f, assume_static_argnums=None):
         self.f = f
         self.cache = Cache()
+        self.assume_static_argnums = assume_static_argnums or []
 
     @classmethod
     def withargs(cls, *args, **kwargs):
@@ -134,7 +135,7 @@ class LazyFunction:
     def _get_maybe_cached_transformed_trace(self, args: List[Any]) -> GraphTrace:
         inputs, inputs_pytree = tree_flatten(args)
         input_tensors = extract_input_tensors(inputs)
-        cache_key = get_cache_key(inputs)
+        cache_key = get_cache_key(inputs, self.assume_static_argnums)
         if self.cache[cache_key] is not None:
             cached = self.cache[cache_key]
             inputs = [x for x in cached.inputs]
