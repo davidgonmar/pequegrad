@@ -74,7 +74,7 @@ class StatefulModule:
         for p in self.__dict__.values():
             if isinstance(p, StatefulModule) or isinstance(p, NonStatefulModule):
                 p.to(backend)
-            elif isinstance(p, ModuleParam):
+            elif isinstance(p, Tensor):
                 p.to_(backend)
             elif isinstance(p, (list, tuple)):
                 for pp in p:
@@ -82,7 +82,15 @@ class StatefulModule:
                         pp, NonStatefulModule
                     ):
                         pp.to(backend)
-                    elif isinstance(pp, ModuleParam):
+                    elif isinstance(pp, Tensor):
+                        pp.to_(backend)
+            elif isinstance(p, dict):
+                for pp in p.values():
+                    if isinstance(pp, StatefulModule) or isinstance(
+                        pp, NonStatefulModule
+                    ):
+                        pp.to(backend)
+                    elif isinstance(pp, Tensor):
                         pp.to_(backend)
         return self
 
@@ -122,7 +130,14 @@ class StatefulModule:
             if not hasattr(m, "__dict__"):
                 return
             for key, p in m.__dict__.items():
-                if isinstance(p, ModuleParam):
+
+                def _to(p, key, path):
+                    current = d
+                    for part in path:
+                        current = current.setdefault(part, {})
+                    current[key] = p
+
+                if isinstance(p, (ModuleParam, Tensor)):
                     current = d
                     for part in path:
                         current = current.setdefault(part, {})
@@ -131,7 +146,16 @@ class StatefulModule:
                     _recurse(p, path + (key,))
                 elif isinstance(p, (list, tuple)):
                     for i, pp in enumerate(p):
-                        _recurse(pp, path + (key, i))
+                        if isinstance(pp, (ModuleParam, Tensor)):
+                            _to(pp, i, path + (key,))
+                        else:
+                            _recurse(pp, path + (key, i))
+                elif isinstance(p, dict):
+                    for k, pp in p.items():
+                        if isinstance(pp, (ModuleParam, Tensor)):
+                            _to(pp, k, path + (key,))
+                        else:
+                            _recurse(pp, path + (key, k))
 
         _recurse(self, ())
         return d
@@ -157,12 +181,33 @@ class StatefulModule:
                         m.__dict__[key] = current[key]
                     else:
                         p.assign(current[key])
-
                 elif isinstance(p, StatefulModule):
                     _recurse(p, path + (key,))
                 elif isinstance(p, (list, tuple)):
                     for i, pp in enumerate(p):
-                        _recurse(pp, path + (key, i))
+                        if isinstance(pp, (ModuleParam, Tensor)):
+                            current = parameters
+                            for part in path:
+                                current = current[part]
+                            if replace:
+                                m.__dict__[key][i] = current[key][i]
+
+                            else:
+                                pp.assign(current[key][i])
+                        else:
+                            _recurse(pp, path + (key, i))
+                elif isinstance(p, dict):
+                    for k, pp in p.items():
+                        if isinstance(pp, (ModuleParam, Tensor)):
+                            current = parameters
+                            for part in path:
+                                current = current[part]
+                            if replace:
+                                m.__dict__[key][k] = current[key][k]
+                            else:
+                                pp.assign(current[key][k])
+                        else:
+                            _recurse(pp, path + (key, k))
 
         _recurse(self, ())
 

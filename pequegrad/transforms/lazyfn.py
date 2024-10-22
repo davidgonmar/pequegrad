@@ -212,6 +212,11 @@ class LazyFunction:
         print_trace(trace)
 
 
+class Identity(LazyFunction):
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        return trace
+
+
 # utils
 
 # recurses the graph and executes a lambda passed as argument
