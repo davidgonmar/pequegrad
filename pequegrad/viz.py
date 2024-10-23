@@ -77,10 +77,7 @@ def viz(tensor_or_tensors, viz=True, name="graph"):
             }
           },
           "physics": {
-            "hierarchicalRepulsion": {
-              "nodeDistance": 300
-            },
-            "minVelocity": 0.75
+            "enabled": false
           }
         }
         """

@@ -7,6 +7,7 @@ import torch
 import time
 
 
+# I tested:  ["efficientnet_em_Opset17.onnx", "alexnet_Opset16.onnx"]
 parser = argparse.ArgumentParser(description="Load ONNX model for inference.")
 parser.add_argument(
     "--model_path",
@@ -25,37 +26,43 @@ providers = [
         },
     )
 ]
+
 sess_options = ort.SessionOptions()
 
 model = pgonnx.from_onnx_path(args.model_path).to("cuda")
 
 input_spec = model.get_input_shapes()["x"]
-# Prepare input tensor
+
+
 input_array = np.random.randn(*input_spec).astype(np.float32)
 input_tensor = pg.Tensor(input_array).to("cuda")
-
 params = model.tree_flatten()
 
 
-@pg.jit.withargs(opts={"fuser": False, "common_subexpr_elim": False})
+@pg.jit.withargs(eval_outs=False)
 def model_run(params_dict, x):
     return pg.apply_to_module(model, params_dict, x)
 
 
-pgouts = model_run(params, {"x": input_tensor})["36"].numpy()
+pgouts = pg.tree_flatten(model_run(params, {"x": input_tensor}))[0]
 
+pg.viz(pgouts)
 ort_session = ort.InferenceSession(
     args.model_path, sess_options=sess_options, providers=providers
 )
-ortouts = ort_session.run(None, {"x": input_tensor.numpy()})[0]
 
-np.testing.assert_allclose(pgouts, ortouts, atol=2e-3)
+ortouts = pg.tree_flatten(ort_session.run(None, {"x": input_tensor.numpy()}))[0]
+
+for pg_out, ort_out in zip(pgouts, ortouts):
+    np.testing.assert_allclose(pg_out.numpy(), ort_out, atol=2e-3)
+
 print("All tests passed!")
 
 # Efficiency test
 start = time.time()
 for _ in range(100):
-    res = model_run(params, {"x": input_tensor})["36"].eval()
+    res = model_run(params, {"x": input_tensor})
+    pg.tree_map(lambda x: x.eval() if isinstance(x, pg.Tensor) else None, res)
 end = time.time()
 print(f"Time taken for Pequegrad: {end - start:.2f}s")
 

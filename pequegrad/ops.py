@@ -904,3 +904,11 @@ def diag_vector(vector: Tensor) -> Tensor:
     """
     I = eye(vector.shape[0], vector.shape[0], dtype=vector.dtype, device=vector.device)
     return I * vector  # will be broadcasted
+
+
+def global_avg_pool2d(self) -> Tensor:
+    """
+    Returns the global average pooling of the tensor
+    """
+    assert self.ndim == 4, "expected a 4D tensor, got {}".format(self.ndim)
+    return self.mean(dim=(2, 3))

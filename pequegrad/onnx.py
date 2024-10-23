@@ -132,6 +132,11 @@ def handle_flatten(op: onnx.NodeProto, tensor_dict: dict):
     tensor_dict[op.output[0]] = x.reshape((x.shape[0], -1))
 
 
+def handle_global_avgpool(op: onnx.NodeProto, tensor_dict: dict):
+    x = tensor_dict[op.input[0]]
+    tensor_dict[op.output[0]] = pg.global_avg_pool2d(x)
+
+
 op_dict = {
     "Gemm": handle_gemm,
     "Constant": handle_constant,
@@ -147,6 +152,7 @@ op_dict = {
     "MaxPool": handle_maxpool,
     "AveragePool": handle_avgpool,
     "Flatten": handle_flatten,
+    "GlobalAveragePool": handle_global_avgpool,
 }
 
 
