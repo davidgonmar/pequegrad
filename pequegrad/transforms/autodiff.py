@@ -7,10 +7,7 @@ from .pytree import (
     make_pytree_list,
     pytree_def_to_dict,
 )
-from .lazyfn import (
-    LazyFunction,
-    GraphTrace,
-)
+from .lazyfn import LazyFunction, GraphTrace, topo_recurse_until_reach_inputs
 import itertools
 from typing import List, Callable
 
@@ -363,3 +360,89 @@ def checkpoint(f: Callable, diff_argnums=None) -> Callable:
     prim.setvjp(grad_fn_for_setvjp)
 
     return prim
+
+
+# ===================== FORWARD AUTODIFF =====================
+
+
+def add_jvp(primals, tangents, argnums, outputs):
+    return tangents[0]
+
+
+def sub_jvp(primals, tangents, argnums, outputs):
+    return tangents[0]
+
+
+def broadcast_jvp(primals, tangents, argnums, outputs):
+    if outputs[0].shape == primals[0].shape:
+        return tangents[0]
+    else:
+        raise ValueError("Broadcasting not supported for JVP")
+
+
+def mul_jvp(primals, tangents, argnums, outputs):
+    if len(argnums) == 1:
+        return primals[1 - argnums[0]] * tangents[0]
+    else:
+        return primals[1] * tangents[0] + primals[0] * tangents[1]
+
+
+jvp_rules = {"Add": add_jvp, "Sub": sub_jvp, "Broadcast": broadcast_jvp, "Mul": mul_jvp}
+
+
+def get_jvp_graph(trace: GraphTrace):
+    # basically gets a graph and returns a new graph with the jvp only
+
+    tangents = dict()
+    for inp in trace.inputs:
+        tangents[inp.id] = Tensor.ones(inp.shape, device=inp.device)
+
+    toposorted = []  # input tensors are first
+
+    def _fn(tensor):
+        toposorted.append(tensor)
+
+    topo_recurse_until_reach_inputs(trace.outputs[0], _fn, trace.inputs)
+
+    for tensor in toposorted:  # input tensors are first, until outputs
+        if tensor.id in tangents:
+            continue
+        if tensor.ad_context() in jvp_rules:
+            primals = tensor.children()
+            _tangents = []
+            _argnums = []
+            for idx, p in enumerate(primals):
+                assert p.id in tangents, f"Primal {p.id} not in tangents: {tangents}"
+                _tangents.append(tangents[p.id])
+                _argnums.append(idx)
+            tan_ = jvp_rules[tensor.ad_context()](
+                primals, _tangents, _argnums, [tensor]
+            )
+            tangents[tensor.id] = tan_
+        else:
+            raise ValueError(f"Operation {tensor.ad_context()} not supported for JVP")
+
+    return tangents[trace.outputs[0].id]
+
+
+class jvp(LazyFunction):
+    def __init__(self, f):
+        super().__init__(f)
+
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        fn_out = trace.outputs
+        assert len(fn_out) == 1, "Only one output supported"
+        jvp = get_jvp_graph(trace)
+        new_outs = fn_out + [jvp]
+        new_outs_pytree = PyTreeDef(
+            type=tuple,
+            structure=[trace.outputs_pytree, trace.outputs_pytree],
+        )
+        ret = GraphTrace(
+            inputs=trace.inputs,
+            inputs_pytree=trace.inputs_pytree,
+            input_tensors=trace.input_tensors,
+            outputs=new_outs,
+            outputs_pytree=new_outs_pytree,
+        )
+        return ret

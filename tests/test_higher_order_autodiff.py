@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import torch
-from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device, checkpoint
+from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device, checkpoint, jvp
 
 
 def function1(a, b):
@@ -79,3 +79,21 @@ def test_checkpoint(tensors, func):
             checkpointed_grads[i].numpy(), grads[i].numpy(), rtol=1e-5
         )
     np.testing.assert_allclose(res.numpy(), checkpointed_res.numpy(), rtol=1e-5)
+
+
+def test_jvp():
+    a = Tensor(5)
+    b = Tensor(2)
+
+    def f(x, y):
+        return x * y
+
+    res, _jvp = jvp(f)(a, b)
+
+    # df/dx = y = 2
+    # df/dy = x = 5
+
+    # jvp = df/dx * 1 + df/dy * 1 = 2 + 5 = 7
+    # res = f(a, b) = 5 * 2 = 10
+    assert _jvp.numpy() == 7
+    assert res.numpy() == 10
