@@ -85,6 +85,53 @@ def handle_elementwise(op: onnx.NodeProto, tensor_dict: dict, fn):
     tensor_dict[op.output[0]] = fn(x, y)
 
 
+# used for things like strides, pads, etc.
+def _parse_int_seq(attr: str, op: onnx.NodeProto):
+    return tuple(att for att in op.attribute if att.name == attr)[0].ints
+
+
+def _parse_int(attr: str, op: onnx.NodeProto):
+    return tuple(att for att in op.attribute if att.name == attr)[0].i
+
+
+def handle_conv(op: onnx.NodeProto, tensor_dict: dict):
+    x, w, b = op.input if len(op.input) == 3 else list(op.input) + [None]
+    x, w, b = (
+        tensor_dict[x],
+        tensor_dict[w],
+        (tensor_dict[b] if b is not None else None),
+    )
+    strides = _parse_int_seq("strides", op)
+    pads = _parse_int_seq("pads", op)
+    dilations = _parse_int_seq("dilations", op)
+    groups = _parse_int("group", op)
+    assert pads[:2] == pads[2:], str(pads)
+    pads = pads[:2]
+    out = pg.conv2d(x, w, b, strides, dilations, pads, groups)
+    tensor_dict[op.output[0]] = out
+
+
+def handle_maxpool(op: onnx.NodeProto, tensor_dict: dict):
+    x = tensor_dict[op.input[0]]
+    kernel_shape = _parse_int_seq("kernel_shape", op)
+    strides = _parse_int_seq("strides", op)
+    out = pg.max_pool2d(x, kernel_shape, strides)
+    tensor_dict[op.output[0]] = out
+
+
+def handle_avgpool(op: onnx.NodeProto, tensor_dict: dict):
+    x = tensor_dict[op.input[0]]
+    kernel_shape = _parse_int_seq("kernel_shape", op)
+    strides = _parse_int_seq("strides", op)
+    out = pg.avg_pool2d(x, kernel_shape, strides)
+    tensor_dict[op.output[0]] = out
+
+
+def handle_flatten(op: onnx.NodeProto, tensor_dict: dict):
+    x = tensor_dict[op.input[0]]
+    tensor_dict[op.output[0]] = x.reshape((x.shape[0], -1))
+
+
 op_dict = {
     "Gemm": handle_gemm,
     "Constant": handle_constant,
@@ -96,6 +143,10 @@ op_dict = {
         op, tensor_dict, lambda x, y: x + y
     ),
     "Max": lambda op, tensor_dict: handle_elementwise(op, tensor_dict, pg.max),
+    "Conv": handle_conv,
+    "MaxPool": handle_maxpool,
+    "AveragePool": handle_avgpool,
+    "Flatten": handle_flatten,
 }
 
 
@@ -107,6 +158,14 @@ class OnnxModel(pg.StatefulModule):
             self.param_dict[tensor.name] = pg.Tensor(
                 onnx.numpy_helper.to_array(tensor)
             ).reshape(tensor.dims)
+
+    def get_input_shapes(self):
+        return {
+            input_tensor.name: tuple(
+                d.dim_value for d in input_tensor.type.tensor_type.shape.dim
+            )
+            for input_tensor in self.graph.input
+        }
 
     @staticmethod
     def _run_onnx_graph(graph: onnx.GraphProto, inputs: dict, preloadeds: dict):

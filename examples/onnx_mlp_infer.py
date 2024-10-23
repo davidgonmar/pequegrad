@@ -29,5 +29,4 @@ def apply(params, inputs):
 
 outputs = apply(model_new.tree_flatten(), inputs)
 
-
 print(outputs["output"].numpy().argmax() == mnist[0][1].numpy())
