@@ -200,3 +200,15 @@ def inv(A: Tensor) -> Tensor:
     cols = [I[:, i] for i in range(n)]
     inv_cols = [solve(A, col) for col in cols]
     return cat([col.unsqueeze(1) for col in inv_cols], dim=1)
+
+
+# ======================= Cholesky Decomposition =======================
+def cholesky(A: Tensor) -> Tensor:
+    assert_rank(A, 2, "A")
+    n = A.shape[0]
+    assert n == A.shape[1], "Matrix must be square"
+    # assumes A is symmetric and positive definite
+    # lambda greek char =
+    # then, the factorization A = X @ Λ @ X^-1 = X @ Λ @ X.T = X @ (sqrt(Λ) @ sqrt(Λ)) @ X.T = (X @ sqrt(Λ)).T @ (X @ sqrt(Λ)) = C.T @ C
+    x, Λ = eig(A)
+    return x @ diag_vector(Λ**0.5)
