@@ -212,3 +212,19 @@ def cholesky(A: Tensor) -> Tensor:
     # then, the factorization A = X @ Λ @ X^-1 = X @ Λ @ X.T = X @ (sqrt(Λ) @ sqrt(Λ)) @ X.T = (X @ sqrt(Λ)).T @ (X @ sqrt(Λ)) = C.T @ C
     x, Λ = eig(A)
     return x @ diag_vector(Λ**0.5)
+
+
+# ======================= SVD =======================
+
+
+def svd(A: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    A_T_A = A.T @ A
+    A_A_T = A @ A.T
+    eigvecs_A_T_A, eigvals_A_T_A = eig(A_T_A)
+    eigvecs_A_A_T, eigvals_A_A_T = eig(A_A_T)
+
+    # singular values are the square roots of the eigenvalues of A_T_A
+    singular_values = eigvals_A_T_A**0.5  # = eigvals_A_A_T**0.5
+    U = eigvecs_A_A_T
+    V = eigvecs_A_T_A
+    return U, diag_vector(singular_values), V.T
