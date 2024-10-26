@@ -112,7 +112,8 @@ def gram_schmidt(vectors: Tuple[Tensor, ...]):
         v_orig = v
         for o in others:
             v = v - project(v_orig, o)
-        res = res.at[:, i].set(v / (v @ v) ** 0.5)
+        norm = (v @ v) ** 0.5
+        res = res.at[:, i].set(v / norm)
         others.append(v)
     return res
 
@@ -120,13 +121,44 @@ def gram_schmidt(vectors: Tuple[Tensor, ...]):
 # ======================= QR factorization =======================
 
 
-def qr_factorization(A: Tensor):
-    m = A.shape[0]
-    assert A.shape[1] == m, "QR factorization only implemented for square matrices"
-    Q = gram_schmidt([A[:, i] for i in range(m)])
-    mask = triu(Tensor.ones((m, m), dtype=A.dtype, device=A.device), diagonal=0)
-    R = (Q.T @ A) * mask
+# householder qr factorization
+def qr_factorization_householder(A: Tensor):
+    # adapted from https://www.cs.cornell.edu/~bindel/class/cs6210-f09/lec18.pdf
+    assert A.ndim == 2
+    m, n = A.shape
+    Q = eye(m, m, A.dtype, A.device)
+    R = A
+    minus1 = fill(tuple(), A.dtype, -1, A.device)
+    one = fill(tuple(), A.dtype, 1, A.device)
+    for i in range(n):
+        normx = ops.norm(R[i:, i])
+        s = ops.where(R[i, i] > 0, minus1, one)
+        u1 = R[i, i] - s * normx
+        w = R[i:, i] / u1
+        w = assign_at(w, fill(tuple(), A.dtype, 1, A.device), 0)
+        tau = -s * u1 / normx
+        R = R.at[i:, :].set(
+            R[i:, :] - (tau * w).unsqueeze(0).T @ (w.unsqueeze(0) @ R[i:, :])
+        )
+        Q = Q.at[:, i:].set(Q[:, i:] - (Q[:, i:] @ w.unsqueeze(1)) * tau * w)
     return Q, R
+
+
+def qr_factorization_graham_schmidt(A: Tensor):
+    assert A.ndim == 2
+    m, n = A.shape
+    Q = gram_schmidt([A[:, i] for i in range(n)])
+    R = Q.T @ A
+    return Q, R
+
+
+def qr_factorization(A: Tensor, method="graham_schmidt"):
+    if method == "householder":
+        return qr_factorization_householder(A)
+    elif method == "graham_schmidt":
+        return qr_factorization_graham_schmidt(A)
+    else:
+        raise ValueError("Invalid method")
 
 
 # ======================= Determinant =======================
@@ -242,6 +274,7 @@ def svd(A):
                 dim=1,
             )
         )
+        # U will have 0s on the right, so we use QR to return an orthonormal matrix
         return U, S, V.T
     elif m < n:
         # we decompose A.T instead of A, then transpose the results
@@ -267,6 +300,7 @@ def svd(A):
             )
         )
         # A.T = U @ S @ V.T -> A = V @ S.T @ U.T
+        # U will have 0s on the right, so we use QR to return an orthonormal matrix
         return V, S.T, U.T
     else:
         # A is square

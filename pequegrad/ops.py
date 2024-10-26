@@ -478,6 +478,8 @@ def avg_pool2d(
 
 
 def transpose(self, dim0, dim1):
+    if self.dim == 1:
+        return self
     axes = list(range(self.dim))
     axes[dim0], axes[dim1] = axes[dim1], axes[dim0]
     return permute(self, axes)
