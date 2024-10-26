@@ -12,6 +12,7 @@ from pequegrad.ops import (
 )
 from typing import Tuple
 import functools
+import pequegrad.ops as ops
 
 
 def assert_rank(a: Tensor, rank: int, name: str):
@@ -217,14 +218,63 @@ def cholesky(A: Tensor) -> Tensor:
 # ======================= SVD =======================
 
 
-def svd(A: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-    A_T_A = A.T @ A
-    A_A_T = A @ A.T
-    eigvecs_A_T_A, eigvals_A_T_A = eig(A_T_A)
-    eigvecs_A_A_T, eigvals_A_A_T = eig(A_A_T)
+def svd(A):
+    # A is (m, n)
+    m, n = A.shape
 
-    # singular values are the square roots of the eigenvalues of A_T_A
-    singular_values = eigvals_A_T_A**0.5  # = eigvals_A_A_T**0.5
-    U = eigvecs_A_A_T
-    V = eigvecs_A_T_A
-    return U, diag_vector(singular_values), V.T
+    if m > n:
+        ATA = A.T @ A  # (n, n)
+        V, eigvals_v = eig(ATA, n_iter=100)  # (n, n), (n,)
+        singular_values = ops.where(
+            eigvals_v > 1e-4, eigvals_v**0.5, fill((n,), A.dtype, 0, A.device)
+        )  # (n,)
+        S = diag_vector(singular_values)  # (n, n)
+        # m > n, so we pad the singular values with zeros on the bottom
+        S = cat([S, fill((m - n, n), A.dtype, 0, A.device)], dim=0)
+        U = (
+            A
+            @ V
+            @ cat(
+                [
+                    diag_vector(1 / singular_values),
+                    fill((n, m - n), A.dtype, 0, A.device),
+                ],
+                dim=1,
+            )
+        )
+        return U, S, V.T
+    elif m < n:
+        # we decompose A.T instead of A, then transpose the results
+        A = A.T
+        m, n = A.shape
+        ATA = A.T @ A  # (n, n)
+        V, eigvals_v = eig(ATA, n_iter=100)  # (n, n), (n,)
+        singular_values = ops.where(
+            eigvals_v > 0, eigvals_v**0.5, fill((n,), A.dtype, 0, A.device)
+        )  # (n,)
+        S = diag_vector(singular_values)  # (n, n)
+        # m > n, so we pad the singular values with zeros on the bottom
+        S = cat([S, fill((m - n, n), A.dtype, 0, A.device)], dim=0)
+        U = (
+            A
+            @ V
+            @ cat(
+                [
+                    diag_vector(1 / singular_values),
+                    fill((n, m - n), A.dtype, 0, A.device),
+                ],
+                dim=1,
+            )
+        )
+        # A.T = U @ S @ V.T -> A = V @ S.T @ U.T
+        return V, S.T, U.T
+    else:
+        # A is square
+        ATA = A.T @ A
+        V, eigvals_v = eig(ATA, n_iter=100)
+        singular_values = ops.where(
+            eigvals_v > 0, eigvals_v**0.5, fill((n,), A.dtype, 0, A.device)
+        )
+        S = diag_vector(singular_values)
+        U = A @ V @ diag_vector(1 / singular_values)
+        return U, S, V.T

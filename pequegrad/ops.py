@@ -161,7 +161,7 @@ def mse_loss(self, target: "Tensor") -> "Tensor":
 
 
 pg.abs = lambda x: (x**2) ** 0.5  # TODO -- I am lazy
-
+_abs = pg.abs
 where = lambda condition, x, y: pg.where(condition, x, y)
 
 
@@ -902,7 +902,7 @@ def diag_vector(vector: Tensor) -> Tensor:
     """
     Returns a 2D tensor with the vector as the diagonal
     """
-    I = eye(vector.shape[0], vector.shape[0], dtype=vector.dtype, device=vector.device)
+    I = eye(vector.shape[0], vector.shape[0], vector.dtype, vector.device)
     return I * vector  # will be broadcasted
 
 
