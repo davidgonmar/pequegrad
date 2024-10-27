@@ -144,6 +144,35 @@ def qr_factorization_householder(A: Tensor):
     return Q, R
 
 
+def qr_factorization_householder2(A: Tensor):
+    def sgn(x):
+        return ops.where(
+            x > 0,
+            fill(tuple(), x.dtype, 1, x.device),
+            fill(tuple(), x.dtype, -1, x.device),
+        )
+
+    def householder_reflection(x):
+        norm_x = ops.norm(x)
+        if norm_x == 0:
+            return eye(len(x), len(x), x.dtype, x.device)
+        u = x.at[0].set(x[0] + sgn(x[0]) * norm_x)
+        u = u / ops.norm(u)
+        H = ops.eye(len(x), len(x), x.dtype, x.device) - 2 * ops.outer_prod(u, u)
+        return H
+
+    assert A.ndim == 2
+    m, n = A.shape
+    Q = eye(m, m, A.dtype, A.device)  # Initialize Q as an identity matrix
+    R = A
+    for k in range(n):
+        x = R[k:m, k]
+        H_k = householder_reflection(x)
+        R = R.at[k:m, :].set(H_k @ R[k:m, :])
+        Q = Q.at[:, k:m].set(Q[:, k:m] @ H_k.T)
+    return Q, R
+
+
 def qr_factorization_graham_schmidt(A: Tensor):
     assert A.ndim == 2
     m, n = A.shape
@@ -154,9 +183,11 @@ def qr_factorization_graham_schmidt(A: Tensor):
 
 def qr_factorization(A: Tensor, method="graham_schmidt"):
     if method == "householder":
-        return qr_factorization_householder(A)
+        return qr_factorization_householder2(A)
     elif method == "graham_schmidt":
         return qr_factorization_graham_schmidt(A)
+    elif method == "householder2":
+        return qr_factorization_householder2(A)
     else:
         raise ValueError("Invalid method")
 
