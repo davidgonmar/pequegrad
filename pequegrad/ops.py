@@ -914,3 +914,15 @@ def global_avg_pool2d(self) -> Tensor:
     """
     assert self.ndim == 4, "expected a 4D tensor, got {}".format(self.ndim)
     return self.mean(dim=(2, 3))
+
+
+def covariance_matrix(self) -> Tensor:
+    """
+    Returns the covariance matrix of the tensor
+    Data should be in the form of a matrix or N-D tensor of the form (b1, ..., bN, samples, features)
+    If rowvar is True, then each row is a variable, with observations in the columns.
+    If rowvar is False, then each column is a variable, with observations in the rows.
+    Any extra dimensions on the left are treated as batch dimensions.
+    """
+    demeaned = self - self.mean(dim=-2, keepdim=True)
+    return (demeaned @ demeaned.transpose(-2, -1)) / (self.shape[-2] - 1)

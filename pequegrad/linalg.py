@@ -229,11 +229,11 @@ def matrix_power(A: Tensor, n: int, method="eigen") -> Tensor:
 
 
 # use qr algorithm to find eigenvalues
-def eig(A: Tensor, n_iter: int = 100) -> Tensor:
+def eig(A: Tensor, n_iter: int = 100, qr_method="graham_smidtch") -> Tensor:
     assert_rank(A, 2, "A")
     eigvecs = eye(A.shape[0], A.shape[0], A.dtype, A.device)
     for _ in range(n_iter):
-        Q, R = qr_factorization(A)
+        Q, R = qr_factorization(A, method=qr_method)
         A = R @ Q
         eigvecs = eigvecs @ Q
     eigvals = [A[i, i] for i in range(A.shape[0])]
