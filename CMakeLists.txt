@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.17)
 project(pequegrad LANGUAGES CXX)
 
+include_directories(external/cutlass/include)
+include_directories(external/cudnn-frontend/include)
+
 # Find the desired Python version
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 include_directories(${Python_INCLUDE_DIRS})
@@ -10,6 +13,7 @@ execute_process(COMMAND python -m pybind11 --cmakedir
   RESULT_VARIABLE __pybind_exit_code
   OUTPUT_VARIABLE __pybind_path
   OUTPUT_STRIP_TRAILING_WHITESPACE)
+
 find_package(pybind11 PATHS ${__pybind_path})
 include_directories(csrc)
 
@@ -48,8 +52,7 @@ find_package(CUDAToolkit REQUIRED)
 
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 # cutlass
-include_directories(external/cutlass/include)
-include_directories(external/cudnn-frontend/include)
+
 file(GLOB PG_SOURCES
         csrc/dtype.cpp
         csrc/shape.cpp

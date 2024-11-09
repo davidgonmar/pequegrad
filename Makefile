@@ -5,7 +5,9 @@ C_SOURCES = $(wildcard csrc/*.cu csrc/*.cpp csrc/*.c csrc/*.h csrc/*.cuh csrc/*.
 
 format:
 	clang-format -i $(C_SOURCES)
-	black .
+	black ./pequegrad
+	black ./examples
+	black ./tests
 
 
 lint:
