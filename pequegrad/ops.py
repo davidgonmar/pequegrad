@@ -754,9 +754,11 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
         dim, [t.shape for t in tensors]
     )
 
-    new_shape = list(tensors[0].shape)
+    new_shape = list(tensors[0].shape) if tensors[0].ndim > 0 else [0]
 
     def _sum_dim(tensors, dim):
+        if tensors[0].ndim == 0:
+            return len(tensors)
         res = 0
         for t in tensors:
             res += t.shape[dim]
@@ -770,13 +772,12 @@ def cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
         0,
         tensors[0].device,
     )
-
     start = 0
     for t in tensors:
-        slices = [slice(None) for _ in range(t.dim)]
-        slices[dim] = slice(start, start + t.shape[dim])
+        slices = [slice(None) for _ in range(_max(t.dim, 1))]
+        slices[dim] = slice(start, start + t.shape[dim] if t.ndim > 0 else 1)
         out = pg.assign_at(out, t, tuple(slices))
-        start += t.shape[dim]
+        start += t.shape[dim] if t.ndim > 0 else 1
 
     return out
 
@@ -849,6 +850,7 @@ Tensor.__matmul__ = matmul_with_reshapes"""
 
 sum = pg.sum
 log = pg.log
+_max = max
 max = pg.max
 exp = pg.exp
 gt = pg.gt
