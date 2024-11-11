@@ -344,6 +344,24 @@ public:
   DEFINE_PRECOMPUTE
 };
 
+class Sin : public UnaryPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Sin)
+  DEFINE_PRECOMPUTE
+};
+
+class Cos : public UnaryPrimitive {
+public:
+  DEFINE_DISPATCH_CPU
+  DEFINE_DISPATCH_CUDA
+  DEFINE_BACKWARD
+  DEFINE_STR_NAME(Cos)
+  DEFINE_PRECOMPUTE
+};
+
 class BinaryPrimitive : public ADPrimitive {};
 
 class Add : public BinaryPrimitive {

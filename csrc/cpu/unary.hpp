@@ -56,5 +56,9 @@ UNARY_OP_FLOAT(vec_exp, _mm256_exp_ps, expf)
 UNARY_OP_FLOAT(vec_log, _mm256_log_ps, logf)
 UNARY_OP_DOUBLE(vec_exp, _mm256_exp_pd, exp)
 UNARY_OP_DOUBLE(vec_log, _mm256_log_pd, log)
+UNARY_OP_FLOAT(vec_sin, _mm256_sin_ps, sinf)
+UNARY_OP_DOUBLE(vec_sin, _mm256_sin_pd, sin)
+UNARY_OP_FLOAT(vec_cos, _mm256_cos_ps, cosf)
+UNARY_OP_DOUBLE(vec_cos, _mm256_cos_pd, cos)
 } // namespace cpu
 } // namespace pg

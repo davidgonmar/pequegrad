@@ -145,6 +145,9 @@ class TestNew:
         "lambdaop",
         [
             (lambda x: pg.log(x), lambda x: torch.log(x), True),
+            (lambda x: pg.exp(x), lambda x: torch.exp(x), True),
+            (lambda x: pg.sin(x), lambda x: torch.sin(x), True),
+            (lambda x: pg.cos(x), lambda x: torch.cos(x), True),
         ],
     )
     def test_unary_ops(self, shape, dtype, lambdaop, device):

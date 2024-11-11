@@ -198,10 +198,30 @@ std::vector<View> Exp::precompute(const std::vector<Tensor> &inputs) {
   return {ViewOptions().like_natural(inputs[0]).build()};
 }
 
+std::vector<View> Sin::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
+}
+
+std::vector<View> Cos::precompute(const std::vector<Tensor> &inputs) {
+  return {ViewOptions().like_natural(inputs[0]).build()};
+}
+
 std::vector<Tensor> Exp::backward(const std::vector<Tensor> &primals,
                                   const std::vector<Tensor> &tangents,
                                   const std::vector<Tensor> &outputs) {
   return {mul(tangents[0], exp(primals[0]))};
+}
+
+std::vector<Tensor> Sin::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  return {mul(tangents[0], cos(primals[0]))};
+}
+
+std::vector<Tensor> Cos::backward(const std::vector<Tensor> &primals,
+                                  const std::vector<Tensor> &tangents,
+                                  const std::vector<Tensor> &outputs) {
+  return {mul(tangents[0], neg(sin(primals[0])))};
 }
 
 std::vector<View> BroadcastTo::precompute(const std::vector<Tensor> &inputs) {

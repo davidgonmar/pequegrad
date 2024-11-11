@@ -66,10 +66,23 @@ __global__ void log_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(float));
 __global__ void log_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(double));
 __global__ void log_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(int));
 
+// sin and cos
+__global__ void sin_kernel(KERNEL_PARAMS_UNARY(float));
+__global__ void sin_kernel(KERNEL_PARAMS_UNARY(double));
+__global__ void cos_kernel(KERNEL_PARAMS_UNARY(float));
+__global__ void cos_kernel(KERNEL_PARAMS_UNARY(double));
+
+__global__ void sin_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(float));
+__global__ void sin_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(double));
+__global__ void cos_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(float));
+__global__ void cos_kernel_dense(KERNEL_PARAMS_UNARY_DENSE(double));
+
 enum class UnaryKernelType {
   COPY,
   EXP,
   LOG,
+  SIN,
+  COS,
 };
 
 template <typename T>

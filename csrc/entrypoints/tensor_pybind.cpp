@@ -79,6 +79,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("get_available_devices", &device::get_available_devices);
   m.def("log", &pg::log);
   m.def("exp", &pg::exp);
+  m.def("cos", &pg::cos);
+  m.def("sin", &pg::sin);
   m.def("im2col", &pg::im2col, py::arg("a"), py::arg("kernel_shape"),
         py::arg("stride") = std::vector<int>{1, 1},
         py::arg("padding") = std::vector<int>{0, 0},

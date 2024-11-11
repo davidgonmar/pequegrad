@@ -469,4 +469,13 @@ Tensor one_hot(const Tensor &a, int num_classes) {
 Tensor to_device(const Tensor &a, std::shared_ptr<device::Device> device_to) {
   return Tensor::from_primitive_one(std::make_shared<ToDevice>(device_to), {a});
 }
+
+Tensor sin(const Tensor &a) {
+  return Tensor::from_primitive_one(std::make_shared<Sin>(), {a});
+}
+
+Tensor cos(const Tensor &a) {
+  return Tensor::from_primitive_one(std::make_shared<Cos>(), {a});
+}
+
 } // namespace pg

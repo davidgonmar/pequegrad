@@ -78,6 +78,76 @@ void Exp::dispatch_cuda(const std::vector<Tensor> &inputs,
   }
 }
 
+void Sin::dispatch_cuda(const std::vector<Tensor> &inputs,
+                        std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &a = inputs[0];
+  if (!a.is_dense()) {
+    outputs[0].init_view(
+        std::make_shared<View>(a.shape(), a.dtype(), device::from_str("cuda")));
+    dim3 blocksize(DEFAULT_BLOCK_SIZE);
+    dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
+    auto d_strides_a =
+        cuda_unique_ptr_from_host<stride_t>(a.ndim(), a.strides().data());
+    auto d_shape = cuda_unique_ptr_from_host(a.ndim(), a.shape().data());
+    size_t smem_size = sizeof(stride_t) * a.ndim() + sizeof(size_t) * a.ndim();
+    PG_DISPATCH_FLOATING_TYPES(a.dtype(), "sin_cuda", [&]() {
+      cuda::sin_kernel<<<gridsize, blocksize, smem_size>>>(
+          d_strides_a.get(), d_shape.get(), a.ndim(),
+          a.get_casted_base_ptr<scalar_t>(),
+          outputs[0].get_casted_base_ptr<scalar_t>());
+    });
+    PG_CUDA_KERNEL_END;
+  } else {
+    outputs[0].init_view(std::make_shared<View>(
+        a.shape(), a.strides(), a.dtype(), device::from_str("cuda")));
+    dim3 blocksize(DEFAULT_BLOCK_SIZE);
+    dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
+    PG_DISPATCH_FLOATING_TYPES(a.dtype(), "sin_cuda", [&]() {
+      cuda::sin_kernel_dense<<<gridsize, blocksize>>>(
+          a.numel(), a.get_casted_base_ptr<scalar_t>(),
+          outputs[0].get_casted_base_ptr<scalar_t>());
+    });
+    PG_CUDA_KERNEL_END;
+  }
+}
+
+void Cos::dispatch_cuda(const std::vector<Tensor> &inputs,
+                        std::vector<Tensor> &outputs) {
+  CHECK_INPUTS_LENGTH(inputs, 1);
+  CHECK_OUTPUTS_LENGTH(outputs, 1);
+  const Tensor &a = inputs[0];
+  if (!a.is_dense()) {
+    outputs[0].init_view(
+        std::make_shared<View>(a.shape(), a.dtype(), device::from_str("cuda")));
+    dim3 blocksize(DEFAULT_BLOCK_SIZE);
+    dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
+    auto d_strides_a =
+        cuda_unique_ptr_from_host<stride_t>(a.ndim(), a.strides().data());
+    auto d_shape = cuda_unique_ptr_from_host(a.ndim(), a.shape().data());
+    size_t smem_size = sizeof(stride_t) * a.ndim() + sizeof(size_t) * a.ndim();
+    PG_DISPATCH_FLOATING_TYPES(a.dtype(), "cos_cuda", [&]() {
+      cuda::cos_kernel<<<gridsize, blocksize, smem_size>>>(
+          d_strides_a.get(), d_shape.get(), a.ndim(),
+          a.get_casted_base_ptr<scalar_t>(),
+          outputs[0].get_casted_base_ptr<scalar_t>());
+    });
+    PG_CUDA_KERNEL_END;
+  } else {
+    outputs[0].init_view(std::make_shared<View>(
+        a.shape(), a.strides(), a.dtype(), device::from_str("cuda")));
+    dim3 blocksize(DEFAULT_BLOCK_SIZE);
+    dim3 gridsize((a.numel() + blocksize.x - 1) / blocksize.x);
+    PG_DISPATCH_FLOATING_TYPES(a.dtype(), "cos_cuda", [&]() {
+      cuda::cos_kernel_dense<<<gridsize, blocksize>>>(
+          a.numel(), a.get_casted_base_ptr<scalar_t>(),
+          outputs[0].get_casted_base_ptr<scalar_t>());
+    });
+    PG_CUDA_KERNEL_END;
+  }
+}
+
 namespace cuda {
 DEF_UNARY_OP_KERNEL(copy_kernel, x, float)
 DEF_UNARY_OP_KERNEL(copy_kernel, x, double)
@@ -95,5 +165,16 @@ DEF_UNARY_OP_KERNEL_DENSE(exp_kernel_dense, exp((float)x), int)
 DEF_UNARY_OP_KERNEL_DENSE(log_kernel_dense, log((float)x), float)
 DEF_UNARY_OP_KERNEL_DENSE(log_kernel_dense, log((double)x), double)
 DEF_UNARY_OP_KERNEL_DENSE(log_kernel_dense, log((float)x), int)
+
+// trig
+DEF_UNARY_OP_KERNEL(sin_kernel, sin((float)x), float)
+DEF_UNARY_OP_KERNEL(sin_kernel, sin((double)x), double)
+DEF_UNARY_OP_KERNEL(cos_kernel, cos((float)x), float)
+DEF_UNARY_OP_KERNEL(cos_kernel, cos((double)x), double)
+DEF_UNARY_OP_KERNEL_DENSE(sin_kernel_dense, sin((float)x), float)
+DEF_UNARY_OP_KERNEL_DENSE(sin_kernel_dense, sin((double)x), double)
+DEF_UNARY_OP_KERNEL_DENSE(cos_kernel_dense, cos((float)x), float)
+DEF_UNARY_OP_KERNEL_DENSE(cos_kernel_dense, cos((double)x), double)
+
 } // namespace cuda
 } // namespace pg

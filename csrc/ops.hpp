@@ -62,6 +62,8 @@ Tensor matmul(const Tensor &a, const Tensor &b);
 Tensor where(const Tensor &condition, const Tensor &a, const Tensor &b);
 DECLARE_BINARY_OP(max)
 Tensor exp(const Tensor &a);
+Tensor sin(const Tensor &a);
+Tensor cos(const Tensor &a);
 
 Tensor im2col(const Tensor &a, const shape_t &kernel_shape,
               const shape_t &stride, const shape_t &padding,

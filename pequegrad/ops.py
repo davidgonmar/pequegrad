@@ -926,3 +926,8 @@ def covariance_matrix(self) -> Tensor:
     """
     demeaned = self - self.mean(dim=-2, keepdim=True)
     return (demeaned @ demeaned.transpose(-2, -1)) / (self.shape[-2] - 1)
+
+
+cos = pg.cos
+
+sin = pg.sin
