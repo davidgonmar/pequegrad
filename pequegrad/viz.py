@@ -1,9 +1,11 @@
 import networkx as nx
 from pyvis.network import Network
+from pequegrad.tensor import Tensor
 
 
 def viz(tensor_or_tensors, viz=True, name="graph"):
     G = nx.DiGraph()
+    tensor_or_tensors = [t for t in tensor_or_tensors if isinstance(t, Tensor)]
 
     def add_node(tensor):
         if tensor not in seen:

@@ -191,15 +191,18 @@ class LazyFunction:
         self.cache[cache_key] = transformed_trace
         return self._get_maybe_cached_transformed_trace(args)
 
-    def post_process_outs(self, outs):
+    def post_process_outs(self, outs, args, input_tensors):
         return outs
 
     def __call__(self, *args):
+        orig_args = args
         trace = self._get_maybe_cached_transformed_trace(args)
         args, _ = tree_flatten(args)
         args = [x for x in args if isinstance(x, Tensor)]
         bridge_args_to_lazy_fn(trace.input_tensors, args)
-        trace.outputs = self.post_process_outs(trace.outputs)
+        trace.outputs = self.post_process_outs(
+            trace.outputs, orig_args, trace.input_tensors
+        )
         ret = tree_unflatten(trace.outputs_pytree, trace.outputs)
         return ret
 
@@ -254,11 +257,37 @@ def topo_recurse_until_reach_inputs(x, fn, inputs, do_for_input=True):
             fn(x)
             visited.add(x.id)
 
-    if isinstance(x, list):
+    if isinstance(x, (list, tuple)):
         for xx in x:
             recurse(xx)
     else:
         recurse(x)
+
+
+import random
+
+
+def get_random_possible_toposorts(x, inputs):
+    visited = set()
+    toposorted_tensors = []
+    inputs = [input.id for input in inputs]
+
+    def recurse(x):
+        if x.id in inputs:
+            toposorted_tensors.append(x)
+            return
+        if x.id not in visited:
+            for child in random.sample(x.children(), len(x.children())):
+                recurse(child)
+            toposorted_tensors.append(x)
+            visited.add(x.id)
+
+    if isinstance(x, (list, tuple)):
+        for xx in x:
+            recurse(xx)
+    else:
+        recurse(x)
+    return toposorted_tensors
 
 
 def get_consumers(xs):

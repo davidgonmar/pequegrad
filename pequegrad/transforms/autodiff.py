@@ -62,7 +62,7 @@ def flatten_argnums(inputs_pytree: PyTreeDef, argnums: List[int]) -> List[int]:
     flat, _ = tree_flatten(pytree_def_to_dict(inputs_pytree.structure[argnum]))
     rest = pytree_def_to_dict(inputs_pytree.structure[:argnum])
     if len(rest) > 0:
-        flattened_start_index = len(tree_flatten(rest[0])[0])
+        flattened_start_index = len(tree_flatten(rest)[0])
     else:
         flattened_start_index = 0
     flattened_indices = list(
@@ -100,7 +100,6 @@ class fngrad(LazyFunction):
             )
         else:
             new_outs_pytree = wrt_pytree
-
         return GraphTrace(
             inputs=trace.inputs,
             inputs_pytree=trace.inputs_pytree,

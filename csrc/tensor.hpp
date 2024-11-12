@@ -459,7 +459,7 @@ public:
     // the other tensor
     _view->init_view(other._view);
   }
-
+  Tensor Tensor::_eval_assume_inputs_evaled();
   void _inplace_as_copy(Tensor other);
   Tensor detach() {
     if (!is_evaled()) {

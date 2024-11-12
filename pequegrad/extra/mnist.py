@@ -5,7 +5,7 @@ import numpy as np
 from typing import Tuple
 from pequegrad.backend.c import Tensor
 
-mnist_url = "http://yann.lecun.com/exdb/mnist/"
+mnist_url = "https://ossci-datasets.s3.amazonaws.com/mnist/"
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "data")
 

@@ -282,9 +282,13 @@ class SGDState(OptimizerState):
 
         if _state_dict is None:
             if momentum != 0:
-                self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
+                self.vt = tree_map(
+                    lambda p: Tensor.zeros(p.shape).to(p.device).eval(), params
+                )
             else:
-                self.vt = tree_map(lambda p: Tensor.zeros(p.shape).to(p.device), params)
+                self.vt = tree_map(
+                    lambda p: Tensor.zeros(p.shape).to(p.device).eval(), params
+                )
         else:
             self.vt = _state_dict["vt"]
 

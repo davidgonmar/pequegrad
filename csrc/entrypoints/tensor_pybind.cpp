@@ -622,7 +622,10 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("view", [](const Tensor &t) { return t.view(); })
       .def("primitive",
            [](const Tensor &t) { return t.ad_node()->primitive(); })
-      .def("ad_node", [](const Tensor &t) { return t.ad_node(); });
+      .def("ad_node", [](const Tensor &t) { return t.ad_node(); })
+      .def("_eval_assume_inputs_evaled",
+      [](Tensor &t) { return t._eval_assume_inputs_evaled();
+      });
 
   // primitives
   py::class_<BroadcastTo, std::shared_ptr<BroadcastTo>>(m, "BroadcastTo")

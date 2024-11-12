@@ -1,6 +1,3 @@
-import functools
-
-
 def bind_method(cls, existing, new):
     setattr(cls, existing, new)
 
@@ -40,13 +37,7 @@ class FrozenDict(dict):
 
 
 def try_cache(f):
-    wrapped_f = functools.lru_cache(maxsize=None)(f)
-
     def wrapped(*args, **kwargs):
-        # if some is unhashable, return what the function returns
-        try:
-            return wrapped_f(*args, **kwargs)
-        except TypeError:
-            return f(*args, **kwargs)
+        return f(*args, **kwargs)
 
     return wrapped

@@ -1,6 +1,6 @@
 from pequegrad.backend.c import Tensor
 import numpy as np
-from typing import List, Union
+from typing import Union
 import pickle
 from pequegrad.context import pequegrad_context
 from pequegrad.utils import FrozenDict
@@ -22,20 +22,14 @@ def kaiming_init(shape):
 
 
 class StatefulModule:
-    _parameters: List[ModuleParam] = None
     _training: bool = True
-    _submodules: List["StatefulModule"] = None
 
     @property
     def backend(self):
         return self.parameters()[0].backend if len(self.parameters()) > 0 else None
 
     def _propagate_training(self):
-        if self._submodules is None:
-            self._search_parameters_and_submodules(root=True)
-        for m in self._submodules:
-            m._training = self._training
-            m._propagate_training()
+        pass
 
     def train(self):
         self._training = True
@@ -110,17 +104,12 @@ class StatefulModule:
                         submodules.append(pp)
                     elif isinstance(pp, ModuleParam):
                         params.append(pp)
-        if root:
-            self._parameters = params
-            self._submodules = submodules
 
         return params, submodules
 
     def parameters(self):
         # first call to parameters, we need to retrieve them, then they are cached
-        if not self._parameters:
-            self._search_parameters_and_submodules(root=True)
-        return self._parameters
+        return self._search_parameters_and_submodules()[0]
 
     def parameters_with_path(self):
         # Initialize the top-level dict
@@ -213,6 +202,14 @@ class StatefulModule:
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
+
+    def substitute_every_param_with_none(self):
+        # recursively set every parameter to None (replace=True)
+        from collections import defaultdict
+
+        recursive_defdict = lambda: defaultdict(recursive_defdict)
+        di = recursive_defdict()
+        self.tree_assign(di, replace=True)
 
 
 class Linear(StatefulModule):
@@ -399,4 +396,6 @@ Module = StatefulModule
 
 def apply_to_module(module: Module, params_dict: dict, *args, **kwargs):
     module.tree_assign(params_dict, replace=True)
-    return module(*args, **kwargs)
+    mod = module(*args, **kwargs)
+    # module.substitute_every_param_with_none()
+    return mod

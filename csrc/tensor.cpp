@@ -220,6 +220,57 @@ Tensor Tensor::eval(bool detach) {
   return *this;
 }
 
+#define SANITY 1
+Tensor Tensor::_eval_assume_inputs_evaled() {
+  if (is_evaled()) {
+    throw std::runtime_error("Tensor is already evaluated.");
+  }
+  auto primitive = _ad_node->primitive();
+  auto this_device = this->device();
+  std::vector<Tensor> &children = _ad_node->children();
+#ifdef SANITY
+  for (Tensor &child : children) {
+    if (!child.is_evaled()) {
+      throw std::runtime_error("Child tensor is not evaluated.");
+    }
+  }
+#endif
+
+  // outputs is just `this` tensor and the siblings (ordered by position)
+  std::vector<Tensor> outputs = this->ad_node()->siblings();
+  // check all inputs are in same device
+  for (const Tensor &input : children) {
+    // if primitive is ToDevice, then we don't need to check device
+    if (primitive->str() == "ToDevice") {
+      break;
+    }
+    PG_CHECK_RUNTIME(
+        input.device() == this_device,
+        "All inputs to a primitive must be on the same device, got ",
+        input.device()->str(), " and ", this_device->str());
+  }
+
+  outputs.insert(outputs.begin(), *this);
+  // sort by position
+  std::sort(outputs.begin(), outputs.end(),
+            [](const Tensor &a, const Tensor &b) {
+              return a.ad_node()->position() < b.ad_node()->position();
+            });
+  switch (this_device->kind()) {
+  case device::DeviceKind::CPU:
+    primitive->dispatch_cpu(children, outputs);
+    break;
+
+  case device::DeviceKind::CUDA:
+    primitive->dispatch_cuda(children, outputs);
+    break;
+  default:
+    throw std::runtime_error("Unsupported device");
+  }
+  this->detach_();
+  return *this;
+}
+
 std::vector<Tensor> grads(const std::vector<Tensor> &required_tensors,
                           const Tensor output,
                           const std::optional<Tensor> &_tangent) {

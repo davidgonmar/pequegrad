@@ -178,7 +178,7 @@ def _replace_leaves(pytree_def: PyTreeDef, leave_structure: PyTreeDef) -> PyTree
 def tree_map(f, *structs):
     """Map a function f over one or more PyTrees."""
     leaves = [tree_flatten(pytree)[0] for pytree in structs]
-    result_leaves = [f(*leaves) for leaves in zip(*leaves)]
+    result_leaves = [f(*l) for l in zip(*leaves)]
     # same as input pytree, but leaves are single_res_leave_pytree
     inp_pytree = tree_flatten(structs[0])[1]
     # single res pytree
