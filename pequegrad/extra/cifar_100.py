@@ -43,10 +43,10 @@ def get_cifar_100_dataset() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
     with open(os.path.join(cifar_100_path, "cifar-100-python", "test"), "rb") as f:
         test_data = pickle.load(f, encoding="bytes")
 
-    X_train = train_data[b"data"].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
-    y_train = np.array(train_data[b"fine_labels"])
-    X_test = test_data[b"data"].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
-    y_test = np.array(test_data[b"fine_labels"])
+    X_train = train_data[b"data"].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1).astype(np.float32)
+    y_train = np.array(train_data[b"fine_labels"]).astype(np.int32)
+    X_test = test_data[b"data"].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1).astype(np.float32)
+    y_test = np.array(test_data[b"fine_labels"]).astype(np.int32)
 
     return X_train, y_train, X_test, y_test
 

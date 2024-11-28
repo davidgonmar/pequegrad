@@ -329,7 +329,7 @@ void OneHotVector::dispatch_cuda(const std::vector<Tensor> &inputs,
   cudaMemsetAsync(output.get_casted_base_ptr<float>(), 0,
                   num_elements * num_classes * sizeof(float));
   PG_CHECK_RUNTIME(input.dtype() == DType::Int32,
-                   "Input must be of type Int32");
+                   "Input must be of type Int32, got ", dtype_to_string(input.dtype()));
   PG_CHECK_RUNTIME(output.dtype() == DType::Float32,
                    "Output must be of type Float32");
   PG_CHECK_RUNTIME(input.shape().size() == 1, "Input must be 1D");
