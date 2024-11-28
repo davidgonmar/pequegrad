@@ -2,6 +2,7 @@
 #include "shape.hpp"
 #include "tensor.hpp"
 #include <cudnn.h>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -243,6 +244,8 @@ class FromFunctions : public ADPrimitive {
                                     const std::vector<Tensor> &tangents,
                                     const std::vector<Tensor> &outputs)>
       _backward_fn;
+  std::function<std::vector<View>(const std::vector<Tensor> &inputs)>
+      _precompute;
   std::string name;
 
 public:
@@ -253,8 +256,30 @@ public:
                                         const std::vector<Tensor> &tangents,
                                         const std::vector<Tensor> &outputs)>
           backward_fn,
+      std::optional<
+          std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>>
+          precompute_fn = std::nullopt,
       std::string name = "")
-      : _forward_fn(forward_fn), _backward_fn(backward_fn), name(name) {}
+      : _forward_fn(forward_fn), _backward_fn(backward_fn), name(name) {
+    if (precompute_fn.has_value()) {
+      _precompute =
+          [this, precompute_fn](
+              const std::vector<Tensor> &inputs) -> std::vector<View> {
+        auto ret = precompute_fn.value()(inputs);
+        // return the views of the tensors
+        std::vector<View> views;
+        views.reserve(ret.size());
+        for (auto &t : ret) {
+          views.push_back(t.view());
+        }
+        return views;
+      };
+    } else {
+      _precompute = [this](const std::vector<Tensor> &inputs) {
+        return default_precompute(inputs);
+      };
+    }
+  }
 
   void dispatch_general(const std::vector<Tensor> &inputs,
                         std::vector<Tensor> &outputs) {
@@ -286,7 +311,7 @@ public:
     return _backward_fn(primals, tangents, outputs);
   }
 
-  std::vector<View> precompute(const std::vector<Tensor> &inputs) override {
+  std::vector<View> default_precompute(const std::vector<Tensor> &inputs) {
     auto outs = _forward_fn(inputs);
     std::vector<View> views;
     views.reserve(outs.size());
@@ -297,10 +322,15 @@ public:
     return views;
   }
 
+  std::vector<View> precompute(const std::vector<Tensor> &inputs) override {
+    return _precompute(inputs);
+  }
+
   std::string str() {
     return name == "" ? "FromFunctions" : "Custom<" + name + ">";
   }
 };
+
 class UnaryPrimitive : public ADPrimitive {};
 
 class FromNumpy : public ADPrimitive {

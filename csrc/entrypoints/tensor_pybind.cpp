@@ -177,7 +177,25 @@ PYBIND11_MODULE(pequegrad_c, m) {
     cuInit(0);
     return true;
   });
+  m.def("compiler_add_custom_pattern",
+        [](std::string name, py::function matcher_, py::function converter_) {
+          /*void add_to_database(
+          std::string name,
+          std::tuple<std::function<std::vector<Tensor>(Tensor)>,
+                     std::function<Tensor(std::vector<Tensor>)>> funcs) {
+          pattern_database[name] = funcs;
+          }
+          */
+          auto matcher = [matcher_](Tensor &t) {
+            return matcher_(t).cast<std::vector<Tensor>>();
+          };
 
+          auto converter = [converter_](std::vector<Tensor> &t) {
+            return converter_(t).cast<Tensor>();
+          };
+
+          add_to_database(name, {matcher, converter});
+        });
   m.def("binomial", &binomial, py::arg("p"), py::arg("shape"), py::arg("dtype"),
         py::arg("device") = device::DeviceKind::CPU);
 
@@ -286,11 +304,19 @@ PYBIND11_MODULE(pequegrad_c, m) {
         const std::vector<Tensor> &primals, const std::vector<Tensor> &tangents,
         const std::vector<Tensor> &outputs)>>
         vjpfn;
+    std::optional<
+        std::function<std::vector<Tensor>(const std::vector<Tensor> &inputs)>>
+        precomputefn;
     void set_vjpfn(py::function vjpfn) {
       this->vjpfn = [vjpfn](const std::vector<Tensor> &primals,
                             const std::vector<Tensor> &tangents,
                             const std::vector<Tensor> &outputs) {
         return vjpfn(primals, tangents, outputs).cast<std::vector<Tensor>>();
+      };
+    }
+    void set_precomputefn(py::function precomputefn) {
+      this->precomputefn = [precomputefn](const std::vector<Tensor> &inputs) {
+        return precomputefn(inputs).cast<std::vector<Tensor>>();
       };
     }
     // constructor
@@ -319,6 +345,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
   py::class_<PyCustomPrimitiveFromFn>(m, "custom_prim", py::dynamic_attr())
       .def(py::init<py::function>())
       .def("setvjp", &PyCustomPrimitiveFromFn::set_vjpfn)
+      .def("setprecompute", &PyCustomPrimitiveFromFn::set_precomputefn)
       .def("__call__", [](PyCustomPrimitiveFromFn &self, py::args args) {
         std::vector<Tensor> inputs;
         for (auto arg : args) {
@@ -326,7 +353,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
         }
         PG_CHECK_RUNTIME(self.vjpfn.has_value(),
                          "Custom primitive must have a vjp function");
-        FromFunctions prim = FromFunctions(self.basefn, self.vjpfn.value());
+        FromFunctions prim =
+            FromFunctions(self.basefn, self.vjpfn.value(), self.precomputefn);
         return Tensor::from_primitive_one(std::make_shared<FromFunctions>(prim),
                                           inputs);
       });
@@ -372,7 +400,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
              const std::vector<Tensor> &outputs) -> std::vector<Tensor> {
             throw std::runtime_error("Custom init does not support backward");
           },
-          this->name);
+          std::nullopt, this->name);
       auto x = Tensor::from_primitive_multiple(
           std::make_shared<FromFunctions>(prim), {}, device::from_str("cpu"));
       return x;

@@ -3,6 +3,8 @@
 #include "scheduler.hpp"
 #include "utils.hpp"
 
+#include <functional>
+
 namespace pg {
 namespace pm = pattern_matcher;
 static bool is_broadcast(ADPrimitive &primitive) {
@@ -1011,6 +1013,18 @@ public:
   bool fuser = true;
 };
 
+// singleton database
+std::map<std::string, std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
+                                 std::function<Tensor(std::vector<Tensor> &)>>>
+    pattern_database;
+
+void add_to_database(std::string name,
+                     std::tuple<std::function<std::vector<Tensor>(Tensor)>,
+                                std::function<Tensor(std::vector<Tensor>)>>
+                         funcs) {
+  pattern_database[name] = funcs;
+}
+
 #define COMPILER_DBG 1
 #define COMPILER_LOG(x)                                                        \
   if (COMPILER_DBG) {                                                          \
@@ -1083,6 +1097,19 @@ static void _compile(std::vector<Tensor> &outs,
       hoist_broadcasts(out, visited);
       COMPILER_LOG("hoist broadcasts");
     }
+    visited.clear();
+    // custom patterns
+    for (auto &[name, funcs] : pattern_database) {
+      auto &[matcher, converter] = funcs;
+      auto matches = matcher(out);
+      if (matches.size() > 0) {
+        auto new_tensor = converter(matches);
+        out.ad_node()->set_primitive(new_tensor.ad_node()->primitive());
+        out.ad_node()->set_children(new_tensor.ad_node()->children());
+        break;
+      }
+    }
+
     std::set<int> visited2;
     if (options.fuser) {
       rec_schedule(out, out, visited2, outs);
@@ -1093,6 +1120,21 @@ static void _compile(std::vector<Tensor> &outs,
     common_subexpr_elim(outs);
     COMPILER_LOG("common subexpr elim");
   }
+}
+
+// Additional compile passes
+
+std::vector<Tensor> maybe_match_add(Tensor &out) {
+  std::shared_ptr<Tensor> inp0 = std::make_shared<Tensor>();
+  std::shared_ptr<Tensor> inp1 = std::make_shared<Tensor>();
+
+  pm::Pattern add_pattern = pm::Add(pm::Input(inp0), pm::Input(inp1));
+  std::vector<Tensor> ret;
+  if (add_pattern->match(out)) {
+    ret.push_back(*inp0);
+    ret.push_back(*inp1);
+  }
+  return ret;
 }
 
 static void compile(std::vector<Tensor> &outs,

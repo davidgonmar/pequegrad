@@ -9,6 +9,7 @@ using namespace ir;
 using leaf_record_t = std::vector<Tensor>;
 
 constexpr bool ALLOW_REDUCE_EPILOGUE = true;
+constexpr bool HORIZONTAL_FUSION = true;
 
 static void schedule_inner(Tensor &node, leaf_record_t &leafs,
                            std::vector<Tensor> &marked_as_out,
@@ -223,6 +224,7 @@ void schedule(
   if (marked_as_out.size() == 0) {
     return;
   }
+
   // now, we have inputs and out
   Compiled compnode;
   auto [ir, ctx, inputs_to_use] = graph_to_ir(out, marked_as_out, leafs);

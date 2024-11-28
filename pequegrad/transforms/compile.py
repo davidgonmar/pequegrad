@@ -1,9 +1,8 @@
 from pequegrad.backend.c import (
     compile,
-    clone_graph,
     Tensor,
-    dt,
     sync_cuda_device,
+    compiler_add_custom_pattern as add_custom_pattern,  # noqa
 )  # noqa
 from contextvars import ContextVar
 from .lazyfn import (
@@ -14,6 +13,7 @@ from .lazyfn import (
     get_random_possible_toposorts,
     bridge_args_to_lazy_fn,
 )
+
 
 inside_jit = ContextVar("inside_jit", default=False)
 

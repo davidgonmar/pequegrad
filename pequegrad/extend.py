@@ -14,6 +14,7 @@ def custom_prim(f):
 
     p = _custom_prim(ff)
     p.vjp = lambda f: p.setvjp(f)
+    p.precompute = lambda f: p.setprecompute(f)
     return p
 
 
@@ -26,9 +27,10 @@ class Primitive:
     def backward(primals, tangents, outputs):
         raise NotImplementedError
 
-    @staticmethod
+    """@staticmethod
     def precompute(inputs):
         raise NotImplementedError
+    """
 
     @classmethod
     def str(cls):
@@ -42,7 +44,6 @@ class Primitive:
     def apply(cls, *args):
         def _fn(*inputs):
             ret = cls.dispatch(inputs)
-            print("ret", ret)
             return ret
 
         def _vjpf(primals, tangents, outputs):
@@ -50,4 +51,8 @@ class Primitive:
 
         prim = custom_prim(_fn)
         prim.setvjp(_vjpf)
+
+        if hasattr(cls, "precompute"):
+            prim.setprecompute(cls.precompute)
+
         return prim(*args)
