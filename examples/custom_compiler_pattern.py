@@ -1,48 +1,60 @@
-from pequegrad import Tensor, np, device, extend, add_custom_pattern
+from pequegrad import Tensor, np, device, extend, add_custom_pattern, make_pattern
 import pequegrad as pg
 import torch
 
 
-def numpy_add_pattern(tensor):
-    # check if prim is Add
-    if tensor.ad_context() == "Add":
-        return tensor.children()
-    return []
+def cross_entropy_loss_pattern_fn(logits, probs):
+    return pg.cross_entropy_loss_probs(logits, probs)
 
 
-def numpy_add_pattern_converter(inps):
-    class NumpyAdd(extend.Primitive):
-        @staticmethod
-        def dispatch(inputs):
-            inps = [i.numpy() for i in inputs]
-            inps = [torch.tensor(i) for i in inps]
-            return (
-                Tensor((inps[0] + inps[1]).numpy())
-                .to(inputs[0].device)
-                .astype(inputs[0].dtype)
-            )
-
-        @staticmethod
-        def precompute(inputs):
-            return [inputs[0]]
-
-    return NumpyAdd.apply(*inps)
+cross_entropy_loss_pattern = make_pattern(
+    cross_entropy_loss_pattern_fn, [(16, 16), (16, 16)]
+)
 
 
-add_custom_pattern("numpy_add", numpy_add_pattern, numpy_add_pattern_converter)
+class TorchCrossEntropy(extend.Primitive):
+    @staticmethod
+    def dispatch(inputs):
+        logits, probs = inputs
+        torcht = torch.nn.functional.cross_entropy(
+            torch.tensor(logits.numpy()), torch.tensor(probs.numpy()), reduction="mean"
+        )
+        return Tensor(torcht.numpy()).astype(pg.dt.float32).to(logits.device)
+
+    @staticmethod
+    def precompute(inputs):
+        # Returns a tensor with the shape, dtype and device of the output. Contents don't matter.
+        return [Tensor(1.0).astype(pg.dt.float32).to(inputs[0].device)]
 
 
-@pg.jit.withargs(eval_outs=False)
+def cross_entropy_loss_pattern_converter(inps):
+    return TorchCrossEntropy.apply(*inps)
+
+
+add_custom_pattern(
+    "cross_entropy_loss_torch",
+    cross_entropy_loss_pattern,
+    cross_entropy_loss_pattern_converter,
+    True,
+)
+
+
 def f(x, y):
-    return x * 2 + y * 3
+    x = (x + 2) + 3 * x
+    y = (y * y) + 2 + y
+    return pg.cross_entropy_loss_probs(x, y) * 10
 
+
+fjitted = pg.jit(f, eval_outs=False)
 
 cuda = device.cuda(0)
-shape = (16, 16)
+shape = (16,)
 x = Tensor(np.random.rand(*shape), device=cuda).astype(pg.dt.float32)
 y = Tensor(np.random.rand(*shape), device=cuda).astype(pg.dt.float32)
-res = f(x, y)
+res = fjitted(x, y)
 pg.viz(res, name="custom_compiler_pattern")
-f.print_trace()
+fjitted.print_trace()
 
 print(res.numpy())
+
+print(f(x, y).numpy())

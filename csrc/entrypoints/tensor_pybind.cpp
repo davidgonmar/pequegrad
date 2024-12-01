@@ -178,14 +178,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
     return true;
   });
   m.def("compiler_add_custom_pattern",
-        [](std::string name, py::function matcher_, py::function converter_) {
-          /*void add_to_database(
-          std::string name,
-          std::tuple<std::function<std::vector<Tensor>(Tensor)>,
-                     std::function<Tensor(std::vector<Tensor>)>> funcs) {
-          pattern_database[name] = funcs;
-          }
-          */
+        [](std::string name, py::function matcher_, py::function converter_, bool before_transforms = true) {
           auto matcher = [matcher_](Tensor &t) {
             return matcher_(t).cast<std::vector<Tensor>>();
           };
@@ -194,8 +187,9 @@ PYBIND11_MODULE(pequegrad_c, m) {
             return converter_(t).cast<Tensor>();
           };
 
-          add_to_database(name, {matcher, converter});
-        });
+          add_to_database(name, {matcher, converter}, before_transforms);
+        },
+        py::arg("name"), py::arg("matcher"), py::arg("converter"), py::arg("before_transforms") = true);
   m.def("binomial", &binomial, py::arg("p"), py::arg("shape"), py::arg("dtype"),
         py::arg("device") = device::DeviceKind::CPU);
 

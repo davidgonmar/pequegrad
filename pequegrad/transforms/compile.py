@@ -13,9 +13,55 @@ from .lazyfn import (
     get_random_possible_toposorts,
     bridge_args_to_lazy_fn,
 )
-
+from typing import Callable, Tuple
+from pequegrad.ops import fill, dt, device
 
 inside_jit = ContextVar("inside_jit", default=False)
+
+
+def make_pattern(fn: Callable, example_shapes: Tuple):
+    def match(t: Tensor):
+        fake_tensors = [
+            fill(shape, dt.float32, 0, device.cpu(0)) for shape in example_shapes
+        ]
+        fake_tensor_ids = [t.id for t in fake_tensors]
+        out = fn(*fake_tensors)
+        # we will compare the graph structure of out with t
+        matched_children = []
+        matched_children_out = []
+        appended_ids = set()
+
+        def _recursive_match(t, out):
+            if out.id in fake_tensor_ids:
+                if t.id not in appended_ids:
+                    matched_children.append(t)
+                    matched_children_out.append(out)
+                    appended_ids.add(t.id)
+                return True
+            if t.ad_context() != out.ad_context():
+                return False
+            if len(t.children()) != len(out.children()):
+                return False
+            for i, j in zip(t.children(), out.children()):
+                if not _recursive_match(i, j):
+                    return False
+            return True
+
+        matched = _recursive_match(t, out)
+        if not matched:
+            return []
+        # reorder matched_children so that it matches the order of fake_tensors
+        matched_children_ = []
+        for i in fake_tensor_ids:
+            idx = None
+            for j, k in enumerate(matched_children_out):
+                if k.id == i:
+                    idx = j
+                    break
+            matched_children_.append(matched_children[idx])
+        return matched_children_
+
+    return match
 
 
 class jit(LazyFunction):

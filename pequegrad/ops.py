@@ -3,11 +3,9 @@ from typing import Optional, Tuple, Union, List
 import pequegrad.backend.c as pg
 import math
 from pequegrad.backend.c import (
-    custom_prim as _custom_prim,
     custom_init as _custom_init,
     permute,
 )
-from pequegrad.transforms import jit
 
 Tensor = pg.Tensor
 dt = pg.dt
@@ -29,29 +27,6 @@ class DeviceModule:
 
 
 device = DeviceModule
-
-
-def custom_prim(f, compile_jit=False):
-    def ff(*args):
-        res = f(*args)
-        if isinstance(res, tuple):
-            return res
-        if isinstance(res, Tensor):
-            return (res,)
-        else:
-            raise ValueError("custom_prim must return a Tensor or a tuple of Tensors")
-
-    if compile_jit:
-        ff = jit(ff)
-
-    p = _custom_prim(ff)
-
-    if compile_jit:
-        p.vjp = lambda f: p.setvjp(jit(f))
-    else:
-        p.vjp = lambda f: p.setvjp(f)
-
-    return p
 
 
 def custom_init(f):

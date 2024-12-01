@@ -1015,16 +1015,39 @@ public:
 
 // singleton database
 std::map<std::string, std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
-                                 std::function<Tensor(std::vector<Tensor> &)>>>
+                                 std::function<Tensor(std::vector<Tensor> &)>, bool>>  // bool -> before_transforms
     pattern_database;
 
 void add_to_database(std::string name,
-                     std::tuple<std::function<std::vector<Tensor>(Tensor)>,
-                                std::function<Tensor(std::vector<Tensor>)>>
-                         funcs) {
-  pattern_database[name] = funcs;
+                     std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
+                                std::function<Tensor(std::vector<Tensor> &)>>
+                         funcs, bool before_transforms) {
+  pattern_database[name] = std::make_tuple(std::get<0>(funcs), std::get<1>(funcs), before_transforms);
 }
 
+void recursive_custom_patterns(Tensor &root, std::set<int> &visited, bool before_transforms) {
+  if (visited.find(root.id) != visited.end()) {
+    return;
+  }
+  for (auto &[name, tup] : pattern_database) {
+    if (std::get<2>(tup) != before_transforms) {
+      continue;
+    }
+    auto &matcher = std::get<0>(tup);
+    auto &converter = std::get<1>(tup);
+    auto matches = matcher(root);
+    if (matches.size() > 0) {
+      auto new_tensor = converter(matches);
+      root.ad_node()->set_primitive(new_tensor.ad_node()->primitive());
+      root.ad_node()->set_children(new_tensor.ad_node()->children());
+      break;
+    }
+  }
+  visited.insert(root.id);
+  for (Tensor &node : root.ad_node()->children()) {
+    recursive_custom_patterns(node, visited, before_transforms);
+  }
+}
 #define COMPILER_DBG 1
 #define COMPILER_LOG(x)                                                        \
   if (COMPILER_DBG) {                                                          \
@@ -1032,6 +1055,13 @@ void add_to_database(std::string name,
   }
 static void _compile(std::vector<Tensor> &outs,
                      CompileOptions options = CompileOptions()) {
+  
+  // before transforms
+  // custom patterns
+  for (Tensor &out : outs) {
+    std::set<int> visited;
+    recursive_custom_patterns(out, visited, true);
+  }
   for (Tensor &out : outs) {
     COMPILER_LOG("compiling " << out.str());
     std::set<int> visited;
@@ -1099,17 +1129,7 @@ static void _compile(std::vector<Tensor> &outs,
     }
     visited.clear();
     // custom patterns
-    for (auto &[name, funcs] : pattern_database) {
-      auto &[matcher, converter] = funcs;
-      auto matches = matcher(out);
-      if (matches.size() > 0) {
-        auto new_tensor = converter(matches);
-        out.ad_node()->set_primitive(new_tensor.ad_node()->primitive());
-        out.ad_node()->set_children(new_tensor.ad_node()->children());
-        break;
-      }
-    }
-
+    recursive_custom_patterns(out, visited, false);
     std::set<int> visited2;
     if (options.fuser) {
       rec_schedule(out, out, visited2, outs);
