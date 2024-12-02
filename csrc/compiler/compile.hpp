@@ -1011,10 +1011,7 @@ public:
   bool hoist_broadcasts = true;
   bool common_subexpr_elim = true;
   bool fuser = true;
-  std::map<std::string,
-           std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
-                      std::function<Tensor(std::vector<Tensor> &)>, bool>>
-      pattern_database; // bool -> before_transforms
+  std::vector<std::tuple<std::function<std::vector<Tensor>(Tensor &)>, std::function<Tensor(std::vector<Tensor> &)>, bool>> pattern_database; // bool -> before_transforms
 };
 
 /*// singleton database
@@ -1032,15 +1029,11 @@ std::get<1>(funcs), before_transforms);
 */
 
 void recursive_custom_patterns(
-    std::map<std::string,
-             std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
-                        std::function<Tensor(std::vector<Tensor> &)>, bool>>
-        pattern_database,
-    Tensor &root, std::set<int> &visited, bool before_transforms) {
+             std::vector<std::tuple<std::function<std::vector<Tensor>(Tensor &)>,  std::function<Tensor(std::vector<Tensor> &)>, bool>> pattern_database, Tensor &root, std::set<int> &visited, bool before_transforms) {
   if (visited.find(root.id) != visited.end()) {
     return;
   }
-  for (auto &[name, tup] : pattern_database) {
+  for (auto &tup : pattern_database) {
     if (std::get<2>(tup) != before_transforms) {
       continue;
     }
@@ -1155,10 +1148,8 @@ static void _compile(std::vector<Tensor> &outs, CompileOptions options) {
 
 static void
 compile(std::vector<Tensor> &outs, std::map<std::string, bool> options = {},
-        std::map<std::string,
-                 std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
-                            std::function<Tensor(std::vector<Tensor> &)>, bool>>
-            pattern_database = {}) {
+                 std::vector<std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
+                            std::function<Tensor(std::vector<Tensor> &)>, bool>> pattern_database = {}) {
   CompileOptions compile_options;
   compile_options.remove_useless_copy =
       options.find("remove_useless_copy") != options.end()

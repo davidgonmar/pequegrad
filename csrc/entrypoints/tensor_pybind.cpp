@@ -163,23 +163,19 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("permute", &permute);
   m.def(
       "compile",
-      [](std::vector<Tensor> &outs, std::map<std::string, bool> options,
-         std::map<std::string, std::tuple<py::function, py::function, bool>>
+      [](std::vector<Tensor> &outs, std::map<std::string, bool> options, std::vector<std::tuple<py::function, py::function, bool>>
              pattern_database) {
         // transform pattern_database to cpp map
-        std::map<std::string,
-                 std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
-                            std::function<Tensor(std::vector<Tensor> &)>, bool>>
-            cpp_pattern_database;
-        for (auto &[name, tup] : pattern_database) {
+                 std::vector<std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
+                            std::function<Tensor(std::vector<Tensor> &)>, bool>> cpp_pattern_database;
+        for (auto &tup : pattern_database) {
           auto matcher = [tup](Tensor &t) {
             return std::get<0>(tup)(t).cast<std::vector<Tensor>>();
           };
           auto converter = [tup](std::vector<Tensor> &t) {
             return std::get<1>(tup)(t).cast<Tensor>();
           };
-          cpp_pattern_database[name] =
-              std::make_tuple(matcher, converter, std::get<2>(tup));
+          cpp_pattern_database.push_back({matcher, converter, std::get<2>(tup)});
         }
         compile(outs, options, cpp_pattern_database);
       });

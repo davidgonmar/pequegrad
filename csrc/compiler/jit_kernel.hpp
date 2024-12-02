@@ -50,14 +50,18 @@ private:
   std::string _src;
 
   void compile() {
+    // put cuda_fp16 into a string
     nvrtcProgram prog;
     // extern C to avoid name mangling
-    std::string file = "extern \"C\" {\n" + _src + "\n};";
+    std::string file = "#include <cuda_fp16.h>\n";
+    // add fp16 max overloads
+    file += "__device__ half max(half a, half b) { return a > b ? a : b; }\n";
+    file += "\nextern \"C\" {\n" + _src + "\n};";
     nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
     // fast math
-    const char *opts[] = {"--use_fast_math"};
-    nvrtcResult compileResult = nvrtcCompileProgram(prog, 0, opts);
 
+    const char *opts[] = {"--use_fast_math", "-arch=sm_70", "--include-path=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1\\include"};
+    nvrtcResult compileResult = nvrtcCompileProgram(prog, 3, opts);
     // Check for compilation errors
     if (compileResult != NVRTC_SUCCESS) {
       size_t logSize;

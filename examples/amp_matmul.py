@@ -24,7 +24,7 @@ def matmul(a, b):
 _ = amp_matmul(matA, matB).eval()
 _ = matmul(matA, matB).eval()
 
-
+print("Warming up done")
 total_time_amp = 0
 total_time_regular = 0
 

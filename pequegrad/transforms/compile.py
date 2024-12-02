@@ -18,7 +18,7 @@ from pequegrad.ops import fill, dt, device
 inside_jit = ContextVar("inside_jit", default=False)
 
 
-def make_pattern_matcher(fn: Callable, example_shapes: Tuple):
+def make_pattern_matcher(fn: Callable, example_shapes: Tuple, match_inps=dict()):
     def match(t: Tensor):
         fake_tensors = [
             fill(shape, dt.float32, 0, device.cpu(0)) for shape in example_shapes
@@ -39,6 +39,12 @@ def make_pattern_matcher(fn: Callable, example_shapes: Tuple):
                 return True
             if t.ad_context() != out.ad_context():
                 return False
+            # for dtype, check dtype_to is same
+            if "AsType" in t.ad_context():
+                dtype_t = t.dtype
+                dtype_out = out.dtype
+                if dtype_t != dtype_out:
+                    return False
             if len(t.children()) != len(out.children()):
                 return False
             for i, j in zip(t.children(), out.children()):
@@ -58,6 +64,10 @@ def make_pattern_matcher(fn: Callable, example_shapes: Tuple):
                     idx = j
                     break
             matched_children_.append(matched_children[idx])
+        # additional checks
+        for i, child in enumerate(matched_children_):
+            if not match_inps.get(i, lambda _: True)(child):
+                return []
         return matched_children_
 
     return match
@@ -74,7 +84,7 @@ class jit(LazyFunction):
         assume_static_argnums=None,
         eval_outs=True,
         opts=None,
-        custom_patterns=None,
+        custom_patterns=[],
     ):
         super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
@@ -86,9 +96,7 @@ class jit(LazyFunction):
             self.toposort_optim = False
         self.eval_outs = eval_outs
         self.toposorted_indices = None
-        self.custom_patterns = {
-            pat[0]: (pat[1], pat[2], pat[3]) for pat in custom_patterns
-        }
+        self.custom_patterns = [(pat[1], pat[2], pat[3]) for pat in custom_patterns]
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph

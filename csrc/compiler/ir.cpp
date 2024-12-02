@@ -20,8 +20,12 @@ std::string get_dtype_cpp_str(DType dtype) {
     return "float";
   case DType::Int32:
     return "int";
+  case DType::Float16:
+    return "half";
+  case DType::Float64:
+    return "double";
   default:
-    throw std::runtime_error("Unsupported dtype");
+    throw std::runtime_error("Unsupported dtype in get_dtype_cpp_str");
   }
 }
 
@@ -452,8 +456,8 @@ void print_new_ir(std::shared_ptr<n::BaseExpr> expr, PrinterContext &ctx) {
       ss << std::to_string((float)val);
     } else if (ex->dtype == DType::Int32) {
       ss << std::to_string((int)val);
-    } else {
-      throw std::runtime_error("Unsupported dtype");
+    } else if (ex->dtype == DType::Float16) {
+      ss << std::to_string((float)val);
     }
     ctx.savevarexpr(expr, ss.str());
     return;
@@ -1262,7 +1266,7 @@ graph_to_ir(Tensor &out, std::vector<Tensor> marked_as_out,
 }
 
 static std::string binop_kind_to_str(BinaryOpKind op, std::string lhs,
-                                     std::string rhs) {
+                                     std::string rhs, DType dtype) {
   switch (op) {
   case BinaryOpKind::Add:
     return lhs + " + " + rhs;
@@ -1369,6 +1373,7 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
     kernel_name = "reduce_kernel";
   }
   std::string res = render_fn_header("", ir) + "\n";
+  // include fp16
   res = "__global__ void __launch_bounds__(1024, 1) " + kernel_name + "(" +
         res + ")";
   res += "{\t\n";
@@ -1385,13 +1390,13 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       auto binop = as<BinaryExpr>(expr);
       if (!binop->force_render) {
         r[expr] = "(" +
-                  binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs]) +
+                  binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs], binop->dtype) +
                   ")";
       } else {
         r[expr] = binop->name;
         res += add_indent() + get_dtype_cpp_str(binop->dtype) + " " +
                binop->name + " = " +
-               binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs]) +
+               binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs], binop->dtype) +
                ";\n";
       }
     } else if (is<UnaryExpr>(expr)) {
@@ -1423,8 +1428,11 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
                 << imm->value << "f";
           }
           return oss.str();
+        } else if (imm->dtype == DType::Float16) {
+
+          return "__float2half(" + std::to_string(imm->value) + ")";
         } else {
-          PG_CHECK_RUNTIME(false, "Unsupported dtype");
+          throw std::runtime_error("Unsupported dtype in imm");
         }
       };
 

@@ -1,60 +1,146 @@
 from pequegrad.backend.c import compile, clone_graph, Tensor, dt  # noqa
-from contextvars import ContextVar
-from .lazyfn import GraphTrace, LazyFunction, topo_recurse, get_consumers
 import pequegrad.ops as ops
+from pequegrad.transforms.compile import jit, make_pattern_matcher, make_pattern
 
-inside_jit = ContextVar("inside_jit", default=False)
-
-
-_ops_cast_to_fp16 = {"MatMul"}
-_str_to_op = {"MatMul": ops.matmul}
-
-
-def get_new_op(tensor):
-    if tensor.ad_context() in _ops_cast_to_fp16 and tensor.dtype == dt.float32:
-        tchildren = tensor.children()
-        casted = [t.astype("float16") for t in tchildren]
-
-        new_op = _str_to_op[tensor.primitive().str()]
-
-        return new_op(*casted).astype("float32")
-    return None
-
-
-def _index(tensor, collection):
-    for i, t in enumerate(collection):
-        if t.id == tensor.id:
-            return i
-    return None
+# everything false
+jit_opts_dict = {
+    "remove_useless_copy": False,
+    "remove_useless_broadcast": False,
+    "remove_useless_astype": False,
+    "recursive_fused_linear": False,
+    "recursive_conv2d": False,
+    "recursive_pooling2d": False,
+    "recursive_conv2d_vjp_weight": False,
+    "recursive_conv2d_vjp_input": False,
+    "recursive_local_response_normalization": False,
+    "recursive_lrn_vjp_input": False,
+    "recursive_max_pooling2d_backward": False,
+    "hoist_broadcasts": False,
+    "common_subexpr_elim": False,
+    "fuser": False,
+    "experimental_toposort_optim": False,
+}
 
 
-class amp(LazyFunction):
-    def __init__(self, f, opts=None):
-        super().__init__(f)
-        self.opts = opts if opts is not None else {}
+def not_f16(x):
+    return x.dtype != dt.float16
 
-    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
-        # same as autograd, but it just compiles the graph
 
-        consumers = get_consumers(trace.outputs)
+def f16(x):
+    return x.dtype == dt.float16
 
-        def recurse_fn(tensor):
-            new_t = get_new_op(tensor)
-            if new_t is not None:
-                # replace the tensor in the consumers
-                for consumer in consumers.get(tensor, []):
-                    consumer.replace_child(tensor, new_t)
-                # if it is an output, replace it in the outputs
 
-                if any(tensor.id == t.id for t in trace.outputs):
-                    trace.outputs[_index(tensor, trace.outputs)] = new_t
+def f32(x):
+    return x.dtype == dt.float32
 
-        topo_recurse(trace.outputs, recurse_fn)
-        new_trace = GraphTrace(
-            inputs=trace.inputs,
-            inputs_pytree=trace.inputs_pytree,
-            input_tensors=trace.input_tensors,
-            outputs=trace.outputs,
-            outputs_pytree=trace.outputs_pytree,
-        )
-        return new_trace
+
+# MATMUL AMP
+def matmul_pattern_matcher_fn(a, b):
+    return ops.matmul(a, b)
+
+
+def matmul_pattern_converter(inps):
+    a, b = inps
+    a, b = a.astype("float16"), b.astype("float16")
+    return ops.matmul(a, b).astype("float32")
+
+
+matmul_pattern_matcher = make_pattern_matcher(
+    matmul_pattern_matcher_fn, [(16, 16), (16, 16)], match_inps={0: not_f16, 1: not_f16}
+)
+matmul_pattern = make_pattern(
+    "matmul_amp", matmul_pattern_matcher, matmul_pattern_converter, True
+)
+
+
+# CROSS ENTROPY AMP (make sure not to use float16)
+def cross_entropy_loss_probs_pattern_fn(logits, probs):
+    return ops.cross_entropy_loss_probs(
+        logits.astype("float16"), probs.astype("float16")
+    )
+
+
+cross_entropy_loss_probs_pattern_matcher = make_pattern_matcher(
+    cross_entropy_loss_probs_pattern_fn,
+    [(16, 16), (16, 16)],
+    match_inps={0: f16, 1: f16},
+)
+
+
+def cross_entropy_loss_probs_pattern_converter(inps):
+    return ops.cross_entropy_loss_probs(inps[0], inps[1])
+
+
+cross_entropy_loss_probs_pattern = make_pattern(
+    "cross_entropy_loss_probs_amp",
+    cross_entropy_loss_probs_pattern_matcher,
+    cross_entropy_loss_probs_pattern_converter,
+    True,
+)
+
+
+# GENERAL (elimnate redundant f32->f16->f32 or vice versa)
+def astype_pattern_matcher_fn_1(x):
+    tof32 = x.astype("float32")
+    back = tof32.astype("float16")
+    return back
+
+
+def astype_pattern_matcher_fn_2(x):
+    tof16 = x.astype("float16")
+    back = tof16.astype("float32")
+    return back
+
+
+astype_pattern_matcher_1 = make_pattern_matcher(
+    astype_pattern_matcher_fn_1, [(16, 16)], match_inps={0: f16}
+)
+astype_pattern_matcher_2 = make_pattern_matcher(
+    astype_pattern_matcher_fn_2, [(16, 16)], match_inps={0: f32}
+)
+
+
+def astype_pattern_converter(inps):
+    return inps[0]
+
+
+astype_pattern_1 = make_pattern(
+    "astype_f32_f16_f32", astype_pattern_matcher_1, astype_pattern_converter, True
+)
+astype_pattern_2 = make_pattern(
+    "astype_f16_f32_f16", astype_pattern_matcher_2, astype_pattern_converter, True
+)
+
+
+def bias_relu_add_pattern_fn(xw, b):
+    return (xw + b).relu()
+
+
+bias_relu_add_pattern_matcher = make_pattern_matcher(
+    bias_relu_add_pattern_fn, [(16, 16), (16,)], match_inps={0: not_f16, 1: not_f16}
+)
+
+
+def bias_relu_add_pattern_converter(inps):
+    xw, b = inps[0].astype("float16"), inps[1].astype("float16")
+    return (xw + b).relu().astype("float32")
+
+
+bias_relu_add_pattern = make_pattern(
+    "bias_relu_add_amp",
+    bias_relu_add_pattern_matcher,
+    bias_relu_add_pattern_converter,
+    True,
+)
+
+patterns = [
+    matmul_pattern,
+    bias_relu_add_pattern,
+    cross_entropy_loss_probs_pattern,
+    astype_pattern_1,
+    astype_pattern_2,
+]
+
+
+def amp(f):
+    return jit(f, opts=jit_opts_dict, eval_outs=False, custom_patterns=patterns)
