@@ -161,24 +161,25 @@ PYBIND11_MODULE(pequegrad_c, m) {
   BIND_REDUCE_OP("mean", pg::mean);
 
   m.def("permute", &permute);
-  m.def(
-      "compile",
-      [](std::vector<Tensor> &outs, std::map<std::string, bool> options, std::vector<std::tuple<py::function, py::function, bool>>
-             pattern_database) {
-        // transform pattern_database to cpp map
-                 std::vector<std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
-                            std::function<Tensor(std::vector<Tensor> &)>, bool>> cpp_pattern_database;
-        for (auto &tup : pattern_database) {
-          auto matcher = [tup](Tensor &t) {
-            return std::get<0>(tup)(t).cast<std::vector<Tensor>>();
-          };
-          auto converter = [tup](std::vector<Tensor> &t) {
-            return std::get<1>(tup)(t).cast<Tensor>();
-          };
-          cpp_pattern_database.push_back({matcher, converter, std::get<2>(tup)});
-        }
-        compile(outs, options, cpp_pattern_database);
-      });
+  m.def("compile", [](std::vector<Tensor> &outs,
+                      std::map<std::string, bool> options,
+                      std::vector<std::tuple<py::function, py::function, bool>>
+                          pattern_database) {
+    // transform pattern_database to cpp map
+    std::vector<std::tuple<std::function<std::vector<Tensor>(Tensor &)>,
+                           std::function<Tensor(std::vector<Tensor> &)>, bool>>
+        cpp_pattern_database;
+    for (auto &tup : pattern_database) {
+      auto matcher = [tup](Tensor &t) {
+        return std::get<0>(tup)(t).cast<std::vector<Tensor>>();
+      };
+      auto converter = [tup](std::vector<Tensor> &t) {
+        return std::get<1>(tup)(t).cast<Tensor>();
+      };
+      cpp_pattern_database.push_back({matcher, converter, std::get<2>(tup)});
+    }
+    compile(outs, options, cpp_pattern_database);
+  });
   m.def("sync_cuda_device", []() { cudaDeviceSynchronize(); });
   m.def(
       "grads",

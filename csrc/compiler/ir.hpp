@@ -69,7 +69,7 @@ public:
 };
 
 using ir_arg_t = std::shared_ptr<ArgExpr>;
-enum class UnaryOpKind { Log, Exp };
+enum class UnaryOpKind { Log, Exp, AsType_F16, AsType_F32 };
 
 /*Represents unary operations like
 {

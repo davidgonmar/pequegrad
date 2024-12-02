@@ -60,7 +60,9 @@ private:
     nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
     // fast math
 
-    const char *opts[] = {"--use_fast_math", "-arch=sm_70", "--include-path=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1\\include"};
+    const char *opts[] = {"--use_fast_math", "-arch=sm_70",
+                          "--include-path=C:\\Program Files\\NVIDIA GPU "
+                          "Computing Toolkit\\CUDA\\v12.1\\include"};
     nvrtcResult compileResult = nvrtcCompileProgram(prog, 3, opts);
     // Check for compilation errors
     if (compileResult != NVRTC_SUCCESS) {

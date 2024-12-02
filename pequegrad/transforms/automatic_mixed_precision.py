@@ -57,7 +57,7 @@ matmul_pattern = make_pattern(
 def cross_entropy_loss_probs_pattern_fn(logits, probs):
     return ops.cross_entropy_loss_probs(
         logits.astype("float16"), probs.astype("float16")
-    )
+    ).astype("float32")
 
 
 cross_entropy_loss_probs_pattern_matcher = make_pattern_matcher(
@@ -93,10 +93,10 @@ def astype_pattern_matcher_fn_2(x):
 
 
 astype_pattern_matcher_1 = make_pattern_matcher(
-    astype_pattern_matcher_fn_1, [(16, 16)], match_inps={0: f16}
+    astype_pattern_matcher_fn_1, [(16, 16)], match_inps={0: f32}
 )
 astype_pattern_matcher_2 = make_pattern_matcher(
-    astype_pattern_matcher_fn_2, [(16, 16)], match_inps={0: f32}
+    astype_pattern_matcher_fn_2, [(16, 16)], match_inps={0: f16}
 )
 
 

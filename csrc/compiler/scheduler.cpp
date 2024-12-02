@@ -67,7 +67,7 @@ static void schedule_inner(Tensor &node, leaf_record_t &leafs,
     return;
   }
 
-  if (is<Log>(prim) || is<Exp>(prim)) {
+  if (is<Log>(prim) || is<Exp>(prim) || is<AsType>(prim)) {
     schedule_inner(node.ad_node()->children()[0], leafs, marked_as_out,
                    dependents, allgraph, allow_reduce);
     return;

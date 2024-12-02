@@ -679,6 +679,7 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
     auto unop = std::make_shared<UnaryExpr>();
     unop->op = op_to_unaryop_kind(prim);
     unop->child = inputs[0];
+    // if it is dtype,
     ir.push_back(unop);
     if (std::find_if(marked_as_out.begin(), marked_as_out.end(),
                      [&out](const Tensor &t) { return t.id == out.id; }) !=
@@ -690,6 +691,25 @@ graph_to_ir_inner(Tensor &out, std::vector<Tensor> &marked_as_out,
       ir.insert(ir.end(), store_ir.begin(), store_ir.end());
     }
     return unop;
+  }
+  if (is<AsType>(prim)) {
+    auto casted_prim = as<AsType>(prim);
+    DType tod = casted_prim->dtype_to();
+    auto astype = std::make_shared<UnaryExpr>();
+    astype->op = tod == DType::Float32 ? UnaryOpKind::AsType_F32
+                                       : UnaryOpKind::AsType_F16;
+    astype->child = inputs[0];
+    ir.push_back(astype);
+    if (std::find_if(marked_as_out.begin(), marked_as_out.end(),
+                     [&out](const Tensor &t) { return t.id == out.id; }) !=
+        marked_as_out.end()) {
+      auto arg = ctx.tid_to_arg.at(out.id);
+      auto strides = ctx.arg_to_strides.at(arg);
+      auto store_ir = render_store_idxs_for_expr(
+          ctx.arg_to_idxs_to_load.at(arg), strides, arg, astype, ctx);
+      ir.insert(ir.end(), store_ir.begin(), store_ir.end());
+    }
+    return astype;
   }
   if (is_ternary_op(prim)) {
     auto ternop = std::make_shared<TernaryExpr>();
@@ -1302,6 +1322,10 @@ static std::string unop_kind_to_str(UnaryOpKind op) {
     return "log";
   case UnaryOpKind::Exp:
     return "exp";
+  case UnaryOpKind::AsType_F16:
+    return "(half)";
+  case UnaryOpKind::AsType_F32:
+    return "(float)";
   default:
     throw std::runtime_error("Unsupported unary operation");
   }
@@ -1390,13 +1414,15 @@ ir_to_cuda(std::vector<std::shared_ptr<BaseExpr>> &ir) {
       auto binop = as<BinaryExpr>(expr);
       if (!binop->force_render) {
         r[expr] = "(" +
-                  binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs], binop->dtype) +
+                  binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs],
+                                    binop->dtype) +
                   ")";
       } else {
         r[expr] = binop->name;
         res += add_indent() + get_dtype_cpp_str(binop->dtype) + " " +
                binop->name + " = " +
-               binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs], binop->dtype) +
+               binop_kind_to_str(binop->op, r[binop->lhs], r[binop->rhs],
+                                 binop->dtype) +
                ";\n";
       }
     } else if (is<UnaryExpr>(expr)) {
