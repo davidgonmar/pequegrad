@@ -1,4 +1,4 @@
-from pequegrad import Tensor, np, device, extend, add_custom_pattern, make_pattern
+from pequegrad import Tensor, np, device, extend, make_pattern_matcher, make_pattern
 import pequegrad as pg
 import torch
 
@@ -7,7 +7,7 @@ def cross_entropy_loss_pattern_fn(logits, probs):
     return pg.cross_entropy_loss_probs(logits, probs)
 
 
-cross_entropy_loss_pattern = make_pattern(
+cross_entropy_loss_pattern = make_pattern_matcher(
     cross_entropy_loss_pattern_fn, [(16, 16), (16, 16)]
 )
 
@@ -31,7 +31,7 @@ def cross_entropy_loss_pattern_converter(inps):
     return TorchCrossEntropy.apply(*inps)
 
 
-add_custom_pattern(
+pat = make_pattern(
     "cross_entropy_loss_torch",
     cross_entropy_loss_pattern,
     cross_entropy_loss_pattern_converter,
@@ -45,7 +45,7 @@ def f(x, y):
     return pg.cross_entropy_loss_probs(x, y) * 10
 
 
-fjitted = pg.jit(f, eval_outs=False)
+fjitted = pg.jit(f, eval_outs=False, custom_patterns=[pat])
 
 cuda = device.cuda(0)
 shape = (16,)

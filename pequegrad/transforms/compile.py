@@ -2,7 +2,6 @@ from pequegrad.backend.c import (
     compile,
     Tensor,
     sync_cuda_device,
-    compiler_add_custom_pattern as add_custom_pattern,  # noqa
 )  # noqa
 from contextvars import ContextVar
 from .lazyfn import (
@@ -19,7 +18,7 @@ from pequegrad.ops import fill, dt, device
 inside_jit = ContextVar("inside_jit", default=False)
 
 
-def make_pattern(fn: Callable, example_shapes: Tuple):
+def make_pattern_matcher(fn: Callable, example_shapes: Tuple):
     def match(t: Tensor):
         fake_tensors = [
             fill(shape, dt.float32, 0, device.cpu(0)) for shape in example_shapes
@@ -64,8 +63,19 @@ def make_pattern(fn: Callable, example_shapes: Tuple):
     return match
 
 
+def make_pattern(name: str, matcher: Callable, converter: Callable, precompute: bool):
+    return (name, matcher, converter, precompute)
+
+
 class jit(LazyFunction):
-    def __init__(self, f, assume_static_argnums=None, eval_outs=True, opts=None):
+    def __init__(
+        self,
+        f,
+        assume_static_argnums=None,
+        eval_outs=True,
+        opts=None,
+        custom_patterns=None,
+    ):
         super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
         if opts and opts["experimental_toposort_optim"]:
@@ -76,6 +86,9 @@ class jit(LazyFunction):
             self.toposort_optim = False
         self.eval_outs = eval_outs
         self.toposorted_indices = None
+        self.custom_patterns = {
+            pat[0]: (pat[1], pat[2], pat[3]) for pat in custom_patterns
+        }
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph
@@ -86,7 +99,8 @@ class jit(LazyFunction):
             outputs=trace.outputs,
             outputs_pytree=trace.outputs_pytree,
         )
-        compile(extract_tensors(new_trace.outputs), self.opts)
+
+        compile(extract_tensors(new_trace.outputs), self.opts, self.custom_patterns)
 
         if self.toposort_optim:
             toposorted_tensors = []
