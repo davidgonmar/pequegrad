@@ -56,14 +56,19 @@ private:
     std::string file = "#include <cuda_fp16.h>\n";
     // add fp16 max overloads
     file += "__device__ half max(half a, half b) { return a > b ? a : b; }\n";
+    // div
+    file +=
+        "__device__ half operator/(half a, int b) { return a / (half)b; }\n";
+    file += "__device__ half pow(half a, half b) { return __powf(float(a), "
+            "float(b)); }\n";
     file += "\nextern \"C\" {\n" + _src + "\n};";
     nvrtcCreateProgram(&prog, file.c_str(), nullptr, 0, nullptr, nullptr);
     // fast math
 
-    const char *opts[] = {"--use_fast_math", "-arch=sm_70",
+    const char *opts[] = {"-arch=sm_70",
                           "--include-path=C:\\Program Files\\NVIDIA GPU "
                           "Computing Toolkit\\CUDA\\v12.1\\include"};
-    nvrtcResult compileResult = nvrtcCompileProgram(prog, 3, opts);
+    nvrtcResult compileResult = nvrtcCompileProgram(prog, 2, opts);
     // Check for compilation errors
     if (compileResult != NVRTC_SUCCESS) {
       size_t logSize;

@@ -88,7 +88,11 @@ class jit(LazyFunction):
     ):
         super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
-        if opts and opts["experimental_toposort_optim"]:
+        if (
+            opts and opts["experimental_toposort_optim"]
+            if "experimental_toposort_optim" in opts
+            else False
+        ):
             if not eval_outs:
                 raise ValueError("experimental_toposort_optim requires eval_outs=True")
             self.toposort_optim = True

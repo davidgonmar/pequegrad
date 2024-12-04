@@ -401,7 +401,7 @@ class GPT(pnn.Module):
         # pad idx to max block size
         idx = idx.astype(pg.dt.int32).pad_to(self.block_size).eval().detach().to("cuda")
 
-        @pg.jit.withargs(opts={"common_subexpr_elim": False})  # runs out of memory atm
+        @pg.jit.withargs(opts={"common_subexpr_elim": False})
         def runmodel(x, params, curridx, temperature):
             logits = pnn.apply_to_module(self, params, x)
             logits = logits[curridx] / temperature
