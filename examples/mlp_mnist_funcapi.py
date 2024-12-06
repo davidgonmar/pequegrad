@@ -8,6 +8,8 @@ from pequegrad.backend.c import device
 from pequegrad.optim import adam, AdamState  # noqa
 from pequegrad.data.dataloader import DataLoader
 from pequegrad import fngrad, jit, amp, Tensor, maybe
+from .quantized_mlp import quantized
+import pequegrad as pg
 
 np.random.seed(0)
 
@@ -75,7 +77,7 @@ def test_model(model, params_dict, ds):
     def step(x, model, params_dict):
         return apply_to_module(model, params_dict, x)
 
-    step = jit(amp(step))
+    step = jit(amp(step), eval_outs=False)
     start = None
     i = 0
     for xx in range(1):
@@ -84,6 +86,37 @@ def test_model(model, params_dict, ds):
                 if i == 1:  # start time after first batch
                     start = time.time()
                 outputs = step(x, model, params_dict)
+
+                correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
+                total += y.shape[0]
+                i += 1
+    end = time.time()
+    print(
+        f"Correct: {correct}, Total: {total}, Accuracy: {correct / total:.3f}, Time: {end - start:.5f}"
+    )
+    return correct, total
+
+
+def test_model_quant(model, params_dict, ds):
+    import time
+
+    correct = 0
+    total = 0
+    loader = DataLoader(ds, batch_size=4096)
+
+    def step(x, model, params_dict):
+        return apply_to_module(model, params_dict, x)
+
+    step = jit(quantized(step), eval_outs=False)
+    start = None
+    i = 0
+    for xx in range(1):
+        for x, y in loader:
+            with no_grad():
+                if i == 1:  # start time after first batch
+                    start = time.time()
+                outputs = step(x, model, params_dict)
+                pg.viz(outputs)
                 correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
                 total += y.shape[0]
                 i += 1
@@ -127,7 +160,7 @@ if __name__ == "__main__":
 
         print("Model saved to", model_path)
         print("Testing the model")
-        correct, total = test_model(mlp, d, test_ds)
+        correct, total = test_model_quant(mlp, d, test_ds)
         print(f"Test accuracy: {correct / total:.3f}")
     else:
         raise ValueError("Unknown mode")

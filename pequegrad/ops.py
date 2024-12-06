@@ -138,6 +138,7 @@ def mse_loss(self, target: "Tensor") -> "Tensor":
 
 
 pg.abs = lambda x: (x**2) ** 0.5  # TODO -- I am lazy
+Tensor.abs = pg.abs
 _abs = pg.abs
 where = lambda condition, x, y: pg.where(condition, x, y)
 
@@ -910,3 +911,20 @@ def covariance_matrix(self) -> Tensor:
 cos = pg.cos
 
 sin = pg.sin
+
+
+def round(self):
+    return (self + 0.5).astype(dt.int32).astype(self.dtype)
+
+
+def clip(self, min, max):
+    min, max = (
+        fill((), self.dtype, min, self.device)
+        if isinstance(min, (int, float))
+        else min,
+        fill((), self.dtype, max, self.device)
+        if isinstance(max, (int, float))
+        else max,
+    )
+    min, max = pg.broadcast_to(min, self.shape), pg.broadcast_to(max, self.shape)
+    return pg.where(self < min, min, pg.where(self > max, max, self))

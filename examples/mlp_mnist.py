@@ -33,9 +33,9 @@ class MLP(StatefulModule):
 def train(model, ds, epochs=13, batch_size=4096):
     start = None
     # weights of the network printed
-    use_jit = True
+    use_jit = False
     do_amp = False
-    optcls = Adam if not use_jit else JittedAdam
+    optcls = JittedAdam
     optim = optcls(model, lr=0.021)
 
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
@@ -56,7 +56,6 @@ def train(model, ds, epochs=13, batch_size=4096):
         batch_y_onehot = Tensor.one_hot(10, y, device=device)
         loss, g = train_step(x, batch_y_onehot, model)
         optim.step(g)
-
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break
@@ -78,7 +77,7 @@ def test_model(model, ds):
     def step(x, model):
         return model.forward(x)
 
-    step = jit(amp(step))
+    step = jit(amp(step), eval_outs=False)
     start = None
     i = 0
     for xx in range(1):
@@ -87,6 +86,7 @@ def test_model(model, ds):
                 if i == 1:  # start time after first batch
                     start = time.time()
                 outputs = step(x, model)
+
                 correct += np.sum(outputs.numpy().argmax(1) == y.numpy())
                 total += y.shape[0]
                 i += 1

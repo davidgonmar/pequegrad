@@ -53,6 +53,7 @@ def make_pattern_matcher(fn: Callable, example_shapes: Tuple, match_inps=dict())
             return True
 
         matched = _recursive_match(t, out)
+
         if not matched:
             return []
         # reorder matched_children so that it matches the order of fake_tensors
@@ -88,8 +89,8 @@ class jit(LazyFunction):
     ):
         super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
-        if (
-            opts and opts["experimental_toposort_optim"]
+        if opts and (
+            opts["experimental_toposort_optim"]
             if "experimental_toposort_optim" in opts
             else False
         ):

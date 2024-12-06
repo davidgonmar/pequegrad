@@ -84,6 +84,8 @@ class Adam:
     def __init__(
         self, parameters: List[Tensor], lr: float = 0.001, b1=0.9, b2=0.999, eps=1e-08
     ):
+        if hasattr(parameters, "tree_flatten"):
+            parameters = parameters.tree_flatten()
         self.params = parameters
         self.lr = lr
         self.b1 = b1
