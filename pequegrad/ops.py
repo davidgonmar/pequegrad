@@ -888,6 +888,33 @@ def diag_vector(vector: Tensor) -> Tensor:
     return I * vector  # will be broadcasted
 
 
+def extract_diag(matrix: Tensor, ret_vec=False) -> Tensor:
+    """
+    Returns the diagonal of the matrix
+    """
+    assert matrix.ndim == 2, "extract_diag is only supported for 2D tensors"
+    if not ret_vec:  # returns diag matrix
+        return (
+            eye(matrix.shape[0], matrix.shape[1], matrix.dtype, matrix.device) * matrix
+        )
+    else:  # returns vector
+        diagmat = (
+            eye(matrix.shape[0], matrix.shape[1], matrix.dtype, matrix.device) * matrix
+        )
+        return diagmat.sum(1)  # sum along the columns (0 + x = 0)
+
+
+def extract_non_diag(matrix: Tensor) -> Tensor:
+    """
+    Returns the matrix without the diagonal
+    """
+    assert matrix.ndim == 2, "extract_non_diag is only supported for 2D tensors"
+    return (
+        fill(matrix.shape, matrix.dtype, 1, matrix.device)
+        - eye(matrix.shape[0], matrix.shape[1], matrix.dtype, matrix.device)
+    ) * matrix
+
+
 def global_avg_pool2d(self) -> Tensor:
     """
     Returns the global average pooling of the tensor

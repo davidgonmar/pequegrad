@@ -67,7 +67,7 @@ lu_factorization = lu_factorization_faster
 # ======================= Solve linear system =======================
 
 
-def solve(A: Tensor, b: Tensor):
+def solve_lu(A: Tensor, b: Tensor):
     """
     Solves the linear system Ax = b for x.
     """
@@ -90,6 +90,33 @@ def solve(A: Tensor, b: Tensor):
         else:
             x = x.at[i].set((y[i] - U[i, i + 1 :] @ x[i + 1 :]) / U[i, i])
     return x
+
+
+def solve_jacobi(A: Tensor, b: Tensor, n_iter: int = 100):
+    """
+    Solves the linear system Ax = b for x using the Jacobi method.
+    Assumes A, D and E are non-singular.
+    """
+    assert_rank(A, 2, "A")
+    assert_rank(b, 1, "b")
+    n = A.shape[0]
+    x = fill(b.shape, b.dtype, 0, b.device)
+    D, E = ops.extract_diag(A), ops.extract_non_diag(A)
+    # Ax = b -> (D + E)x = b -> Dx = b - Ex -> x = D^-1(b - Ex)
+    D_inv = 1 / D  # element-wise inverse since D is diagonal
+    for _ in range(n_iter):
+        x = D_inv * (b - E @ x)
+
+    return x
+
+
+def solve(A: Tensor, b: Tensor, method="lu", **kwargs):
+    if method == "lu":
+        return solve_lu(A, b)
+    elif method == "jacobi":
+        return solve_jacobi(A, b, **kwargs)
+    else:
+        raise ValueError("Invalid method")
 
 
 # ======================= Projection ========================
