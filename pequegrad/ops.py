@@ -25,6 +25,12 @@ class DeviceModule:
     def cpu(idx: int = 0) -> Device:
         return from_str(f"cpu:{idx}")
 
+    @staticmethod
+    def from_str(device: str) -> Device:
+        if isinstance(device, Device):
+            return device
+        return from_str(device)
+
 
 device = DeviceModule
 
@@ -165,7 +171,6 @@ _device = device
 
 
 def one_hot(
-    cls,
     num_classes: int,
     indices: "Tensor",
     device="cpu",
@@ -630,6 +635,10 @@ assign_at = pg.assign_at
 fill = pg.fill
 
 
+def zeros(shape: _Shape, dtype=dt.float32, dev="cpu"):
+    return fill(shape, dtype, 0.0, device.from_str(dev))
+
+
 @custom_init
 def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device="cpu"):
     return Tensor(np.arange(start, end, step).astype(dtypetonp[dtype]), device=device)
@@ -955,3 +964,20 @@ def clip(self, min, max):
     )
     min, max = pg.broadcast_to(min, self.shape), pg.broadcast_to(max, self.shape)
     return pg.where(self < min, min, pg.where(self > max, max, self))
+
+
+def argmax(self, dim: int = -1):
+    max_ = pg.max_reduce(self, axes=dim, keepdims=True)
+    reduced_shape = list(max_.shape)
+    del reduced_shape[dim]
+    assert len(reduced_shape) == 1
+    # todo -- better
+    ar = pg.reshape(arange(0, self.shape[1], 1, dt.float32, device.cpu(0)), (1, -1)).to(
+        self.device
+    )
+    aranges = pg.broadcast_to(ar, (self.shape[0], self.shape[1]))
+    return pg.sum((self == max_) * aranges, axes=dim)
+
+
+def accuracy(self, target):
+    return (_abs(self - target) < 1e-6).mean()

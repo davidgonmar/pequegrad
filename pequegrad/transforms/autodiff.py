@@ -445,3 +445,7 @@ class jvp(LazyFunction):
             outputs_pytree=new_outs_pytree,
         )
         return ret
+
+
+def value_and_grad(f, wrt=[0]):
+    return fngrad(f, wrt, return_outs=True)
