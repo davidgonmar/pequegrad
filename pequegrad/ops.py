@@ -651,13 +651,6 @@ def rand(shape: int, dtype=dt.float32, device="cpu"):
     )
 
 
-@custom_init
-def eye(n: int, m: int = None, dtype=dt.float32, device="cpu"):
-    if m is None:
-        m = n
-    return Tensor(np.eye(n, m).astype(dtypetonp[dtype]), device=device)
-
-
 def outer_prod(v1, v2):
     return v1.reshape((v1.shape[0], 1)) * v2.reshape((1, v2.shape[0]))
 
@@ -1020,4 +1013,12 @@ def cumsum(self, dim: int = 0):
 
 
 def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device="cpu"):
-    return cumsum(ones((end - start) // step, dtype, device) * step, 0) + start
+    return cumsum(ones(((end - start) // step,), dtype, device) * step, 0) + start
+
+
+def eye(n: int, m: int = None, dtype=dt.float32, device="cpu"):
+    if m is None:
+        m = n
+    return (
+        arange(0, n, 1, dtype, device).reshape((n, 1)) == arange(0, m, 1, dtype, device)
+    ).astype(dtype)
