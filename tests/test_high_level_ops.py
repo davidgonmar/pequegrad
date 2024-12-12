@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import tensor as torch_tensor, Tensor as TorchTensor
 import pytest
+from pequegrad import ops
 
 dtypemapnp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
 dtypemapt = {
@@ -588,4 +589,33 @@ class TestNew:
             lambda x: x.silu(),
             lambda x: torch.nn.functional.silu(x),
             device=device,
+        )
+
+    # tests for cumsum
+    @pytest.mark.parametrize(
+        "info",
+        [
+            [(10,), 0],  # shape, dim
+            [(10, 5), 0],
+            [(10, 5), 1],
+            [(10, 5, 3), 0],
+            [(10, 5, 3), 1],
+            [(10, 5, 3), 2],
+            [(10, 5, 3), 0],
+            [(10, 5, 3), 1],
+            [(10, 5, 3), 2],
+            [(10, 5, 3), 0],
+            [(10, 5, 3), 1],
+            [(10, 5, 3), 2],
+        ],
+    )
+    @all_devices
+    def test_cumsum(self, info, device):
+        shape, dim = info
+        _compare_fn_with_torch(
+            [shape],
+            lambda x: ops.cumsum(x, dim=dim),
+            lambda x: torch.cumsum(x, dim=dim),
+            device=device,
+            backward=False,
         )

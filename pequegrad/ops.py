@@ -566,8 +566,8 @@ def tril(self, diagonal: int = 0) -> "Tensor":
     """
     Returns the lower triangular part of the tensor
     """
-    row_indices = arange(0, self.size(-2)).reshape((-1, 1))
-    col_indices = arange(0, self.size(-1)).reshape((1, -1))
+    row_indices = arange(0, self.size(-2)).reshape((-1, 1)).to(self.device)
+    col_indices = arange(0, self.size(-1)).reshape((1, -1)).to(self.device)
     mask = (row_indices >= (col_indices - diagonal)).astype(self.dtype)
     return self * mask
 
@@ -576,8 +576,8 @@ def triu(self, diagonal: int = 0) -> "Tensor":
     """
     Returns the upper triangular part of the tensor
     """
-    row_indices = arange(0, self.size(-2)).reshape((-1, 1))
-    col_indices = arange(0, self.size(-1)).reshape((1, -1))
+    row_indices = arange(0, self.size(-2)).reshape((-1, 1)).to(self.device)
+    col_indices = arange(0, self.size(-1)).reshape((1, -1)).to(self.device)
     mask = (row_indices <= (col_indices - diagonal)).astype(self.dtype)
     return self * mask
 
@@ -637,11 +637,6 @@ fill = pg.fill
 
 def zeros(shape: _Shape, dtype=dt.float32, dev="cpu"):
     return fill(shape, dtype, 0.0, device.from_str(dev))
-
-
-@custom_init
-def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device="cpu"):
-    return Tensor(np.arange(start, end, step).astype(dtypetonp[dtype]), device=device)
 
 
 @custom_init
@@ -981,3 +976,48 @@ def argmax(self, dim: int = -1):
 
 def accuracy(self, target):
     return (_abs(self - target) < 1e-6).mean()
+
+
+def repeat_new_dim(self, repeats: int, dim: int):
+    """
+    Repeats the tensor along a new dimension
+    """
+    dim = dim if dim >= 0 else self.ndim + dim + 1
+    shape = list(self.shape)
+    shape.insert(dim, repeats)
+    shapewith1 = list(self.shape)
+    shapewith1.insert(dim, 1)
+    return pg.broadcast_to(self.reshape(shapewith1), shape)
+
+
+def fill_like(self, value):
+    return pg.fill(self.shape, self.dtype, value, self.device)
+
+
+def ones_like(self):
+    return fill_like(self, 1)
+
+
+def ones(shape: _Shape, dtype=dt.float32, device="cpu"):
+    return fill(shape, dtype, 1, DeviceModule.from_str(device))
+
+
+def cumsum(self, dim: int = 0):
+    N = self.shape[dim]
+    t1 = self.transpose(dim, -1)
+    other_shape = list(t1.shape)
+    del other_shape[-1]
+    t2 = (
+        t1.to("cpu")
+        .pad_constant((N - 1, 0), 0.0)
+        .reshape((-1, 1, 1, 2 * N - 1))
+        .to(self.device)
+    )  # cuda is buggy on non contiguous pads
+    t3 = t2.unfold((1, N))
+    return (
+        (t3).sum(dim=-1).reshape(other_shape + [N]).transpose(dim, -1)
+    )  # shape (*old_shape)
+
+
+def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device="cpu"):
+    return cumsum(ones((end - start) // step, dtype, device) * step, 0) + start
