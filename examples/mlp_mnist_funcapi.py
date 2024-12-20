@@ -7,7 +7,7 @@ import time
 from pequegrad.backend.c import device
 from pequegrad.optim import adam, AdamState  # noqa
 from pequegrad.data.dataloader import DataLoader
-from pequegrad import fngrad, jit, amp, Tensor, maybe
+from pequegrad import fngrad, jit, amp, maybe
 from .quantized_mlp import quantized
 import pequegrad as pg
 
@@ -52,7 +52,7 @@ def train(model, ds, epochs=13, batch_size=4096):
     for x, y in loader:
         if i == 1:
             start = time.time()
-        batch_y_onehot = Tensor.one_hot(10, y, device=device)
+        batch_y_onehot = pg.one_hot(10, y, device=device)
         optim_state, params_dict, loss = update(
             optim_state, params_dict, x, batch_y_onehot
         )

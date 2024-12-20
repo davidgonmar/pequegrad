@@ -397,5 +397,5 @@ Module = StatefulModule
 def apply_to_module(module: Module, params_dict: dict, *args, **kwargs):
     module.tree_assign(params_dict, replace=True)
     mod = module(*args, **kwargs)
-    # module.substitute_every_param_with_none()
+    module.substitute_every_param_with_none()
     return mod

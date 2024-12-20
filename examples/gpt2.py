@@ -219,9 +219,9 @@ class GPT(pnn.Module):
         C.vocab_size = None
         C.block_size = None
         # dropout hyperparameters
-        C.embd_pdrop = 0.1
-        C.resid_pdrop = 0.1
-        C.attn_pdrop = 0.1
+        C.embd_pdrop = 0
+        C.resid_pdrop = 0
+        C.attn_pdrop = 0
         return C
 
     def __init__(self, config):

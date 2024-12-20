@@ -619,3 +619,21 @@ class TestNew:
             device=device,
             backward=False,
         )
+
+    # test scaled dot product attention
+    @all_devices
+    def test_scaled_dot_product_attention(self, device):
+        # q, k, v, mask
+        shape = [(5, 5, 10, 15), (5, 5, 10, 15), (5, 5, 10, 15)]
+        m_ = pg.tril(Tensor.ones((5, 5, 10, 10)))
+
+        def torch_fn(q, k, v):
+            return torch.nn.functional.scaled_dot_product_attention(
+                q, k, v, is_causal=True
+            )
+
+        def peq_fn(q, k, v):
+            m = m_.to(q.device)
+            return pg.scaled_dot_product_attention(q, k, v, m)
+
+        _compare_fn_with_torch(shape, peq_fn, torch_fn, device=device, backward=False)
