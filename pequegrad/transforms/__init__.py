@@ -3,6 +3,7 @@ from .compile import *  # noqa
 from .extra import *  # noqa
 from .automatic_mixed_precision import *  # noqa
 from .distrib import *  # noqa
+from .vectorize import *  # noqa
 
 
 def maybe(transform, condition):

@@ -251,3 +251,5 @@ class _SetItemPartial:
 
 
 bind_method_property(Tensor, "at", lambda self: _SetItemPartial(self))
+
+bind_method_property(Tensor, "op", lambda self: self.ad_context())
