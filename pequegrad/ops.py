@@ -182,6 +182,7 @@ def one_hot(
         nparr[indices] = 1.0
         return Tensor(nparr, device=device)
     assert indices.ndim in [1, 0], "indices must be a vector"
+
     if indices.device == _device.cpu(0):
         indices = indices.numpy()
         np_one_hot = np.zeros((indices.shape[0], num_classes)).astype(dtypetonp[dtype])

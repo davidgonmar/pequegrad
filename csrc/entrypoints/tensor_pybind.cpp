@@ -1,10 +1,12 @@
 #define PYBIND11_DETAILED_ERROR_MESSAGES
 #include "compiler/compile.hpp"
+#include "cuda/mem.hpp"
 #include "dtype.hpp"
 #include "graph.hpp"
 #include "npybind_utils.hpp"
 #include "ops.hpp"
 #include "shape.hpp"
+#include "state.hpp"
 #include "tensor.hpp"
 #include <cuda.h>
 #include <iostream>
@@ -66,6 +68,15 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("memset", &device::Device::memset)
       .def("str", &device::Device::str)
       .def("__repr__", &device::Device::str);
+
+  // state
+  m.def("set_global_state_cuda_allocator", [](std::string d) {
+    GlobalState::getInstance()->set_cuda_allocator(d);
+  });
+  m.def("reset_global_allocator_memory", []() { reset_custom_allocator(); });
+
+  m.def("get_custom_allocator_alloc_history",
+        &get_custom_allocator_alloc_history);
 
   // tensor uitls
   m.def("tensor_precompute_again", &tensor_precompute_again);
@@ -193,6 +204,24 @@ PYBIND11_MODULE(pequegrad_c, m) {
   m.def("load_cuda_driver_api", [](bool x) {
     cuDevicePrimaryCtxRetain(0, 0); // This is a dummy call to load the driver
     cuInit(0);
+    // print cuda version, driver, etc (all relevant info)
+    int driver_version;
+    cuDriverGetVersion(&driver_version);
+    std::cout << "CUDA Driver Version: " << driver_version << std::endl;
+    int runtime_version;
+    cuDriverGetVersion(&runtime_version);
+    std::cout << "CUDA Runtime Version: " << runtime_version << std::endl;
+    int device_count;
+    cuDeviceGetCount(&device_count);
+    std::cout << "CUDA Device Count: " << device_count << std::endl;
+    for (int i = 0; i < device_count; i++) {
+      CUdevice device;
+      cuDeviceGet(&device, i);
+      char name[100];
+      cuDeviceGetName(name, 100, device);
+      std::cout << "Device " << i << ": " << name << std::endl;
+    }
+
     return true;
   });
   m.def("binomial", &binomial, py::arg("p"), py::arg("shape"), py::arg("dtype"),
@@ -429,6 +458,7 @@ PYBIND11_MODULE(pequegrad_c, m) {
         t.to_(device::from_str(device));
       })
       .def("assign", &Tensor::assign)
+      .def("copy", &pg::copy)
       .def("detach", &Tensor::detach)
       .def("detach_", &Tensor::detach_)
       .def("children", &Tensor::children)

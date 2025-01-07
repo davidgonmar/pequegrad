@@ -14,6 +14,8 @@ from .lazyfn import (
 )
 from typing import Callable, Tuple
 from pequegrad.ops import fill, dt, device
+from pequegrad.state import cuda_allocator, reset_custom_allocator
+from pequegrad.transforms.pytree import tree_map
 
 inside_jit = ContextVar("inside_jit", default=False)
 
@@ -86,6 +88,7 @@ class jit(LazyFunction):
         eval_outs=True,
         opts=None,
         custom_patterns=[],
+        allocator=None,
     ):
         super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
@@ -102,6 +105,7 @@ class jit(LazyFunction):
         self.eval_outs = eval_outs
         self.toposorted_indices = None
         self.custom_patterns = [(pat[1], pat[2], pat[3]) for pat in custom_patterns]
+        self.allocator = allocator or "default"
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph
@@ -146,7 +150,18 @@ class jit(LazyFunction):
     def post_process_outs(self, outs, args, input_tensors):
         if not self.toposort_optim:
             if self.eval_outs:
-                outs = [o.eval() if isinstance(o, Tensor) else o for o in outs]
+                if self.allocator == "custom":
+                    tree_map(
+                        lambda x: x.eval() if isinstance(x, Tensor) else x,
+                        input_tensors,
+                    )
+                with cuda_allocator(self.allocator):
+                    outs = [o.eval() if isinstance(o, Tensor) else o for o in outs]
+                if self.allocator == "custom":
+                    outs = [
+                        o.copy().eval() if isinstance(o, Tensor) else o for o in outs
+                    ]
+                    reset_custom_allocator()
             return outs
         else:
             toposorted_tensors = []

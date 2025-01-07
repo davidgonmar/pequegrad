@@ -132,7 +132,7 @@ print("Size in MB:", sum([p.numel() * 4 for p in model.parameters()]) / 1024 / 1
 if not args.test:
     do_jit = True
 
-    @maybe(pg.jit, do_jit)
+    @maybe(pg.jit.withargs(allocator="custom"), do_jit)
     def update_step(state, params_dict, x, y):
         x = x.to("cuda")
         y = y.to("cuda")

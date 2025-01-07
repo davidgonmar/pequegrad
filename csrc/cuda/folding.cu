@@ -357,8 +357,7 @@ void CudnnConv2dVjpInput::dispatch_cuda(const std::vector<Tensor> &inputs,
         &workspace_size));
     this->initialized = true;
     this->workspace = nullptr;
-    // Allocate workspace
-    cudaMallocAsync(&workspace, workspace_size, 0);
+    CHECK_CUDA(cudaMallocAsync(&workspace, workspace_size, 0));
   }
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionBackwardData(

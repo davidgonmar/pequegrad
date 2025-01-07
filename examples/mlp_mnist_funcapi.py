@@ -32,10 +32,11 @@ def train(model, ds, epochs=13, batch_size=4096):
     start = None
     use_jit = True
     do_amp = False
+    allocator = "custom"
 
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
-    @maybe(jit, use_jit)
+    @maybe(jit.withargs(allocator=allocator), use_jit)
     @maybe(amp, do_amp)
     def update(optim_state, params_dict, x, y):
         def get_loss(batch_X, batch_Y, params_dict):

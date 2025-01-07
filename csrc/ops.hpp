@@ -90,4 +90,5 @@ Tensor binomial(const double p, const shape_t &shape, const DType dtype,
 
 Tensor to_device(const Tensor &a, std::shared_ptr<device::Device> device_to);
 
+Tensor copy(const Tensor &a);
 } // namespace pg

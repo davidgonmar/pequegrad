@@ -905,14 +905,9 @@ std::vector<Tensor> Copy::backward(const std::vector<Tensor> &primals,
 // implementations
 void Copy::dispatch_cpu(const std::vector<Tensor> &inputs,
                         std::vector<Tensor> &outputs) {
-  outputs[0].view_ptr()->set_ptr(inputs[0].view().shared_ptr(),
-                                 inputs[0].nbytes());
-}
-
-void Copy::dispatch_cuda(const std::vector<Tensor> &inputs,
-                         std::vector<Tensor> &outputs) {
-  outputs[0].view_ptr()->set_ptr(inputs[0].view().shared_ptr(),
-                                 inputs[0].nbytes());
+  outputs[0].view_ptr()->allocate();
+  std::memcpy(outputs[0].view_ptr()->get_base_ptr(),
+              inputs[0].view_ptr()->get_base_ptr(), inputs[0].nbytes());
 }
 
 std::vector<View> ToDevice::precompute(const std::vector<Tensor> &inputs) {

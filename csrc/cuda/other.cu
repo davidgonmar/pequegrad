@@ -348,4 +348,12 @@ void OneHotVector::dispatch_cuda(const std::vector<Tensor> &inputs,
   PG_CUDA_KERNEL_END;
 }
 
+void Copy::dispatch_cuda(const std::vector<Tensor> &inputs,
+                         std::vector<Tensor> &outputs) {
+  outputs[0].view_ptr()->allocate();
+  cudaMemcpyAsync(outputs[0].get_base_ptr(), inputs[0].get_base_ptr(),
+                  inputs[0].view_ptr()->nbytes(), cudaMemcpyDeviceToDevice);
+  PG_CUDA_KERNEL_END;
+}
+
 } // namespace pg

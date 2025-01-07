@@ -78,6 +78,7 @@ bind_method(
     ),
 )
 
+
 bind_method(
     Tensor,
     "zeros_like",
@@ -167,7 +168,7 @@ bind_method(
 )
 bind_method(Tensor, "unfold", lambda *args, **kwargs: pg.im2col(*args, **kwargs))
 bind_method(Tensor, "fold", lambda *args, **kwargs: pg.col2im(*args, **kwargs))
-bind_method(Tensor, "one_hot", classmethod(one_hot))
+bind_method(Tensor, "one_hot", staticmethod(one_hot))
 bind_method(Tensor, "cross_entropy_loss_indices", cross_entropy_loss_indices)
 bind_method_property(Tensor, "dim", lambda self: len(self.shape))
 bind_method(Tensor, "cross_entropy_loss_probs", cross_entropy_loss_probs)

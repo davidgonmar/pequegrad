@@ -47,8 +47,8 @@ include(CheckCXXCompilerFlag)
 ### But only for the CPU version, as the CUDA compiler does not like those flags
 enable_language(CUDA)
 
-find_package(CUDA REQUIRED)
-find_package(CUDAToolkit REQUIRED)
+find_package(CUDA ${CUDA_VERSION} REQUIRED)
+find_package(CUDAToolkit ${CUDA_VERSION} REQUIRED)
 
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
 # cutlass

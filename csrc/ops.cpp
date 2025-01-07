@@ -478,4 +478,8 @@ Tensor cos(const Tensor &a) {
   return Tensor::from_primitive_one(std::make_shared<Cos>(), {a});
 }
 
+Tensor copy(const Tensor &a) {
+  return Tensor::from_primitive_one(std::make_shared<Copy>(), {a});
+}
+
 } // namespace pg
