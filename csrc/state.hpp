@@ -8,6 +8,7 @@ private:
   static GlobalState *instance;
 
   std::string cuda_allocator;
+  int cuda_stream;
 
 public:
   GlobalState(const GlobalState &) = delete;
@@ -23,4 +24,8 @@ public:
   std::string get_cuda_allocator() { return cuda_allocator; }
 
   void set_cuda_allocator(std::string allocator) { cuda_allocator = allocator; }
+
+  int get_cuda_stream() { return cuda_stream; }
+
+  void set_cuda_stream(int stream) { cuda_stream = stream; }
 };

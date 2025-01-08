@@ -16,6 +16,7 @@ from typing import Callable, Tuple
 from pequegrad.ops import fill, dt, device
 from pequegrad.state import cuda_allocator, reset_custom_allocator
 from pequegrad.transforms.pytree import tree_map
+from pequegrad.backend.c import CudaGraph
 
 inside_jit = ContextVar("inside_jit", default=False)
 
@@ -89,6 +90,7 @@ class jit(LazyFunction):
         opts=None,
         custom_patterns=[],
         allocator=None,
+        use_cuda_graph=False,
     ):
         super().__init__(f, assume_static_argnums)
         self.opts = opts if opts is not None else {}
@@ -106,6 +108,12 @@ class jit(LazyFunction):
         self.toposorted_indices = None
         self.custom_patterns = [(pat[1], pat[2], pat[3]) for pat in custom_patterns]
         self.allocator = allocator or "default"
+        if use_cuda_graph:
+            self.use_cuda_graph = True
+            self.allocator = "custom"
+            self.graph = None
+        else:
+            self.use_cuda_graph = False
 
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph
@@ -148,6 +156,42 @@ class jit(LazyFunction):
         return new_trace
 
     def post_process_outs(self, outs, args, input_tensors):
+        if self.use_cuda_graph and self.graph is None:
+            assert self.allocator == "custom"
+            tree_map(
+                lambda x: x.eval() if isinstance(x, Tensor) else x,
+                input_tensors,
+            )  # make sure inputs are evaluated
+            sync_cuda_device()
+            with cuda_allocator("custom"):
+                cg = CudaGraph()
+                print("Recording")
+                cg.begin_record()
+                print("Recording done")
+                outs = [
+                    o.eval()
+                    if (print("yaaa") or True)
+                    else None
+                    if isinstance(o, Tensor)
+                    else o
+                    for o in outs
+                ]
+                cg.end_record()
+            self.graph = cg
+            self.cg_outs = outs
+            outs = [o.copy().eval() if isinstance(o, Tensor) else o for o in outs]
+            reset_custom_allocator()
+            return outs
+
+        if self.use_cuda_graph and self.graph is not None:
+            tree_map(
+                lambda x: x.eval() if isinstance(x, Tensor) else x,
+                input_tensors,
+            )
+            self.graph.replay()
+            outs = [o.eval() if isinstance(o, Tensor) else o for o in self.cg_outs]
+            return outs
+
         if not self.toposort_optim:
             if self.eval_outs:
                 if self.allocator == "custom":

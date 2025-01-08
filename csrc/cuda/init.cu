@@ -6,6 +6,7 @@
 #include "random.cuh"
 #include "tensor.hpp"
 #include <curand_kernel.h>
+
 namespace pg {
 namespace cuda {
 template <typename T>

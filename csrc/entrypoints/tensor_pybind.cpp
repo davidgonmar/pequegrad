@@ -9,6 +9,7 @@
 #include "state.hpp"
 #include "tensor.hpp"
 #include <cuda.h>
+#include <cuda_runtime.h>
 #include <iostream>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -690,4 +691,90 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("get_created_axes", &BroadcastTo::get_created_axes)
       .def("get_broadcasted_axes", &BroadcastTo::get_broadcasted_axes)
       .def("shape_to", &BroadcastTo::shape_to);
+
+  class CudaGraph {
+  public:
+    CudaGraph() : graph(nullptr), graphExec(nullptr) {}
+
+    ~CudaGraph() {
+      if (graphExec)
+        cudaGraphExecDestroy(graphExec);
+      if (graph)
+        cudaGraphDestroy(graph);
+    }
+
+    void begin_record() {
+      cudaStream_t stream;
+
+      cudaError_t err = cudaStreamCreate(&stream);
+
+      GlobalState::getInstance()->set_cuda_stream((int)stream);
+
+      cudaStreamCaptureStatus status;
+      err = cudaStreamGetCaptureInfo(0, &status, nullptr);
+      if (err != cudaSuccess) {
+        throw std::runtime_error("Failed to get stream capture info: " +
+                                 std::string(cudaGetErrorString(err)));
+      }
+
+      if (status == cudaStreamCaptureStatusActive) {
+        throw std::runtime_error(
+            "Stream capture is already active on the default stream.");
+      }
+
+      std::cout << "Current status is " << status << std::endl;
+
+      err = cudaStreamSynchronize(0);
+      if (err != cudaSuccess) {
+        throw std::runtime_error("Failed to synchronize the default stream: " +
+                                 std::string(cudaGetErrorString(err)));
+      }
+
+      err = cudaStreamBeginCapture(stream, cudaStreamCaptureModeRelaxed);
+      std::cout << "Begin capture" << std::endl;
+      if (err != cudaSuccess) {
+        throw std::runtime_error("Failed to begin CUDA stream capture: " +
+                                 std::string(cudaGetErrorString(err)) +
+                                 "and code " + std::to_string(err));
+      }
+    }
+
+    void end_record() {
+      cudaError_t err = cudaStreamEndCapture(0 /* default stream */, &graph);
+      if (err != cudaSuccess) {
+        throw std::runtime_error("Failed to end CUDA stream capture: " +
+                                 std::string(cudaGetErrorString(err)));
+      }
+
+      err = cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0);
+      if (err != cudaSuccess) {
+        throw std::runtime_error("Failed to instantiate CUDA graph: " +
+                                 std::string(cudaGetErrorString(err)));
+      }
+    }
+
+    void launch() {
+      if (!graphExec) {
+        throw std::runtime_error("CUDA graph has not been instantiated.");
+      }
+
+      cudaError_t err = cudaGraphLaunch(graphExec, 0 /* default stream */);
+      if (err != cudaSuccess) {
+        throw std::runtime_error("Failed to launch CUDA graph: " +
+                                 std::string(cudaGetErrorString(err)));
+      }
+    }
+
+  private:
+    cudaGraph_t graph;
+    cudaGraphExec_t graphExec;
+  };
+
+  py::class_<CudaGraph>(m, "CudaGraph")
+      .def(py::init<>())
+      .def("begin_record", &CudaGraph::begin_record,
+           "Begin recording CUDA operations into a graph")
+      .def("end_record", &CudaGraph::end_record,
+           "End recording and instantiate the CUDA graph")
+      .def("launch", &CudaGraph::launch, "Launch the recorded CUDA graph");
 };
