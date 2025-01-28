@@ -1,6 +1,7 @@
 #include "ad_primitives.hpp"
 #include "cuda_utils.cuh"
 #include "dispatch.hpp"
+#include "state.hpp"
 #include "unary.cuh"
 #include "utils.hpp"
 #include "view_helpers.cuh"
@@ -95,6 +96,7 @@ __global__ void fast_copy_zero_strided_to_strided(const int n, const T *in,
 
 namespace view {
 View as_contiguous(const View &view) {
+  auto stream = GlobalState::getInstance()->get_cuda_stream()->get();
   if (view.is_contiguous()) {
     return view;
   }
@@ -107,7 +109,7 @@ View as_contiguous(const View &view) {
           fast_copy_zero_strided_to_strided<scalar_t>
               <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) /
                       DEFAULT_BLOCK_SIZE),
-                 dim3(DEFAULT_BLOCK_SIZE)>>>(
+                 dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
                   view.numel(), view.get_casted_base_ptr<scalar_t>(),
                   contiguous_view.get_casted_base_ptr<scalar_t>());
         });
@@ -124,7 +126,7 @@ View as_contiguous(const View &view) {
     PG_DISPATCH_ALL_TYPES(view.dtype(), "as_contiguous_3d", [&]() {
       cuda::copy_kernel_3d<scalar_t>
           <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
-             dim3(DEFAULT_BLOCK_SIZE)>>>(
+             dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
               strides[0], strides[1], strides[2], view.shape()[0],
               view.shape()[1], view.shape()[2], contiguous_view.shape()[0],
               contiguous_view.shape()[1], contiguous_view.shape()[2],
@@ -141,7 +143,7 @@ View as_contiguous(const View &view) {
     PG_DISPATCH_ALL_TYPES(view.dtype(), "as_contiguous_4d", [&]() {
       cuda::copy_kernel_4d<scalar_t>
           <<<dim3((view.numel() + max_threads - 1) / max_threads),
-             dim3(max_threads)>>>(
+             dim3(max_threads), 0, stream>>>(
               strides[0], strides[1], strides[2], strides[3], view.shape()[0],
               view.shape()[1], view.shape()[2], view.shape()[3],
               view.get_casted_base_ptr<scalar_t>(),
@@ -155,7 +157,7 @@ View as_contiguous(const View &view) {
     PG_DISPATCH_ALL_TYPES(view.dtype(), "as_contiguous_5d", [&]() {
       cuda::copy_kernel_5d<scalar_t>
           <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
-             dim3(DEFAULT_BLOCK_SIZE)>>>(
+             dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
               strides[0], strides[1], strides[2], strides[3], strides[4],
               view.shape()[0], view.shape()[1], view.shape()[2],
               view.shape()[3], view.shape()[4],
@@ -184,6 +186,7 @@ View as_contiguous(const View &view) {
   return contiguous_view;
 }
 void copy(const View &src, const View &dst) {
+  auto stream = GlobalState::getInstance()->get_cuda_stream()->get();
   // if contiguous, we can use a faster kernel
   if (dst.is_contiguous()) {
     if (src.is_contiguous()) {
@@ -199,7 +202,7 @@ void copy(const View &src, const View &dst) {
         cuda::copy_kernel_3d<scalar_t>
             <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) /
                     DEFAULT_BLOCK_SIZE),
-               dim3(DEFAULT_BLOCK_SIZE)>>>(
+               dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
                 src.strides()[0] / dts, src.strides()[1] / dts,
                 src.strides()[2] / dts, src.shape()[0], src.shape()[1],
                 src.shape()[2], dst.shape()[0], dst.shape()[1], dst.shape()[2],
@@ -214,7 +217,7 @@ void copy(const View &src, const View &dst) {
         cuda::copy_kernel_4d<scalar_t>
             <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) /
                     DEFAULT_BLOCK_SIZE),
-               dim3(DEFAULT_BLOCK_SIZE)>>>(
+               dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
                 src.strides()[0] / dts, src.strides()[1] / dts,
                 src.strides()[2] / dts, src.strides()[3] / dts, src.shape()[0],
                 src.shape()[1], src.shape()[2], src.shape()[3],
@@ -229,7 +232,7 @@ void copy(const View &src, const View &dst) {
         cuda::copy_kernel_5d<scalar_t>
             <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) /
                     DEFAULT_BLOCK_SIZE),
-               dim3(DEFAULT_BLOCK_SIZE)>>>(
+               dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
                 src.strides()[0] / dts, src.strides()[1] / dts,
                 src.strides()[2] / dts, src.strides()[3] / dts,
                 src.strides()[4] / dts, src.shape()[0], src.shape()[1],
@@ -247,10 +250,10 @@ void copy(const View &src, const View &dst) {
     PG_DISPATCH_ALL_TYPES(src.dtype(), "copy_kernel_fast", [&]() {
       cuda::copy_kernel_fast<scalar_t>
           <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
-             dim3(DEFAULT_BLOCK_SIZE)>>>(d_src_strides.get(), d_src_shape.get(),
-                                         src.shape().size(),
-                                         src.get_casted_base_ptr<scalar_t>(),
-                                         dst.get_casted_base_ptr<scalar_t>());
+             dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
+              d_src_strides.get(), d_src_shape.get(), src.shape().size(),
+              src.get_casted_base_ptr<scalar_t>(),
+              dst.get_casted_base_ptr<scalar_t>());
     });
     PG_CUDA_KERNEL_END;
     return;
@@ -267,16 +270,17 @@ void copy(const View &src, const View &dst) {
   PG_DISPATCH_ALL_TYPES(src.dtype(), "copy_with_out_strides_kernel", [&]() {
     cuda::copy_with_out_strides_kernel<scalar_t>
         <<<dim3((src.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
-           dim3(DEFAULT_BLOCK_SIZE)>>>(d_src_strides.get(), d_src_shape.get(),
-                                       d_dst_strides.get(), d_dst_shape.get(),
-                                       src.shape().size(), dst.shape().size(),
-                                       src.get_casted_base_ptr<scalar_t>(),
-                                       dst.get_casted_base_ptr<scalar_t>());
+           dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
+            d_src_strides.get(), d_src_shape.get(), d_dst_strides.get(),
+            d_dst_shape.get(), src.shape().size(), dst.shape().size(),
+            src.get_casted_base_ptr<scalar_t>(),
+            dst.get_casted_base_ptr<scalar_t>());
   });
   PG_CUDA_KERNEL_END;
 }
 
 View astype(const View &view, const DType &dtype) {
+  auto stream = GlobalState::getInstance()->get_cuda_stream()->get();
   if (view.dtype() == dtype) {
     return view;
   }
@@ -288,7 +292,7 @@ View astype(const View &view, const DType &dtype) {
   PG_DISPATCH_ALL_TYPES_TWO_TYPES(view.dtype(), dtype, "astype", [&]() {
     cuda::astype_kernel<scalar_t1, scalar_t2>
         <<<dim3((view.numel() + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE),
-           dim3(DEFAULT_BLOCK_SIZE)>>>(
+           dim3(DEFAULT_BLOCK_SIZE), 0, stream>>>(
             d_strides.get(), d_shape.get(), view.shape().size(),
             view.get_casted_base_ptr<scalar_t1>(),
             new_view.get_casted_base_ptr<scalar_t2>());

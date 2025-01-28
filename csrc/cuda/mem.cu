@@ -183,34 +183,41 @@ AllocatorWrapper *AllocatorWrapper::instance = nullptr;
 
 std::shared_ptr<void> allocate_cuda_default(const size_t nbytes) {
   void *ptr;
-  CHECK_CUDA(cudaMallocAsync(&ptr, nbytes, 0));
-  return std::shared_ptr<void>(
-      ptr, [](void *p) { CHECK_CUDA(cudaFreeAsync(p, 0)); });
+  CHECK_CUDA(cudaMallocAsync(
+      &ptr, nbytes, GlobalState::getInstance()->get_cuda_stream()->get()));
+  return std::shared_ptr<void>(ptr, [](void *p) {
+    CHECK_CUDA(
+        cudaFreeAsync(p, GlobalState::getInstance()->get_cuda_stream()->get()));
+  });
 }
 
 void copy_from_cpu_to_cuda_default(const std::shared_ptr<void> &src,
                                    const std::shared_ptr<void> &dst,
                                    const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyHostToDevice, 0);
+  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyHostToDevice,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
 void copy_from_cpu_to_cuda_default(const void *src, std::shared_ptr<void> &dst,
                                    const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyHostToDevice, 0);
+  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyHostToDevice,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
 void copy_from_cuda_to_cpu_default(const std::shared_ptr<void> &src,
                                    const std::shared_ptr<void> &dst,
                                    const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyDeviceToHost, 0);
+  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyDeviceToHost,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
 void copy_from_cuda_to_cpu_default(const void *src, std::shared_ptr<void> &dst,
                                    const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyDeviceToHost, 0);
+  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyDeviceToHost,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
@@ -224,26 +231,30 @@ std::shared_ptr<void> allocate_cuda_custom(const size_t nbytes) {
 void copy_from_cpu_to_cuda_custom(const std::shared_ptr<void> &src,
                                   const std::shared_ptr<void> &dst,
                                   const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyHostToDevice, 0);
+  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyHostToDevice,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
 void copy_from_cpu_to_cuda_custom(const void *src, std::shared_ptr<void> &dst,
                                   const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyHostToDevice, 0);
+  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyHostToDevice,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
 void copy_from_cuda_to_cpu_custom(const std::shared_ptr<void> &src,
                                   const std::shared_ptr<void> &dst,
                                   const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyDeviceToHost, 0);
+  cudaMemcpyAsync(dst.get(), src.get(), nbytes, cudaMemcpyDeviceToHost,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 
 void copy_from_cuda_to_cpu_custom(const void *src, std::shared_ptr<void> &dst,
                                   const size_t nbytes) {
-  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyDeviceToHost, 0);
+  cudaMemcpyAsync(dst.get(), src, nbytes, cudaMemcpyDeviceToHost,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   CHECK_CUDA(cudaGetLastError());
 }
 

@@ -2,8 +2,8 @@
 #include "cuda_utils.cuh"
 #include "dispatch.hpp"
 #include "folding.cuh"
+#include "state.hpp"
 #include "view_helpers.cuh"
-
 // cudnn
 #include <cudnn.h>
 #include <cudnn_cnn.h>
@@ -142,7 +142,8 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
   if (!this->initialized) {
     PG_CHECK_CUDNN(cudnnCreate(&handle));
     // set stream to 0
-    PG_CHECK_CUDNN(cudnnSetStream(handle, 0));
+    PG_CHECK_CUDNN(cudnnSetStream(
+        handle, GlobalState::getInstance()->get_cuda_stream()->get()));
     PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&input_desc));
     PG_CHECK_CUDNN(cudnnCreateTensorDescriptor(&output_desc));
     PG_CHECK_CUDNN(cudnnCreateFilterDescriptor(&filter_desc));
@@ -192,7 +193,8 @@ void CudnnConv2D::dispatch_cuda(const std::vector<Tensor> &inputs,
     this->workspace_size = workspace_size;
     this->algo = perfResults[0].algo;
     this->workspace = nullptr;
-    cudaMallocAsync(&this->workspace, workspace_size, 0);
+    cudaMallocAsync(&this->workspace, workspace_size,
+                    GlobalState::getInstance()->get_cuda_stream()->get());
   }
   float alpha = 1.0f, beta = 0.0f;
   PG_CHECK_CUDNN(cudnnConvolutionForward(

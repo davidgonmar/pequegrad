@@ -70,9 +70,18 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("str", &device::Device::str)
       .def("__repr__", &device::Device::str);
 
+  py::class_<CudaStream, std::shared_ptr<CudaStream>>(m, "CudaStream")
+      .def(py::init<unsigned int>(), py::arg("flags") = cudaStreamDefault)
+      .def("synchronize", &CudaStream::synchronize);
+
   // state
   m.def("set_global_state_cuda_allocator", [](std::string d) {
     GlobalState::getInstance()->set_cuda_allocator(d);
+  });
+  m.def("set_global_state_cuda_stream", [](std::shared_ptr<CudaStream> s) {
+     GlobalState::getInstance()->set_cuda_stream(s);
+   }).def("get_global_state_cuda_stream", []() {
+    return GlobalState::getInstance()->get_cuda_stream();
   });
   m.def("reset_global_allocator_memory", []() { reset_custom_allocator(); });
 
@@ -693,6 +702,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
       .def("shape_to", &BroadcastTo::shape_to);
 
   class CudaGraph {
+    std::shared_ptr<CudaStream> stream;
+
   public:
     CudaGraph() : graph(nullptr), graphExec(nullptr) {}
 
@@ -704,14 +715,11 @@ PYBIND11_MODULE(pequegrad_c, m) {
     }
 
     void begin_record() {
-      cudaStream_t stream;
-
-      cudaError_t err = cudaStreamCreate(&stream);
-
-      GlobalState::getInstance()->set_cuda_stream((int)stream);
+      std::shared_ptr<CudaStream> stream = std::make_shared<CudaStream>();
+      GlobalState::getInstance()->set_cuda_stream(stream);
 
       cudaStreamCaptureStatus status;
-      err = cudaStreamGetCaptureInfo(0, &status, nullptr);
+      auto err = cudaStreamGetCaptureInfo(0, &status, nullptr);
       if (err != cudaSuccess) {
         throw std::runtime_error("Failed to get stream capture info: " +
                                  std::string(cudaGetErrorString(err)));
@@ -730,17 +738,19 @@ PYBIND11_MODULE(pequegrad_c, m) {
                                  std::string(cudaGetErrorString(err)));
       }
 
-      err = cudaStreamBeginCapture(stream, cudaStreamCaptureModeRelaxed);
+      err = cudaStreamBeginCapture(stream->get(), cudaStreamCaptureModeRelaxed);
       std::cout << "Begin capture" << std::endl;
       if (err != cudaSuccess) {
         throw std::runtime_error("Failed to begin CUDA stream capture: " +
                                  std::string(cudaGetErrorString(err)) +
                                  "and code " + std::to_string(err));
       }
+
+      this->stream = stream;
     }
 
     void end_record() {
-      cudaError_t err = cudaStreamEndCapture(0 /* default stream */, &graph);
+      cudaError_t err = cudaStreamEndCapture(stream->get(), &graph);
       if (err != cudaSuccess) {
         throw std::runtime_error("Failed to end CUDA stream capture: " +
                                  std::string(cudaGetErrorString(err)));
@@ -751,6 +761,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
         throw std::runtime_error("Failed to instantiate CUDA graph: " +
                                  std::string(cudaGetErrorString(err)));
       }
+
+      this->stream = nullptr;
     }
 
     void launch() {

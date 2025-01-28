@@ -1,3 +1,4 @@
+#include "state.hpp"
 #include "utils.hpp"
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -110,10 +111,11 @@ private:
     if (_func == nullptr) {
       throw std::runtime_error("Kernel not compiled");
     }
+    auto cuda_stream = GlobalState::getInstance()->get_cuda_stream()->get();
     CUresult R = cuLaunchKernel(_func, _blocks_per_grid.x, _blocks_per_grid.y,
                                 _blocks_per_grid.z, _threads_per_block.x,
                                 _threads_per_block.y, _threads_per_block.z, 0,
-                                0, args.data(), nullptr);
+                                cuda_stream, args.data(), nullptr);
     PG_CHECK_RUNTIME(R == CUDA_SUCCESS, "Failed to launch kernel: got " +
                                             std::to_string(R) + " for kernel " +
                                             _name);

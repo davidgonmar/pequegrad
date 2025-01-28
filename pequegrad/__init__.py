@@ -8,6 +8,7 @@ from pequegrad.backend.c import (
     force_emulated_devices,
     Device,
     from_str,
+    CudaStream,
 )  # noqa
 from pequegrad.tensor import *  # noqa
 from pequegrad.optim import *  # noqa
@@ -19,6 +20,7 @@ from pequegrad.ops import *  # noqa
 from pequegrad.distrib.sharded_tensor import *  # noqa
 from pequegrad.viz import *  # noqa
 from pequegrad.distrib import *  # noqa
+from pequegrad.state import *  # noqa
 
 
 class DeviceModule:

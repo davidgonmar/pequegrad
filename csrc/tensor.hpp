@@ -5,6 +5,7 @@
 #include "device.hpp"
 #include "dtype.hpp"
 #include "shape.hpp"
+#include "state.hpp"
 #include "utils.hpp"
 #include <iostream>
 #include <memory>

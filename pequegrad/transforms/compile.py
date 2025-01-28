@@ -165,17 +165,9 @@ class jit(LazyFunction):
             sync_cuda_device()
             with cuda_allocator("custom"):
                 cg = CudaGraph()
-                print("Recording")
                 cg.begin_record()
-                print("Recording done")
-                outs = [
-                    o.eval()
-                    if (print("yaaa") or True)
-                    else None
-                    if isinstance(o, Tensor)
-                    else o
-                    for o in outs
-                ]
+                outs = [o.eval() if isinstance(o, Tensor) else o for o in outs]
+                print("Recorded CUDA graph")
                 cg.end_record()
             self.graph = cg
             self.cg_outs = outs

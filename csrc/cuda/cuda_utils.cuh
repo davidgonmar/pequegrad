@@ -1,6 +1,8 @@
 #pragma once
 
+#include "cuda/mem.hpp"
 #include "shape.hpp"
+#include "state.hpp"
 #include <cuda_runtime.h>
 #include <iostream>
 #include <memory>
@@ -58,24 +60,26 @@ static inline __device__ int get_max_idx(const size_t *shape,
   return accum;
 }
 
-template <typename T> using cuda_unique_ptr = std::unique_ptr<T, void (*)(T *)>;
+template <typename T> using cuda_unique_ptr = std::shared_ptr<T>;
 
 template <typename T>
 cuda_unique_ptr<T> cuda_unique_ptr_from_host(const size_t size,
                                              const T *host_ptr) {
-  T *device_ptr = nullptr;
-  CHECK_CUDA(cudaMallocAsync(&device_ptr, size * sizeof(T), 0));
-  CHECK_CUDA(cudaMemcpyAsync(device_ptr, host_ptr, size * sizeof(T),
-                             cudaMemcpyHostToDevice));
-  return cuda_unique_ptr<T>(device_ptr,
-                            [](T *ptr) { CHECK_CUDA(cudaFreeAsync(ptr, 0)); });
+  auto sptr = allocate_cuda(size * sizeof(T));
+  CHECK_CUDA(cudaMemcpyAsync(
+      sptr.get(), host_ptr, size * sizeof(T), cudaMemcpyHostToDevice,
+      GlobalState::getInstance()->get_cuda_stream()->get()));
+  return std::static_pointer_cast<T>(sptr);
 }
 
 #define SHOULD_SYNC 0
 #define PG_CUDA_KERNEL_END                                                     \
   do {                                                                         \
-    if (SHOULD_SYNC) {                                                         \
+    if (SHOULD_SYNC == 1) {                                                    \
       CHECK_CUDA(cudaDeviceSynchronize());                                     \
+    } else if (SHOULD_SYNC == 2) {                                             \
+      CHECK_CUDA(cudaStreamSynchronize(                                        \
+          GlobalState::getInstance()->get_cuda_stream()->get()));              \
     }                                                                          \
     CHECK_CUDA(cudaGetLastError());                                            \
                                                                                \

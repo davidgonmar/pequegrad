@@ -3,6 +3,7 @@
 #include "dispatch.hpp"
 #include "dtype.hpp"
 #include "matmul.cuh"
+#include "state.hpp"
 #include "view_helpers.cuh"
 #include <cublas_v2.h>
 
@@ -80,7 +81,8 @@ void MatMul::dispatch_cuda(const std::vector<Tensor> &inputs,
   cublasHandle_t cublas_handle;
   cublasCreate(&cublas_handle);
   // set to stream 0
-  cublasSetStream(cublas_handle, 0);
+  cublasSetStream(cublas_handle,
+                  GlobalState::getInstance()->get_cuda_stream()->get());
   int B = 1;
   for (size_t i = 0; i < a.ndim() - 2; i++) {
     PG_CHECK_ARG(a.shape()[i] == b.shape()[i],
