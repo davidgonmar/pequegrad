@@ -1,4 +1,4 @@
-from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, device, fnvhp
+from pequegrad import fngrad, fnjacobian, Tensor, dt, fnhessian, fnvhp
 import numpy as np
 import torch
 
@@ -9,9 +9,9 @@ def f(a, b, c):
 
 
 a, b, c = (
-    Tensor(np.random.rand(5, 5), device=device.cuda),
-    Tensor(np.random.rand(5, 5), device=device.cuda),
-    Tensor(np.random.rand(5, 5), device=device.cuda),
+    Tensor(np.random.rand(5, 5), device="cuda"),
+    Tensor(np.random.rand(5, 5), device="cuda"),
+    Tensor(np.random.rand(5, 5), device="cuda"),
 )
 a, b, c = a.astype(dt.float32), b.astype(dt.float32), c.astype(dt.float32)
 
@@ -35,6 +35,7 @@ for i in range(3):
         grads[i].numpy(), torch_grads[i].detach().numpy(), rtol=1e-5
     )
 
+print("Gradient test passed")
 
 # JACOBIAN
 
@@ -49,6 +50,7 @@ for i in range(3):
         jacobian[i].numpy(), torch_jacobian[i].detach().numpy(), rtol=1e-5
     )
 
+print("Jacobian test passed")
 
 # HESSIAN (this one takes a while :( )
 
@@ -64,6 +66,8 @@ for i in range(3):
             hessians[i][j].numpy(), torch_hessian[i][j].detach().numpy(), rtol=1e-5
         )
 
+print("Hessian test passed")
+
 # VECTOR HESSIAN PRODUCT
 
 
@@ -73,7 +77,7 @@ def f_scalar(a, b):
     return x.sum()
 
 
-v = Tensor(np.random.rand(5, 5), device=device.cuda).astype(dt.float32)
+v = Tensor(np.random.rand(5, 5), device="cuda").astype(dt.float32)
 vtorch = torch.tensor(v.numpy(), requires_grad=True)
 
 f_and_vhp = fnvhp(f_scalar, wrt=[0, 1], return_outs=True)
@@ -86,3 +90,5 @@ torch_res, torch_vhp = torch.autograd.functional.vhp(
 
 for i in range(2):
     np.testing.assert_allclose(vhp[i].numpy(), torch_vhp[i].detach().numpy(), rtol=1e-5)
+
+print("Vector Hessian Product test passed")

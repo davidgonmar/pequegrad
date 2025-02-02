@@ -904,8 +904,8 @@ static std::string hash_tensor(Tensor &t,
   }
   std::string hash = t.ad_node()->primitive()->str();
   // if we are using non-eliminable primitives, we need to add a random number
-  std::array<std::string, 4> nonelim = {"ADPrimitive", "FromNumpy", "Compiled",
-                                        "JitBoundary"};
+  std::array<std::string, 5> nonelim = {"ADPrimitive", "FromNumpy", "Compiled",
+                                        "JitBoundary", "AssignAt"};
   for (const auto &substr : nonelim) {
     if (hash.find(substr) != std::string::npos) {
       hash += "--" + std::to_string(*nonelim_count) + "--";
