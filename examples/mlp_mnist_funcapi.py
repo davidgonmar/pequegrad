@@ -57,6 +57,7 @@ def train(model, ds, epochs=13, batch_size=4096):
         optim_state, params_dict, loss = update(
             optim_state, params_dict, x, batch_y_onehot
         )
+        update.print_trace()
         print(f"Step {i} | Loss {loss.numpy()}")
         if i >= epochs:
             break

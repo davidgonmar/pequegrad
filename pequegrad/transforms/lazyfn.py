@@ -23,6 +23,8 @@ def print_trace(trace):
     curr = 0
 
     def n(x):
+        if not isinstance(x, Tensor):
+            return str(x)
         nonlocal curr
         if x.id not in name_map:
             name_map[x.id] = f"v{curr}"
@@ -76,6 +78,8 @@ def print_trace(trace):
             visited.add(x.id)
 
     for out in outs:
+        if not isinstance(out, Tensor):
+            continue
         recurse(out)
     strres += "  " + "\n  ".join(body) + "\n"
 
