@@ -32,6 +32,7 @@ from .ops import (
     split,
     pad_to,
     cat,
+    min_reduce,
     assign_at,
 )
 
@@ -179,6 +180,11 @@ bind_method(
     Tensor,
     "max_reduce",
     lambda self, dim=None, keepdim=False: pg.max_reduce(self, dim, keepdim),
+)
+bind_method(
+    Tensor,
+    "min_reduce",
+    lambda self, dim=None, keepdim=False: min_reduce(self, dim, keepdim),
 )
 bind_method(
     Tensor,

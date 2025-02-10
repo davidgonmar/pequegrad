@@ -1014,7 +1014,13 @@ def cumsum(self, dim: int = 0):
 
 
 def arange(start: int, end: int, step: int = 1, dtype=dt.float32, device="cpu"):
-    return cumsum(ones(((end - start) // step,), dtype, device) * step, 0) + start
+    if dtype == dt.int32:
+        return (
+            cumsum(ones(((end - start) // step,), dt.float32, device) * step, 0)
+            + start
+            - 1
+        ).astype(dt.int32)
+    return cumsum(ones(((end - start) // step,), dtype, device) * step, 0) + start - 1
 
 
 def eye(n: int, m: int = None, dtype=dt.float32, device="cpu"):
@@ -1023,3 +1029,32 @@ def eye(n: int, m: int = None, dtype=dt.float32, device="cpu"):
     return (
         arange(0, n, 1, dtype, device).reshape((n, 1)) == arange(0, m, 1, dtype, device)
     ).astype(dtype)
+
+
+def min_reduce(self, axes: int = None, keepdims: bool = False):
+    return -pg.max_reduce(-self, axes, keepdims)
+
+
+def digitize(self, nbins: int) -> Tensor:
+    """
+    Returns the indices of the bins to which each value in input belongs
+    """
+    assert self.ndim == 1, "digitize is only supported for 1D tensors"
+    scale = (
+        self.max_reduce() - self.min_reduce()
+    ) / nbins  # in self, the size of each step is 'scale'
+    return clip(
+        round((self - self.min_reduce()) / scale).astype(dt.int32), 0, nbins - 1
+    )
+
+
+def histogram(digitized: Tensor, nbins) -> Tensor:
+    """
+    Returns the histogram of the tensor
+    """
+    assert digitized.ndim == 1, "histogram is only supported for 1D tensors"
+    return pg.sum(
+        arange(0, nbins, 1, digitized.dtype, digitized.device).reshape((1, -1))
+        == digitized.reshape((-1, 1)),
+        0,
+    ).reshape((-1,))
