@@ -1058,3 +1058,22 @@ def histogram(digitized: Tensor, nbins) -> Tensor:
         == digitized.reshape((-1, 1)),
         0,
     ).reshape((-1,))
+
+
+def meshgrid(x, y):
+    assert x.ndim == 1 and y.ndim == 1
+    x = broadcast_to(x.reshape((-1, 1)), (x.shape[0], y.shape[0]))
+    y = broadcast_to(y.reshape((1, -1)), (x.shape[0], y.shape[0]))
+    return x, y
+
+
+def linspace(start: float, end: float, steps: int, dtype=dt.float32, device="cpu"):
+    return arange(0, steps, 1, dtype, device) * (end - start) / (steps - 1) + start
+
+
+def floor(self):
+    return round(self - 0.5)
+
+
+def ceil(self):
+    return round(self + 0.5)
