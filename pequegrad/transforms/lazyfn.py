@@ -168,8 +168,8 @@ class LazyFunction:
         # TODO -- MIGHT CAUSE BUGS
         new_args = self._get_args_for_original_fn(args)
         outs, outs_pytree = tree_flatten(self.f(*new_args))
-        inputs, inputs_pytree = tree_flatten(new_args)
-        input_tensors = extract_input_tensors(inputs)
+        # inputs, inputs_pytree = tree_flatten(new_args)
+        # input_tensors = extract_input_tensors(inputs) # breaks vmap
 
         out_tensors = extract_input_tensors(outs)
         out_tensors, input_tensors = clone_graph(out_tensors, input_tensors)

@@ -4,21 +4,27 @@ from jax._src.util import safe_map
 from pequegrad import ops
 import pequegrad as pg
 
+
 class Env:
     def __init__(self):
         self.env = {}
+
     def __getitem__(self, key):
         key = str(key)
         return self.env[key]
+
     def __setitem__(self, key, value):
         key = str(key)
         self.env[key] = value
+
     def __contains__(self, key):
         key = str(key)
         return key in self.env
+
     def get(self, key, default=None):
         key = str(key)
         return self.env.get(key, default)
+
 
 @pg.jit
 def pg_tensor_interp(jaxpr, device, consts, *args):
@@ -29,19 +35,29 @@ def pg_tensor_interp(jaxpr, device, consts, *args):
     for var, arg in zip(jaxpr.invars, flat_args):
         env[var] = arg
     for eqn in jaxpr.eqns:
-        in_vals = [v.val if isinstance(v, jax.core.Literal) else env[v] for v in eqn.invars]
-        in_vals = [v if isinstance(v, pg.Tensor) else pg.fill((), pg.dt.float32, v.item(), device) for v in in_vals]
+        in_vals = [
+            v.val if isinstance(v, jax.core.Literal) else env[v] for v in eqn.invars
+        ]
+        in_vals = [
+            v
+            if isinstance(v, pg.Tensor)
+            else pg.fill((), pg.dt.float32, v.item(), device)
+            for v in in_vals
+        ]
         prim_name = eqn.primitive.name
         if prim_name == "dot_general":
             dimension_numbers = eqn.params.get(
-                "dimension_numbers",
-                (([in_vals[0].ndim - 1], [0]), ((), ()))
+                "dimension_numbers", (([in_vals[0].ndim - 1], [0]), ((), ()))
             )
             (lhs_contract, rhs_contract), (lhs_batch, rhs_batch) = dimension_numbers
             if len(lhs_batch) == 0 and len(rhs_batch) == 0:
-                res = ops.tensordot(in_vals[0], in_vals[1], dims=(lhs_contract, rhs_contract))
+                res = ops.tensordot(
+                    in_vals[0], in_vals[1], dims=(lhs_contract, rhs_contract)
+                )
             else:
-                raise NotImplementedError("dot_general with batch dimensions is not implemented.")
+                raise NotImplementedError(
+                    "dot_general with batch dimensions is not implemented."
+                )
         elif prim_name == "add":
             res = ops.add(in_vals[0], in_vals[1])
         elif prim_name == "tanh":
@@ -51,7 +67,7 @@ def pg_tensor_interp(jaxpr, device, consts, *args):
         elif prim_name == "sub":
             res = ops.sub(in_vals[0], in_vals[1])
         elif prim_name == "power":
-            exponent = eqn.params.get('exponent', 2)
+            exponent = eqn.params.get("exponent", 2)
             res = ops.pow(in_vals[0], exponent)
         elif prim_name == "mean":
             res = ops.mean(in_vals[0], axes=eqn.params.get("axis"))
@@ -84,7 +100,9 @@ def pg_tensor_interp(jaxpr, device, consts, *args):
         elif prim_name == "copy":
             res = in_vals[0].copy()
         else:
-            raise NotImplementedError(f"Primitive '{prim_name}' not implemented in numpy_interp.")
+            raise NotImplementedError(
+                f"Primitive '{prim_name}' not implemented in numpy_interp."
+            )
         if len(eqn.outvars) == 1:
             env[eqn.outvars[0]] = res
         else:
@@ -101,7 +119,9 @@ def eval_jaxpr(jaxpr, consts, *args, device):
         env[var] = pg.Tensor(const, device=device).astype("float32")
     flat_args, _ = tree_flatten(args)
     for var, arg in zip(jaxpr.invars, flat_args):
-        env[var] = pg.Tensor(arg, device=device).astype("float32") # TODO -- some way of extracting the type from the jaxpr
+        env[var] = pg.Tensor(arg, device=device).astype(
+            "float32"
+        )  # TODO -- some way of extracting the type from the jaxpr
     _args = [env[var] for var in jaxpr.invars]
     _consts = [env[var] for var in jaxpr.constvars]
     return pg_tensor_interp(jaxpr, device, _consts, *_args)
@@ -110,10 +130,12 @@ def eval_jaxpr(jaxpr, consts, *args, device):
 def jax_jit(device="cuda"):
     if isinstance(device, str):
         device = pg.device.from_str(device)
+
     def inner(fun):
         # get in and out pytrees
         in_pytree = None
         out_pytree = None
+
         def wrapper(*args):
             nonlocal in_pytree, out_pytree
             if in_pytree is None:
@@ -124,6 +146,7 @@ def jax_jit(device="cuda"):
             res = eval_jaxpr(jaxpr_obj.jaxpr, jaxpr_obj.literals, *args, device=device)
             res_np = jax.tree_map(lambda x: x.numpy(), res)
             return jax.tree_unflatten(out_pytree, res_np)
+
         return wrapper
-    
+
     return inner

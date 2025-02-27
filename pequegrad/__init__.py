@@ -39,7 +39,7 @@ class DeviceModule:
     @staticmethod
     def force_emulated_devices(num, str):
         return force_emulated_devices(num, str)
-    
+
     @staticmethod
     def from_str(str):
         return from_str(str)

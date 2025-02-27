@@ -449,3 +449,65 @@ class jvp(LazyFunction):
 
 def value_and_grad(f, wrt=[0]):
     return fngrad(f, wrt, return_outs=True)
+
+
+class vjp(LazyFunction):
+    def __init__(self, f, wrt, return_outs=False):
+        super().__init__(f)
+        self.wrt = wrt
+        self.return_outs = return_outs
+
+    def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
+        # fngrad returns the same trace, but the outputs -> outputs, grads if return_outs is True, else grads
+        fn_out = trace.outputs
+        assert len(fn_out) == 1, "Only one output supported"
+        flattened_indices = []
+        for xxx in self.wrt:
+            flattened_indices.extend(flatten_argnums(trace.inputs_pytree, [xxx]))
+        wrt = [trace.inputs[i] for i in flattened_indices]
+        cotangent = trace.inputs[-1]
+        grad = grads(wrt, fn_out[0], cotangent)
+        assert len(grad) == len(wrt), "Gradient and wrt must have the same length"
+        new_outs = fn_out + grad if self.return_outs else grad
+        new_outs_pytree = None
+
+        # returned grads have shape of the wrt (maybe a dict for named parameters)
+        # so we get the inputs_pytree of the wrt
+        wrt_pytree = make_pytree_list(
+            [trace.inputs_pytree.structure[i] for i in self.wrt]
+        )
+        if self.return_outs:
+            new_outs_pytree = PyTreeDef(
+                type=tuple, structure=[trace.outputs_pytree, wrt_pytree]
+            )
+        else:
+            new_outs_pytree = wrt_pytree
+        return GraphTrace(
+            inputs=trace.inputs,
+            inputs_pytree=trace.inputs_pytree,
+            input_tensors=trace.input_tensors,
+            outputs=new_outs,
+            outputs_pytree=new_outs_pytree,
+        )
+
+    def _get_args_for_original_fn(self, args):
+        # all args except last one
+        return args[:-1]
+
+
+def jvp(f, wrt):
+    assert len(wrt) == 1, "Only one wrt supported"
+
+    def new_function(*args):
+        v = args[-1]
+        args = args[:-1]
+
+        def _f(*args):
+            # v = args[-1]
+            vjp_res = vjp(f, wrt=wrt)(*args)
+            return vjp_res[0]  # returns (u * Jf)
+
+        vjp2 = vjp(_f, wrt=[len(args)])(*args, v, v)  # returns (Jf) * v
+        return vjp2
+
+    return new_function

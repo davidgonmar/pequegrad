@@ -8,8 +8,10 @@ import pequegrad.jax as pg_jax
 
 DEVICE = "cuda"
 
+
 class FlaxMLP(nn.Module):
     features: list
+
     @nn.compact
     def __call__(self, x):
         for feat in self.features[:-1]:
@@ -26,7 +28,9 @@ def loss(params, x, y):
     preds = mlp_model.apply(params, x)
     return jnp.mean((preds - y) ** 2)
 
+
 grad_loss = grad(loss)
+
 
 @pg_jax.jax_jit(DEVICE)
 def update(params, x, y, lr):
@@ -35,6 +39,7 @@ def update(params, x, y, lr):
     flat_grads, _ = tree_flatten(grads)
     new_flat_params = [p - lr * g for p, g in zip(flat_params, flat_grads)]
     return tree_unflatten(tree_def, new_flat_params)
+
 
 input_dim = 10
 key = jax.random.PRNGKey(42)
