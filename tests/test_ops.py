@@ -128,11 +128,11 @@ class TestNew:
             [shape, shape],
             pq_fn,
             torch_fn,
-            backward=do_backward_float
-            if dtype in [dt.float32, dt.float64]
-            else do_backward_on_int
-            if dtype == dt.int32
-            else False,
+            backward=(
+                do_backward_float
+                if dtype in [dt.float32, dt.float64]
+                else do_backward_on_int if dtype == dt.int32 else False
+            ),
             device=device,
             dtype=dtype,
         )

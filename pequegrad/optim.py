@@ -165,8 +165,7 @@ class JittedAdam:
 ### Functional API
 
 
-class OptimizerState:
-    ...
+class OptimizerState: ...
 
 
 class AdamState(OptimizerState):

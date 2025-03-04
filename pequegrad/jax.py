@@ -39,9 +39,11 @@ def pg_tensor_interp(jaxpr, device, consts, *args):
             v.val if isinstance(v, jax.core.Literal) else env[v] for v in eqn.invars
         ]
         in_vals = [
-            v
-            if isinstance(v, pg.Tensor)
-            else pg.fill((), pg.dt.float32, v.item(), device)
+            (
+                v
+                if isinstance(v, pg.Tensor)
+                else pg.fill((), pg.dt.float32, v.item(), device)
+            )
             for v in in_vals
         ]
         prim_name = eqn.primitive.name

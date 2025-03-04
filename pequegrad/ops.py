@@ -14,6 +14,7 @@ _Shape = Union[int, Tuple[int, ...]]
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
 
 from pequegrad.backend.c import Device, from_str  # noqa
+import functools
 
 
 class DeviceModule:
@@ -113,10 +114,7 @@ def gelu(self, approximate: str = None):
         return (
             0.5
             * self
-            * (
-                1.0
-                + pg.tanh(math.sqrt(2 / math.pi) * (self + 0.044715 * (self**3.0)))
-            )
+            * (1.0 + pg.tanh(math.sqrt(2 / math.pi) * (self + 0.044715 * (self**3.0))))
         )
 
 
@@ -406,6 +404,18 @@ def conv_transpose2d(
     return out
 
 
+def depthwise_separable_conv2d(
+    self,
+    filter: "Tensor",
+    bias: "Tensor" = None,
+    stride: Union[int, Tuple[int, int]] = 1,
+    dilation: Union[int, Tuple[int, int]] = 1,
+    padding: Union[int, Tuple[int, int]] = 0,
+):
+    ngroups = filter.shape[1]  # each channel is a group
+    return conv2d(filter, bias, stride, dilation, padding, groups=ngroups)
+
+
 def _pool2d(
     self,
     kernel_size: Tuple[int, int],
@@ -420,9 +430,7 @@ def _pool2d(
     stride = (
         kernel_size
         if stride is None
-        else (stride, stride)
-        if isinstance(stride, int)
-        else stride
+        else (stride, stride) if isinstance(stride, int) else stride
     )
     assert stride[0] == stride[1], "kernel size must be square"
 
@@ -477,9 +485,7 @@ def var(self, dim=None, keepdim=True, correction=1):
     assert (
         dim >= 0
         if isinstance(dim, int)
-        else all(d >= 0 for d in dim)
-        if dim is not None
-        else True
+        else all(d >= 0 for d in dim) if dim is not None else True
     ), "only positive dims supported by now. Got {}".format(dim)
 
     N = (
@@ -944,12 +950,16 @@ def round(self):
 
 def clip(self, min, max):
     min, max = (
-        fill((), self.dtype, min, self.device)
-        if isinstance(min, (int, float))
-        else min,
-        fill((), self.dtype, max, self.device)
-        if isinstance(max, (int, float))
-        else max,
+        (
+            fill((), self.dtype, min, self.device)
+            if isinstance(min, (int, float))
+            else min
+        ),
+        (
+            fill((), self.dtype, max, self.device)
+            if isinstance(max, (int, float))
+            else max
+        ),
     )
     min, max = pg.broadcast_to(min, self.shape), pg.broadcast_to(max, self.shape)
     return pg.where(self < min, min, pg.where(self > max, max, self))
