@@ -55,12 +55,6 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
       return;
     }
 
-    // if is FromNumpy, but reached here, throw (unsafe)
-    if (t.ad_node()->primitive()->str() == "FromNumpy") {
-      throw std::runtime_error(
-          "FromNumpy should not be in the graph and not an input: " + t.str());
-    }
-
     for (Tensor &child : t.children()) {
       copy(child);
     }
@@ -100,7 +94,10 @@ clone_graph(std::vector<Tensor> &outputs, std::vector<Tensor> &inputs) {
     std::vector<Tensor> newsibs = {};
     // if new_t has siblings, we need to copy them as well
     for (Tensor &sib : siblings) {
-      Tensor new_sib = sib.copy_graph(new_children);
+      bool copy_data = sib.ad_node()->primitive()->str() == "FromNumpy" ||
+                       sib.ad_node()->primitive()->str() == "ADPrimitive";
+      Tensor new_sib =
+          sib.copy_graph(new_children, sib.ad_node()->primitive(), copy_data);
       new_sib.ad_node()->set_position(sib.ad_node()->position());
       old_to_new[sib] = new_sib;
       newsibs.push_back(new_sib);

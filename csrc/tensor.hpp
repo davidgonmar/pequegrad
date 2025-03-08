@@ -487,9 +487,9 @@ public:
     this->id = other.id;
     return *this;
   }
-  Tensor copy_graph(
-      std::vector<Tensor> &inputs,
-      std::optional<std::shared_ptr<ADPrimitive>> primitive = std::nullopt);
+  Tensor copy_graph(std::vector<Tensor> &inputs,
+                    std::shared_ptr<ADPrimitive> primitive,
+                    bool maintain_data = false);
   Tensor copy_but_lose_grad_info() {
     Tensor copy = *this;
     copy._ad_node = std::make_shared<ADNode>(copy._ad_node->primitive(),

@@ -402,12 +402,13 @@ class GPT(pnn.Module):
         # pad idx to max block size
         idx = idx.astype(pg.dt.int32).pad_to(self.block_size).eval().detach().to("cuda")
 
-        @pg.jit.withargs(opts={"common_subexpr_elim": False})
-        def runmodel(x, params, curridx, temperature):
+        params = pg.tree_map(lambda x: x.eval(), self.tree_flatten())
+
+        @pg.jit.withargs(opts={"common_subexpr_elim": False}, allocator="custom")
+        def runmodel(x, curridx, temperature):
             logits = pnn.apply_to_module(self, params, x)
             logits = logits[curridx] / temperature
             probs = pg.softmax(logits, dim=-1)
-
             return probs.squeeze(0)
 
         import sys
@@ -428,13 +429,11 @@ class GPT(pnn.Module):
 
             sys.stdout.flush()
 
-        di = self.tree_flatten()
         for _ in range(max_new_tokens):
             start = time.time()
             # forward the model to get the logits for the index in the sequence
             probs = runmodel(
                 idx,
-                di,
                 pg.Tensor([curr], device="cuda").astype(pg.dt.int32),
                 temperature,
             ).numpy()

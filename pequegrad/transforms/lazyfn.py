@@ -73,7 +73,7 @@ def print_trace(trace):
             if x.id in [x.id for x in inps]:
                 return
             body.append(
-                f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"
+                f"{repr_tensor(x)} = {x.ad_context()}({', '.join([n(y) for y in x.children()])})"  # + "is_evaled=" + str(x.is_evaled())
             )
             visited.add(x.id)
 
@@ -222,6 +222,26 @@ class LazyFunction:
         trace = self.cache[last_key]
 
         print_trace(trace)
+
+    def get_constants(self):
+        assert len(self.cache) > 0, "No cache entries"
+        last_key = list(self.cache.keys())[-1]
+        trace = self.cache[last_key]
+        # constants are elements in the graph with primitive FromNumpy or ADPrimitive
+        constants = []
+        visited = set()
+
+        def recurse(x):
+            if x.id not in visited:
+                for child in x.children():
+                    recurse(child)
+                if x.op == "FromNumpy" or x.op == "ADPrimitive":
+                    constants.append(x)
+                visited.add(x.id)
+
+        for out in trace.outputs:
+            recurse(out)
+        return constants
 
 
 class Identity(LazyFunction):
