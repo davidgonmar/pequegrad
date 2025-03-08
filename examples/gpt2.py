@@ -150,7 +150,6 @@ class CausalSelfAttention(pnn.Module):
         T, C = x.size()  # sequence length, embedding dimensionality (n_embd)
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = self.c_attn(x).split(self.n_embd, dim=1)
-
         # compute attention in torch to assert close
         k = k.reshape((T, self.n_head, C // self.n_head)).transpose(
             0, 1
@@ -437,6 +436,8 @@ class GPT(pnn.Module):
                 pg.Tensor([curr], device="cuda").astype(pg.dt.int32),
                 temperature,
             ).numpy()
+
+            # runmodel.print_trace()
             # sample from the distribution
             idx_next = np.random.choice(probs.shape[0], p=probs)
             if curr + 1 < len(idx):
@@ -501,10 +502,9 @@ generate(
     num_samples=10,
     steps=10000,
 )
-"""
-from functools import partial
-@partial(jit, externals=model.parameters(), enabled=True)
-def model_pass(x):
+
+
+"""def model_pass(x):
     logits = model(x)
     return logits
 
@@ -519,4 +519,18 @@ for _ in range(10):
     pg.sync_cuda_device()
     print("elapsed time: %.2f s" % (time.time() - start))
 
+@pg.jit.withargs(opts={"common_subexpr_elim": False}, allocator="custom")
+def model_pass_jit(x):
+    logits = model(x)
+    return logits
+
+# time the forward pass
+x = pg.Tensor(np.random.randint(0, 50257, (1024)).astype(np.int32), device="cuda").eval().detach()
+print("timing forward pass with jit...")
+import time
+for _ in range(10):
+    start = time.time()
+    logits = model_pass_jit(x).eval()
+    pg.sync_cuda_device()
+    print("elapsed time: %.2f s" % (time.time() - start))
 """

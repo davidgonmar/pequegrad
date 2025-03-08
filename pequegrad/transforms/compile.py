@@ -127,6 +127,38 @@ class jit(LazyFunction):
 
         compile(extract_tensors(new_trace.outputs), self.opts, self.custom_patterns)
 
+        # now, for each element in the outputs, some of them might NOT depend on the inputs (e.g. functions of constants)'
+        # we need to evaluate them so they are precomputed instead of computed again and again during runtime
+        # we will do this by traversing the graph from the outputs to the inputs
+
+        visited = set()
+
+        def is_const(t: Tensor):
+            return t.op in ["FromNumpy", "ADPrimitive"]
+
+        def is_fn_of_const(t: Tensor):
+            if t.op == "JitBoundary":
+                return False  # trace input
+            if is_const(t):
+                return True
+            for c in t.children():
+                if not is_fn_of_const(c):
+                    return False
+            return True
+
+        def _recursive_visit(t: Tensor):
+            if t in visited:
+                return
+            visited.add(t)
+            for c in t.children():
+                _recursive_visit(c)
+
+            if is_fn_of_const(t):
+                t.eval()
+
+        for o in new_trace.outputs:
+            _recursive_visit(o)
+
         if self.toposort_optim:
             toposorted_tensors = []
 
