@@ -14,7 +14,7 @@ _Shape = Union[int, Tuple[int, ...]]
 dtypetonp = {dt.float32: np.float32, dt.float64: np.float64, dt.int32: np.int32}
 
 from pequegrad.backend.c import Device, from_str  # noqa
-import functools
+from pequegrad import extend
 
 
 class DeviceModule:
@@ -1087,3 +1087,86 @@ def floor(self):
 
 def ceil(self):
     return round(self + 0.5)
+
+
+def while_loop(cond, body, init):
+    from pequegrad.transforms import vjp
+
+    n_evals = 0
+
+    class WhileLoop(extend.Primitive):
+        @staticmethod
+        def dispatch(inputs):
+            val = inputs
+            n_evals = 0
+            while cond(*val).numpy() == 1:
+                val = body(*val)
+                n_evals += 1
+            return (val[-1].eval(),)  # TODO -- multiple returns
+
+        @staticmethod
+        def backward(primals, tangents, outputs):
+            # we need to do the backward pass of the body for each iteration
+            tangents = tangents[0]  # only one output
+            val = primals
+            bodygrad = vjp(body, wrt=range(1, len(val)))
+            # to evaluate the gradient, we'll go backwards
+            # this is inefficient atm
+            vals = []
+            for i in range(n_evals):
+                vals.append(val)
+                val = body(*val)
+            # now we have the values of the body at each iteration
+            # we can start the backward pass
+            for i in range(n_evals - 1, -1, -1):
+                val = vals[i]
+                val = bodygrad(val, tangents)
+                tangents = val[0]
+            return (
+                fill_like(primals[0], 0),
+                tangents,
+            )  # iterator is not differentiable
+
+    return WhileLoop.apply(*init)
+
+
+def fori_loop(start, end, body, init):
+    def cond(i, *args):
+        return i < end
+
+    def _body(i, *args):
+        return i + 1, body(i, *args)
+
+    return while_loop(cond, _body, (start,) + init)
+
+
+def ifelse(cond, true_fn, false_fn, args):
+    from pequegrad.transforms import vjp
+
+    evaled = None
+
+    class IfElse(extend.Primitive):
+        @staticmethod
+        def dispatch(inputs):
+            assert len(inputs) == 1
+            nonlocal evaled
+            c = cond(*inputs).numpy()
+            if c:
+                evaled = "true"
+                return true_fn(*inputs).eval()
+            else:
+                evaled = "false"
+                return false_fn(*inputs).eval()
+
+        @staticmethod
+        def backward(primals, tangents, outputs):
+            vjptrue = vjp(true_fn, wrt=[0])
+            vjpfalse = vjp(false_fn, wrt=[0])
+            if evaled == "true":
+                return vjptrue(primals[0], tangents)
+            elif evaled == "false":
+                return vjpfalse(primals[0], tangents)
+            else:
+                raise ValueError("ifelse not evaluated")
+
+    return IfElse.apply(*args)

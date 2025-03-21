@@ -10,7 +10,11 @@ def custom_prim(f):
         if isinstance(res, Tensor):
             return (res,)
         else:
-            raise ValueError("custom_prim must return a Tensor or a tuple of Tensors")
+            raise ValueError(
+                "custom_prim must return a Tensor or a tuple of Tensors, got {}".format(
+                    type(res)
+                )
+            )
 
     p = _custom_prim(ff)
     p.vjp = lambda f: p.setvjp(f)
@@ -54,5 +58,4 @@ class Primitive:
 
         if hasattr(cls, "precompute"):
             prim.setprecompute(cls.precompute)
-
         return prim(*args)
