@@ -115,6 +115,8 @@ class jit(LazyFunction):
         else:
             self.use_cuda_graph = False
 
+        self.const_fold = opts.get("const_fold", True) if opts else True
+
     def _transform_trace(self, trace: GraphTrace) -> GraphTrace:
         # same as autograd, but it just compiles the graph
         new_trace = GraphTrace(
@@ -131,33 +133,34 @@ class jit(LazyFunction):
         # we need to evaluate them so they are precomputed instead of computed again and again during runtime
         # we will do this by traversing the graph from the outputs to the inputs
 
-        visited = set()
+        if self.const_fold:
+            visited = set()
 
-        def is_const(t: Tensor):
-            return t.op in ["FromNumpy", "ADPrimitive"]
+            def is_const(t: Tensor):
+                return t.op in ["FromNumpy", "ADPrimitive"]
 
-        def is_fn_of_const(t: Tensor):
-            if t.op == "JitBoundary":
-                return False  # trace input
-            if is_const(t):
+            def is_fn_of_const(t: Tensor):
+                if t.op == "JitBoundary":
+                    return False  # trace input
+                if is_const(t):
+                    return True
+                for c in t.children():
+                    if not is_fn_of_const(c):
+                        return False
                 return True
-            for c in t.children():
-                if not is_fn_of_const(c):
-                    return False
-            return True
 
-        def _recursive_visit(t: Tensor):
-            if t in visited:
-                return
-            visited.add(t)
-            for c in t.children():
-                _recursive_visit(c)
+            def _recursive_visit(t: Tensor):
+                if t in visited:
+                    return
+                visited.add(t)
+                for c in t.children():
+                    _recursive_visit(c)
 
-            if is_fn_of_const(t):
-                t.eval()
+                if is_fn_of_const(t):
+                    t.eval()
 
-        for o in new_trace.outputs:
-            _recursive_visit(o)
+            for o in new_trace.outputs:
+                _recursive_visit(o)
 
         if self.toposort_optim:
             toposorted_tensors = []
