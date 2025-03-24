@@ -29,15 +29,6 @@ def viz(tensor_or_tensors, viz=True, name="graph"):
                 G.add_edge(child_name, node_name, relation="child")
                 add_node(child)
 
-            for sibling in tensor.siblings():
-                sibling_name = sibling.id
-                G.add_node(
-                    sibling_name,
-                    label=f"{sibling_name}\n({sibling.ad_context() + str(sibling.position)}), shape: {sibling.shape}, strides: {sibling.strides}",
-                )
-                G.add_edge(sibling_name, node_name, relation="sibling")
-                add_node(sibling)
-
     seen = set()
     for tensor in (
         tensor_or_tensors
@@ -45,6 +36,18 @@ def viz(tensor_or_tensors, viz=True, name="graph"):
         else [tensor_or_tensors]
     ):
         add_node(tensor)
+
+    # sibling relations
+    for tensor in seen:
+        node_name = tensor.id
+        for sibling in tensor.siblings():
+            # seen.add(sibling)
+            sibling_name = sibling.id
+            G.add_node(
+                sibling_name,
+                label=f"{sibling_name}\n({sibling.ad_context() + str(sibling.position)}), shape: {sibling.shape}, strides: {sibling.strides}",
+            )
+            G.add_edge(sibling_name, node_name, relation="sibling")
 
     if viz:
         net = Network(notebook=True, directed=True)

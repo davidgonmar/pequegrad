@@ -288,6 +288,7 @@ public:
     for (size_t i = 0; i < outs.size(); i++) {
       outs[i].eval(false);
     }
+
     PG_CHECK_RUNTIME(outs.size() == outputs.size(), "Expected ", outputs.size(),
                      " outputs, got ", outs.size());
     for (size_t i = 0; i < outs.size(); i++) {

@@ -393,8 +393,8 @@ PYBIND11_MODULE(pequegrad_c, m) {
                          "Custom primitive must have a vjp function");
         FromFunctions prim =
             FromFunctions(self.basefn, self.vjpfn.value(), self.precomputefn);
-        return Tensor::from_primitive_one(std::make_shared<FromFunctions>(prim),
-                                          inputs);
+        return Tensor::from_primitive_multiple(
+            std::make_shared<FromFunctions>(prim), inputs);
       });
 
   // Custom init are functions that take no tensors and return a tuple of

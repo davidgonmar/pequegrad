@@ -151,6 +151,7 @@ Tensor::from_primitive_multiple(const std::shared_ptr<ADPrimitive> &primitive,
     if (primitive->eager()) {
       t.eval(false);
     }
+    t.ad_node()->set_position(i);
     tensors.push_back(t);
   }
 

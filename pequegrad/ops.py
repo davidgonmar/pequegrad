@@ -1102,7 +1102,7 @@ def while_loop(cond, body, init):
             while cond(*val).numpy() == 1:
                 val = body(*val)
                 n_evals += 1
-            return (val[-1].eval(),)  # TODO -- multiple returns
+            return tuple(map(lambda x: x.eval(), val))  # TODO -- multiple returns
 
         @staticmethod
         def backward(primals, tangents, outputs):
@@ -1170,3 +1170,27 @@ def ifelse(cond, true_fn, false_fn, args):
                 raise ValueError("ifelse not evaluated")
 
     return IfElse.apply(*args)
+
+
+def scan(scan_fn, init, seq):
+    assert seq.ndim == 1, "scan is only supported for 1D tensors"
+
+    # scan_fn is of the form (carry, curr) -> (new_carry, new_output)
+    def _cond(i, *args):
+        return i < seq.shape[0]
+
+    def _body(i, *args):
+        next_idx = i + 1
+        assert len(args) == 2  # (carry, output)
+        carry, acc = args
+        new_carry, new_output = scan_fn(carry, seq[i])
+        return next_idx, new_carry, acc.at[i].set(new_output)
+
+    acc = fill_like(seq, 0).at[0].set(init)
+    return while_loop(
+        _cond,
+        _body,
+        (Tensor(0).astype("int32").to(seq.device).reshape((1,)),) + (init, acc),
+    )[
+        1:
+    ]  # ret carry, output array
