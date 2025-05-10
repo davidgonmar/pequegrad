@@ -1,266 +1,221 @@
-## Pequegrad
+# pequegrad
 
-Pequegrad is a simple deep learning framework for Python. It works with tensors, and provides automatic differentiation. It supports CUDA and CPU computation.
+**pequegrad** is a toy‑deep learning framework for Python.  
+The main actors are **Tensors**—multi‑dimensional arrays that live on the CPU or GPU and carry elements of certain data‑type (`dtype`).
 
-### Requirements (might work with other versions, but these are the ones that I tested)
+pequegrad features:
 
-```bash
-- General
-numpy==1.26.2
+* A **tracing mechanism** that turns a subset of Python functions into a custom graph structure (`GraphTrace`).  
+  This powers automatic differentiation (AD) and other advanced features.
+* A concise **core operation set**, used to implement the other operations.
+* A comprehensive **neural‑network module** that lets you build and train models with ease.
 
-- Testing
-pytest==7.4.0
-torch==2.1.1 (it is used to check the correctness of the results)
-```
+---
 
-### Examples
+## Automatic Differentiation
 
-There are some examples in the examples directory. You can run them with the following commands:
-(in case you don't want to use the GPU, just remove the --cuda flag from the commands below)
-
-- MLP
-  `python -m examples.mlp_mnist --cuda`
-
-- CNN
-  `python -m examples.conv_mnist --cuda`
-
-### Automatic differentiation
-
-You can perform simple autodifferentiation with Pequegrad like this:
+`fngrad` transforms a pure Python function into one that returns gradients (and optionally the original outputs).
 
 ```python
 from pequegrad.tensor import Tensor
-from pequegrad.autodiff import grads
+from pequegrad import fngrad
+import pequegrad as pg
 
-t1 = Tensor([1, 2, 3, 4, 5])
-t2 = Tensor([5, 4, 3, 2, 1])
-t3 = t1 + t2
-t4 = t3.sum()
-dt4_dt1, dt4_dt2 = grads([t1, t2], t4)
+def f(a, b, c):
+    x = a * b
+    return x * c
 
-print(dt4_dt1.numpy()) # [1, 1, 1, 1, 1]
-print(dt4_dt2.numpy()) # [1, 1, 1, 1, 1]
+f_and_grad = fngrad(f, wrt=[0, 1, 2], return_outs=True)
+
+a, b, c = (
+    pg.rand((2, 3), dtype=pg.dt.float32, device=pg.device.cuda(0)),
+    pg.rand((2, 3), dtype=pg.dt.float32, device=pg.device.cuda(0)),
+    pg.rand((2, 3), dtype=pg.dt.float32, device=pg.device.cuda(0)),
+)
+
+outs, grads = f_and_grad(a, b, c)
 ```
 
-The same example in PyTorch would be:
+Beyond simple gradients, pequegrad can compute Jacobians, Hessians, JVPs, VJPs, and even Taylor expansions.
+
+---
+
+## JIT Compilation
+
+The tracing mechanism feeds a graph compiler with several optimisation passes:
+
+1. **Remove redundant ops** e.g. reshapes with no effect.
+2. **Detect common patterns** On CUDA, it looks for convolution/normalisation patterns and substitutes sub-graphs with cuDNN kernels.
+3. **Operator fusion** Element‑wise and reduction ops are merged; broadcasts may be hoisted to enable deeper fusion.
+
+
+Let's see a simple example. Set `PG_KERNEL_DB=true` to print generated CUDA kernels:
 
 ```python
-import torch
-
-t1 = torch.tensor([1, 2, 3, 4, 5], requires_grad=True)
-t2 = torch.tensor([5, 4, 3, 2, 1], requires_grad=True)
-t3 = t1 + t2
-t4 = t3.sum()
-t4.backward()
-dt4_dt1 = t1.grad
-dt4_dt2 = t2.grad
-
-print(dt4_dt1.detach().numpy()) # [1, 1, 1, 1, 1]
-print(dt4_dt2.detach().numpy()) # [1, 1, 1, 1, 1]
-```
-
-### Laziness and just-in-time compilation
-
-The whole Tensor class is lazy. This means that shapes and dtypes are inferred when you write a tensor computation like
-
-```python
-from pequegrad.tensor import Tensor, dt
-
-t1 = Tensor([1, 2, 3, 4, 5]).astype(dt.float32)
-t2 = Tensor([5, 4, 3, 2, 1]).astype(dt.float32)
-t3 = t1 + t2
-print(t3.shape) # [5]
-print(t3.dtype) # dt.float32
-print(t3) # Tensor(shape=[5], dtype=float32, device=CPU, evaled=0, primitive=Add, id=34)
-```
-
-But t3 is not actually computed until .eval() is called, or until you try to access the .numpy() attribute.
-This is useful since useless computations are not done, and allows for graph optimizations in the future.
-
-You can even extend the DAG with the tensor gradients, without anything being actually computed!
-
-```python
-t1 = Tensor([1, 2, 3, 4, 5])
-t2 = Tensor([5, 4, 3, 2, 1])
-t3 = t1 + t2
-t4 = t3.sum()
-dt4_dt1, dt4_dt2 = grads([t1, t2], t4)
-```
-
-Here, nothing is actually computed!
-
-Moreover, you can also just-in-time compile the computation to a function that can be called with the actual values of the tensors.
-To use it, just decorate a function with the @jit decorator (must be a pure function and have no python things (only pequegrad ops)):
-
-```python
-from pequegrad.compile import jit
+import pequegrad as pg
+import numpy as np
 import time
-from pequegrad.tensor import Tensor, dt, device
 
-dev = device.cuda
-def test_some_fn():
-    @jit
-    def some_function(x, y, z):
-        return x.log() + y + z.exp().log().exp()
+x = pg.Tensor(np.random.rand(1000, 20, 100)).to("cuda").astype("float32")
+y = pg.Tensor(np.random.rand(1000, 100, 20)).to("cuda").astype("float32")
 
-    def non_jitted(x, y, z):
-        return x.log() + y + z.exp().log().exp()
+def f(x, y):
+    return ((pg.permute(x, (0, 2, 1)) + 2) + y).sum(2) * 3
 
-    for i in range(10):
-        x = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32).eval()
-        y = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32).eval()
-        z = Tensor(np.random.randn(10000, 1000), device=dev).astype(dt.float32).eval()
+fjit = pg.jit(f)
 
-        start = time.time()
-        j = some_function(x, y, z).eval()
-        jittedtime = time.time() - start
+# Warmup
+for _ in range(10):
+    f(x, y).eval()
+    pg.sync_cuda_device()
+    fjit(x, y).eval()
+    pg.sync_cuda_device()
 
-        start = time.time()
-        nj = non_jitted(x, y, z).eval()
-        nonjittedtime = time.time() - start
+# Test without JIT
+start_time = time.time()
+for _ in range(1000):
+    f(x, y).eval()
+    pg.sync_cuda_device()
+end_time = time.time()
+print(f"Time without JIT: {end_time - start_time} seconds")
 
-        print(f"Jitted time: {jittedtime}, Non-jitted time: {nonjittedtime}")
-        np.testing.assert_allclose(j.numpy(), nj.numpy(), atol=1e-3)
+# Test with JIT
+start_time = time.time()
+for _ in range(1000):
+    fjit(x, y).eval()
+    pg.sync_cuda_device()
+end_time = time.time()
+print(f"Time with JIT: {end_time - start_time} seconds")
 ```
-
-Use PG_KERNEL_DB to print generated kernels
-
 ```bash
-PG_KERNEL_DB=true python -m examples.jit --cuda
-file:
-extern "C" {
-    __global__ void kernel_name(float *arg0, float *arg1, float *arg2, float *arg3)
-    {
-        int bidx = blockIdx.x;
-        int bdim = blockDim.x;
-        int tidx = threadIdx.x;
-        int global_idx = (bidx * bdim) + tidx;
-        if ((10000000 < global_idx)) {
-            return;
-        }
-        float load0 = arg0[global_idx];
-        float load1 = arg1[global_idx];
-        float load2 = arg2[global_idx];
-        arg3[global_idx] = ((log(load0) + load1) + exp(log(exp(load2))));
-    }
+PG_KERNEL_DB=true python example.py
+...
+__global__ void __launch_bounds__(1024, 1) reduce_kernel(const float * __restrict__ arg0, const float * __restrict__ arg1, float * __restrict__ arg2
+){
+  int bidx = blockIdx.x;
+  int bdim = blockDim.x;
+  int tidx = threadIdx.x;
+  int global_idx = (bidx * bdim) + tidx;
+  if ((100000 <= global_idx)) {
+    return;
+  }
+  int arg_0_idx_1 = (global_idx / (1 * 1)) % 100;
+  int arg_0_idx_0 = (global_idx / 100) % 1000;
+  int arg_2_idx_1 = (global_idx / (1 * 1)) % 100;
+  int arg_2_idx_0 = (global_idx / 100) % 1000;
+  int arg_4_idx_1 = (global_idx / (1 * 1)) % 100;
+  int arg_4_idx_0 = (global_idx / 100) % 1000;
+  float acc0 = 0.000000000f;
+  int const23 = 0;
+  #pragma unroll
+  for (const23; const23 < 20; const23+=1) {
+    int arg_0_idx_2 = (const23 / (1 * 1)) % 20;
+    int arg_2_idx_2 = (const23 / (1 * 1)) % 20;
+    float load0 = __ldg(arg0 + (((arg_0_idx_0 * 2000) + (arg_0_idx_1 * 1)) + (arg_0_idx_2 * 100)));
+    float load1 = __ldg(arg1 + (((arg_2_idx_0 * 2000) + (arg_2_idx_1 * 20)) + (arg_2_idx_2 * 1)));
+    acc0 += ((load0 + 2.000000000f) + load1);
+  }
+  arg2[((arg_4_idx_0 * 100) + (arg_4_idx_1 * 1))] = (acc0 * 3.000000000f);
 }
-Jitted time: 0.10751175880432129, Non-jitted time: 0.017236709594726562
-Jitted time: 0.002004384994506836, Non-jitted time: 0.016346454620361328
-Jitted time: 0.003206491470336914, Non-jitted time: 0.017115354537963867
-Jitted time: 0.0030007362365722656, Non-jitted time: 0.017028331756591797
-Jitted time: 0.0030069351196289062, Non-jitted time: 0.017102718353271484
-Jitted time: 0.0030078887939453125, Non-jitted time: 0.015584945678710938
-Jitted time: 0.008017539978027344, Non-jitted time: 0.03783774375915527
-Jitted time: 0.01613640785217285, Non-jitted time: 0.0693202018737793
-Jitted time: 0.003019571304321289, Non-jitted time: 0.016047954559326172
-Jitted time: 0.0077784061431884766, Non-jitted time: 0.0374603271484375
+
+Time without JIT: 2.6615936756134033 seconds
+Time with JIT: 0.27284669876098633 seconds
 ```
 
-As you can see, the jitted function is slower the first time it is called, but then it is a lot faster than the non-jitted function.
-All the operations in the function were compiled to a single CUDA kernel, so no intermediate memory is used and the overhead of the kernel launch is minimal.
-The only downside is that gradient computation must be done before the jitting, for example:
+The fuser was able to combine the whole function into a single kernel, including folding the constants into the kernel and the sum reduction. Note that the permute is done through stride reordering, and is implicit in the kernel (look at how the loads are done).
+
+---
+
+## Training a Neural Network
+
+The training utilities are fairly complete. Below is a condensed AlexNet‑on‑CIFAR‑10 example:
 
 ```python
-@partial(jit, externals=model.parameters())
-def train_step(batch_X, batch_Y):
-        prediction = model.forward(batch_X)
-        loss = prediction.cross_entropy_loss_probs(batch_Y)
-        g = grads(model.parameters(), loss)
-        return [loss] + g
+class AlexNet(nn.StatefulModule):
+    def __init__(self, num_classes=100):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3,   96, kernel_size=11, stride=4, padding=2),
+            ...
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.5),
+            ...
+            nn.Linear(4096, num_classes),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.features(x)
+        x = x.reshape((x.shape[0], 256 * 6 * 6))
+        return self.classifier(x)
 ```
 
-The `externals` parameter is used to tell the jitting function which tensors are external to the function (the function depends on them, but they are not arguments of the function). As you can see, we can compute the gradients inside a jitted function, and then use them to update the model parameters.
-
-However, we cannot do this:
+Data pipeline:
 
 ```python
-@partial(jit, externals=model.parameters())
-def train_step(batch_X, batch_Y):
-        prediction = model.forward(batch_X)
-        loss = prediction.cross_entropy_loss_probs(batch_Y)
-        return loss
-
-
-loss = train_step(batch_X, batch_Y)
-g = grads(model.parameters(), loss) # Error: cannot differentiate through a compiled function!!!
-
+transform = transforms.Compose([
+    transforms.ToTensor(device="cuda"),
+    transforms.JitCompose([
+        transforms.PermuteFromTo((0, 1, 2, 3), (0, 3, 1, 2)),  # NHWC → NCHW
+        transforms.Normalize((0.5,) * 3, (0.5,) * 3),
+        transforms.Resize((224, 224)),
+    ]),
+    transforms.EvalAndDetach(),
+])
 ```
 
-### Training a simple neural network!
-
-(please go to the examples directory to see the full example, like loading the data and saving/loading a model)
+Training step:
 
 ```python
-class MLP(StatefulModule):
-    def __init__(self):
-        self.fc1 = Linear(784, 200)
-        self.fc2 = Linear(200, 10)
+@pg.jit.withargs(allocator="custom") # uses a custom CUDA allocator, about 8% faster on a 2070 laptop
+def update_step(state, params_dict, x, y):
+    x, y = x.to("cuda"), y.to("cuda")
+    y = Tensor.one_hot(100, y)
 
-    def forward(self, input):
-        input = self.fc1.forward(input).relu()
-        return self.fc2.forward(input)
+    def loss_fn(x, y, params):
+        preds = nn.apply_to_module(model, params, x)
+        return preds.cross_entropy_loss_probs(y)
 
-def train(model, X_train, Y_train, epochs=13, batch_size=4096):
-    optim = Adam(model.parameters(), lr=0.021)
-
-    def train_step(batch_X, batch_Y):
-        prediction = model.forward(batch_X)
-        loss = prediction.cross_entropy_loss_indices(batch_Y)
-        g = grads(model.parameters(), loss)
-        return [loss] + g
-
-    for epoch in range(epochs):
-        indices = np.random.choice(len(X_train), batch_size)
-        batch_X = X_train[indices]
-        batch_Y = Y_train[indices]
-        outs = train_step(batch_X, batch_Y)
-        loss = outs[0]
-        g = outs[1:]
-        optim.step(g)
-        print(f"Epoch {epoch} | Loss {loss.numpy()}")
-
-    return model
-
-model = MLP()
-model = train(model, X_train, Y_train)
+    loss, (grads,) = fngrad(loss_fn, wrt=[2], return_outs=True)(x, y, params_dict)
+    state, params_dict = sgd(params_dict, grads, state)
+    return state, params_dict, loss
 ```
 
-### GPU support
 
-All operations must have the same device for all inputs. To use the GPU, simply pass the tensor to the device you want to use:
 
-```python
-from pequegrad.tensor import Tensor, dt, device
+## Other Cool Things
 
-t1 = Tensor([1, 2, 3, 4, 5]).to(device.cuda)
-t2 = Tensor([5, 4, 3, 2, 1]).to(device.cuda)
-t3 = t1 + t2 # fine!!!!
-t2_cpu = t2.to(device.cpu)
-t3 = t1 + t2_cpu # this will raise an error
+* **JAX frontend** (early‑stage) – train a simple MLP using familiar JAX APIs.
+* **ONNX importer/exporter** – move models in and out of pequegrad.
+
+See the *examples* directory for more.
+
+
+## Disclaimer
+
+This project is a hobby. Expect outdated code, TODOs, and the occasional bug.  
+I focus on building fun stuff rather than maintaining a stable codebase.
+
+
+
+## Core Requirements
+
+```text
+numpy == 1.26.2
+
+# For tests (used to validate results)
+pytest == 7.4.0
+torch  == 2.1.1
 ```
 
-To pass an entire model to the GPU, you can use the .to(device) method:
+## Building the Library
 
-```python
-model = MLP()
-model = model.to(device.cuda) # now, it computes everything in the GPU, and expects all inputs to be in the GPU!
-```
+Most heavy lifting (graphs and AD) is in C++. You can build it with CMake.
+Currently, CUDA, OpenMP, and OpenBLAS are required. I’m working on relaxing those dependencies.
+The resulting binaries land in `build/`, and Python will pick them up automatically.
+Right now, everything is set up for my system and it is difficult to build it on other systems. I'm working on it.
 
-### More operations
-
-Pequegrad has support for most core operations like:
-
-- Binary operations: +, -, \*, /, @
-- Unary operations: relu, sigmoid, tanh
-- Reduction operations: sum, mean, max
-- Indexing operations: getitem, setitem
-- Folding operations: im2col (fold), col2im (unfold)
-- Padding
-- Convolutions (regular and transposed)
-
-And higher level operations like tensordot (tensor contractions), pooling, norms, naive einsum, dropoutm, statistical operations, dropout, etc.
-
-### Building the library
-
-Most of the computation (include graphs and automatic differentiation) is done in C++. You'll need to compile the CPP code to use the library. A CMakeLists.txt file is provided. Once it is compiled, the built files should be in the build directory.
-At the moment, the library can only be built with support for different technologies like CUDA, OpenMP and OpenBLAS. I'm working on making it more flexible and able to be built without these dependencies.
+---
